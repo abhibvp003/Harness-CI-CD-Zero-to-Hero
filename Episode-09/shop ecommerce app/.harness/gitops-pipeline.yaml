@@ -211,6 +211,23 @@ pipeline:
                       - applicationName: shop-ecommerce # ← CHANGE: your GitOps app name
                         agentId: gitopsagent # ← CHANGE: your agent ID
 
+              # Step 6: Health Check (COMMENTED — cannot use Run step in GitOps stage)
+              - step:
+                  type: Run
+                  name: Health Check
+                  identifier: health_check
+                  spec:
+                    connectorRef: dockerhub
+                    shell: Sh
+                    image: bitnami/kubectl:latest
+                    command: |-
+                      kubectl wait --for=condition=ready pod -l app=shop-ecommerce -n shop-ecommerce --timeout=180s
+                      kubectl get pods -n shop-ecommerce
+                      SVC_IP=$(kubectl get svc shop-ecommerce -n shop-ecommerce -o jsonpath='{.spec.clusterIP}')
+                      HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://$SVC_IP/health --max-time 10)
+                      echo "HTTP Health: $HTTP_CODE"
+                      if [ "$HTTP_CODE" != "200" ]; then exit 1; fi
+
               # Step 6: Continuous Verification — compares pre/post deployment metrics from Prometheus
               # Auto-triggers rollback if error rate or latency degrades
               # - step:
@@ -294,9 +311,6 @@ pipeline:
       pipelineEvents:
         - type: PipelineSuccess
         - type: PipelineFailed
-        - type: StageSuccess
-          forStages:
-            - gitops_deploy
       notificationMethod:
         type: Slack
         spec:

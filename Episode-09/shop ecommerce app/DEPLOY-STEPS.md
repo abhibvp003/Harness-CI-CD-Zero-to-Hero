@@ -339,7 +339,7 @@ helm install argocd gitops-agent/gitops-helm --values override.yaml --namespace 
 
 ## Step 8: Configure Slack Notifications
 
-### Step 8.1: Create Slack App + Bot Token
+### Step 8.1: Create Slack App + Webhook
 
 1. Open: **https://api.slack.com/apps**
 2. Click **Create New App** → **From scratch**
@@ -354,7 +354,27 @@ helm install argocd gitops-agent/gitops-helm --values override.yaml --namespace 
 9. Click **Add New Webhook to Workspace** → Select channel (e.g., `#deployments`) → **Allow**
 10. Copy the **Webhook URL** (starts with `https://hooks.slack.com/services/...`)
 
-### Step 8.2: Create Slack Connector in Harness (Project Level)
+### Step 8.2: Store Webhook URL in Harness
+
+1. Go to **Project Settings** → **Secrets** → **+ New Secret** → **Text**
+2. Secret ID: `slack_webhook_url`
+3. Value: paste the Webhook URL from Step 8.1
+4. Click **Save**
+
+### Step 8.3: Add Webhook to User Group (for notifications to work)
+
+1. Go to **Project Settings** → **User Groups** → click **`All Project Users`** (or `_project_all_users`)
+2. Click **Edit**
+3. Under **Notification Preferences** → find **Slack Webhook URL**
+4. Paste the same webhook URL from Step 8.1
+5. Save
+
+> **How notifications work:**
+> - Pipeline YAML has `notificationRules` with `webhookUrl: <+secrets.getValue("slack_webhook_url")>`
+> - Harness sends Slack message on: Pipeline Success, Pipeline Failed
+> - If YAML notifications don't work, the User Group webhook (Step 8.3) is the fallback
+
+### Step 8.4: Create Slack Connector (Optional — for Bot features)
 
 1. Go to **Project Settings** → **Connectors** → **+ New Connector**
 2. Under **Communication Tools** → Select **Slack**
@@ -371,17 +391,6 @@ helm install argocd gitops-agent/gitops-helm --values override.yaml --namespace 
    - Select: **Connect through Harness Platform**
 6. **Screen 4 (Connection Test):**
    - Click **Finish** → ✅ Success
-
-### Step 8.3: Store Webhook as Secret (for pipeline notifications)
-
-1. Go to **Project Settings** → **Secrets** → **+ New Secret** → **Text**
-2. Secret ID: `slack_webhook_url`
-3. Value: paste the same webhook URL
-4. Click **Save**
-
-> **Why both connector AND secret?**
-> - **Connector** = used by Harness Notification Rules (Account/Project level alerts)
-> - **Secret** = used in pipeline YAML `notificationRules` section (`<+secrets.getValue("slack_webhook_url")>`)
 
 ---
 
