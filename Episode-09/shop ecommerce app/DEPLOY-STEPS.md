@@ -22,10 +22,16 @@
 │  └──────────────────┘  └──────────┘  └─────────┘  └──────────┘  │
 │         │                                                │        │
 │         ▼                                                ▼        │
-│  ┌──────────────────┐                    ┌──────────────────────┐ │
-│  │ GetAppDetails    │                    │ App Status: Synced ✅│ │
-│  │ (verify healthy) │                    │ Healthy ✅           │ │
-│  └──────────────────┘                    └──────────────────────┘ │
+│  ┌──────────────────┐              ┌────────────────────────────┐ │
+│  │ GetAppDetails    │              │ Verify (Prometheus CV)     │ │
+│  │ (app status)     │              │ (compare pre/post metrics) │ │
+│  └──────────────────┘              └────────────────────────────┘ │
+│                                                                    │
+│  Stage 3: Health Check (CI — kubectl + curl)                      │
+│  ┌──────────────────┐  ┌──────────────────────┐                  │
+│  │ Wait for Pods    │→ │ HTTP /health check   │                  │
+│  │ (kubectl wait)   │  │ (curl → 200 = pass)  │                  │
+│  └──────────────────┘  └──────────────────────┘                  │
 │                                                                    │
 │  Rollback (auto on failure):                                      │
 │  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐ │
@@ -44,16 +50,18 @@
 ├──────────────────────────────────────────────────────────────────┤
 │  OBSERVABILITY STACK (deployed via ArgoCD App-of-Apps)            │
 │                                                                    │
-│  Prometheus → Scrapes /nginx-status every 15s                     │
-│  Grafana    → Dashboards (CPU, Memory, Requests, Latency)        │
-│  EFK        → Elasticsearch + Fluentd + Kibana (logs)            │
+│  Prometheus → Scrapes metrics every 15s (CPU, Memory, Network)   │
+│  Grafana    → 7 Dashboards: Cluster, Nodes, Pods, Deployments,  │
+│               Resources, Network/DNS, Storage/Jobs               │
+│  EFK        → Elasticsearch + Fluentd + Kibana (all pod logs)    │
 │  Jaeger     → Distributed tracing (OpenTelemetry)                │
-│  Alerts     → Slack on: HighErrorRate, PodCrash, MySQLDown       │
+│  Alerts     → PrometheusRules: HighErrorRate, PodCrash, DBDown   │
 │                                                                    │
 ├──────────────────────────────────────────────────────────────────┤
 │  NOTIFICATIONS                                                    │
 │                                                                    │
-│  Slack: Pipeline success/failure + alert firing                   │
+│  Slack: Pipeline success/failure notification                     │
+│  Contains: Pipeline name, stage, status, link to execution       │
 │                                                                    │
 └──────────────────────────────────────────────────────────────────┘
 ```
@@ -93,8 +101,8 @@ failureStrategy triggers rollbackSteps:
 RevertPR → creates commit that reverts back to: image: shop-ecommerce:v3
 MergePR → merges revert
 GitOpsSync → ArgoCD deploys v3 again → app is healthy ✅
-
----
+```
+---s
 
 ## Prerequisites (Already Done)
 
