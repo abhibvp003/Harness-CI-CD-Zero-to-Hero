@@ -80,10 +80,18 @@
 | 6 | Merge PR | MergePR | Merges PR into main, deletes source branch |
 | 7 | Sync Application | GitOpsSync | Triggers ArgoCD to sync NOW (not wait 3 min poll) |
 | 8 | Get App Status | GitOpsGetAppDetails | Returns app health as JSON (Synced/Healthy/Degraded) |
+| 9 | Verify Deployment (commented) | Verify | Continuous Verification — compares Prometheus metrics pre/post deploy |
+| 10 | Health Check (commented) | Run | kubectl wait + HTTP /health check (needs separate CI stage) |
+| **Stage 3** | | **CI** | **Health Check (kubectl + HTTP)** |
+| 11 | Wait for Pods | Run | `kubectl wait --for=condition=ready` — fails if pods crash |
+| 12 | HTTP Health Check | Run | `curl /health` — verifies app responds 200 |
 | **Rollback** | | **Auto on failure** | **Reverts Git + merges revert + syncs old state** |
 | R1 | Revert PR | RevertPR | Uses commitId from step 4 → creates revert commit → opens revert PR |
 | R2 | Merge Revert PR | MergePR | Merges the revert PR → main goes back to old image tag |
 | R3 | Rollback Sync | GitOpsSync | Forces ArgoCD sync → deploys previous version back |
+| **Notifications** | | **Slack** | **Auto on success/failure** |
+| N1 | Pipeline Success | Slack webhook | Sends: pipeline name, stage, status, link |
+| N2 | Pipeline Failed | Slack webhook | Sends: which stage failed + link to execution |
 
 ### How GitOps Rollback Works
 
@@ -249,6 +257,7 @@ kubectl auth can-i create deployments --as=system:serviceaccount:harness-delegat
    - **Name:** `gitopsagent`
    - **GitOps Operator:** Argo (default)
    - **Namespace:** `gitops`
+   - High Availability (on)
 5. Under **Advanced** (scroll down):
    - **Enable Helm Secrets Path Traversal:** ✅ Check (allows accessing secrets in Helm values from different paths)
    - **Enable ArgoCD Harness Plugin:** ✅ Check (required for `<+secrets.getValue()>` resolution)
@@ -276,6 +285,12 @@ helm install argocd gitops-agent/gitops-helm --values override.yaml --namespace 
 
 9. Wait 2 min → Click **Continue** in Harness UI → Verification: **Healthy** ✅
 
+
+```bash
+helm uninstall argocd --namespace gitops
+kubectl delete namespace gitops
+kubectl create namespace gitops
+```
 
 ---
 
@@ -620,13 +635,13 @@ Then re-run the `episode9-observability-infra` pipeline in Harness — it recrea
 
 ```bash
 # Delete ArgoCD applications (this removes all observability pods)
-kubectl delete application monitoring logging tracing -n gitops
+kubectl delete application monitoring logging tracing shop-ecommerce -n gitops
 
-# Delete GitOps application for the app
-# Go to Harness UI → GitOps → Applications → Delete shop-ecommerce
+# Uninstall GitOps Agent (ArgoCD)
+helm uninstall argocd --namespace gitops
 
-# Delete namespaces (if ArgoCD didn't clean them)
-kubectl delete namespace monitoring logging tracing shop-ecommerce
+# Delete namespaces
+kubectl delete namespace monitoring logging tracing shop-ecommerce gitops
 
 # Delete ECR repository
 aws ecr delete-repository --repository-name shop-ecommerce --region us-east-1 --force
