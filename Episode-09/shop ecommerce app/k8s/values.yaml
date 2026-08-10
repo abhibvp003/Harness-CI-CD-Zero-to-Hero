@@ -3,3 +3,4 @@ replicas: 2
 dbHost: mysql-service.shop-ecommerce.svc.cluster.local
 dbPort: '3306'
 dbDatabase: shop_ecommerce
+
