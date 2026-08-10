@@ -1,6 +1,6 @@
 # ============================================
 # STORAGECLASS: Tells EKS Auto Mode how to provision EBS volumes
-# EKS Auto Mode does NOT create a StorageClass automatically!
+# EKS Auto Mode does NOT create a StorageClass automatically!!!!
 # Same as Episode 6 — reuses auto-ebs-sc name
 # ============================================
 apiVersion: storage.k8s.io/v1
