@@ -78,8 +78,8 @@ spec:
                   key: ELASTIC_PASSWORD
           resources:
             requests:
-              cpu: 50m
-              memory: 150Mi
+              cpu: 100m
+              memory: 200Mi
             limits:
               cpu: 200m
               memory: 300Mi
