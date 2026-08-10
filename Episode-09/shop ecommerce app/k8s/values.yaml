@@ -1,3 +1,4 @@
+
 image: 713939171080.dkr.ecr.us-east-1.amazonaws.com/shop-ecommerce:v1
 replicas: 2
 dbHost: mysql-service.shop-ecommerce.svc.cluster.local
