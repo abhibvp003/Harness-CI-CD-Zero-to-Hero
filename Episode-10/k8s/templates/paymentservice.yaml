@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: paymentservice
+  namespace: {{.Values.namespace}}
+  labels:
+    app: paymentservice
+spec:
+  replicas: {{int .Values.replicas}}
+  selector:
+    matchLabels:
+      app: paymentservice
+  template:
+    metadata:
+      labels:
+        app: paymentservice
+    spec:
+      containers:
+        - name: paymentservice
+          image: {{.Values.paymentserviceImage}}
+          ports:
+            - containerPort: 50051
+          env:
+            - name: PORT
+              value: "50051"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          readinessProbe:
+            grpc:
+              port: 50051
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            grpc:
+              port: 50051
+            initialDelaySeconds: 30
+            periodSeconds: 15
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: paymentservice
+  namespace: {{.Values.namespace}}
+spec:
+  type: ClusterIP
+  selector:
+    app: paymentservice
+  ports:
+    - port: 50051
+      targetPort: 50051

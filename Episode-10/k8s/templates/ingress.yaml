@@ -1,0 +1,30 @@
+# ═══════════════════════════════════════════════════════════════════
+# Ingress — Single ALB for ALL services (MNC pattern)
+# 1 Load Balancer → routes by subdomain → multiple services
+# ACM certificate auto-discovered from domain
+# ═══════════════════════════════════════════════════════════════════
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: online-boutique-ingress
+  namespace: {{.Values.namespace}}
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443},{"HTTP":80}]'
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+    alb.ingress.kubernetes.io/certificate-arn: "auto"
+    alb.ingress.kubernetes.io/group.name: "ep10-shared-alb"
+spec:
+  rules:
+    - host: "app.{{.Values.domain}}"
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 80

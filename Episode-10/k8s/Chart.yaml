@@ -1,0 +1,4 @@
+apiVersion: v2
+name: online-boutique
+version: 1.0.0
+description: Online Boutique microservices (Google Online Boutique) — Episode 10 Enterprise Capstone

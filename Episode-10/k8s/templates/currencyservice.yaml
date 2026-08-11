@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: currencyservice
+  namespace: {{.Values.namespace}}
+  labels:
+    app: currencyservice
+spec:
+  replicas: {{int .Values.replicas}}
+  selector:
+    matchLabels:
+      app: currencyservice
+  template:
+    metadata:
+      labels:
+        app: currencyservice
+    spec:
+      containers:
+        - name: currencyservice
+          image: {{.Values.currencyserviceImage}}
+          ports:
+            - containerPort: 7000
+          env:
+            - name: PORT
+              value: "7000"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          readinessProbe:
+            grpc:
+              port: 7000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            grpc:
+              port: 7000
+            initialDelaySeconds: 30
+            periodSeconds: 15
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: currencyservice
+  namespace: {{.Values.namespace}}
+spec:
+  type: ClusterIP
+  selector:
+    app: currencyservice
+  ports:
+    - port: 7000
+      targetPort: 7000

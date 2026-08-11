@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: shippingservice
+  namespace: {{.Values.namespace}}
+  labels:
+    app: shippingservice
+spec:
+  replicas: {{int .Values.replicas}}
+  selector:
+    matchLabels:
+      app: shippingservice
+  template:
+    metadata:
+      labels:
+        app: shippingservice
+    spec:
+      containers:
+        - name: shippingservice
+          image: {{.Values.shippingserviceImage}}
+          ports:
+            - containerPort: 50051
+          env:
+            - name: PORT
+              value: "50051"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          readinessProbe:
+            grpc:
+              port: 50051
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            grpc:
+              port: 50051
+            initialDelaySeconds: 30
+            periodSeconds: 15
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: shippingservice
+  namespace: {{.Values.namespace}}
+spec:
+  type: ClusterIP
+  selector:
+    app: shippingservice
+  ports:
+    - port: 50051
+      targetPort: 50051

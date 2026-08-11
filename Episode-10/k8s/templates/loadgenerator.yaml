@@ -1,0 +1,45 @@
+# ═══════════════════════════════════════════════════════════════════
+# Load Generator — Generates synthetic traffic (Locust)
+# Purpose: Feeds Prometheus with real metrics so Verify step + Grafana have data
+# Without this: Prometheus shows 0 requests → Verify step has nothing to compare
+# ═══════════════════════════════════════════════════════════════════
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: loadgenerator
+  namespace: {{.Values.namespace}}
+  labels:
+    app: loadgenerator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: loadgenerator
+  template:
+    metadata:
+      labels:
+        app: loadgenerator
+    spec:
+      initContainers:
+        - name: wait-for-frontend
+          image: busybox:1.36
+          command: ['sh', '-c', 'until nc -z frontend 80; do echo "Waiting for frontend..."; sleep 5; done']
+      containers:
+        - name: loadgenerator
+          image: {{.Values.loadgeneratorImage}}
+          ports:
+            - containerPort: 8089
+          env:
+            - name: FRONTEND_ADDR
+              value: "frontend:80"
+            - name: USERS
+              value: "10"
+            - name: SPAWN_RATE
+              value: "1"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi

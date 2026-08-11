@@ -1,0 +1,248 @@
+name: Episode 10 — Harness Automation Setup
+
+run-name: >-
+  ${{
+    github.event.inputs.action == 'apply'
+    && 'Ep10 Terraform Apply (Install Everything)'
+    || github.event.inputs.action == 'destroy'
+    && 'Ep10 Terraform Destroy (Remove Everything)'
+    || 'Ep10 Terraform Plan'
+  }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Choose action"
+        required: true
+        default: plan
+        type: choice
+        options:
+          - plan
+          - apply
+          - destroy
+      confirm_destroy:
+        description: "Type yes to confirm destroy"
+        required: false
+        default: "no"
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+  TF_WORKING_DIR: "Episode-10/terraform"
+  TF_STATE_KEY: "harness-ep10/terraform.tfstate"
+  AWS_REGION_VALUE: "us-east-1"
+
+jobs:
+  terraform:
+    name: Episode 10 Harness Setup
+    runs-on: ubuntu-latest
+    environment: production
+    defaults:
+      run:
+        shell: bash
+        working-directory: ${{ env.TF_WORKING_DIR }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION_VALUE }}
+
+      - name: Validate destroy confirmation
+        if: github.event.inputs.action == 'destroy'
+        run: |
+          if [ "${{ github.event.inputs.confirm_destroy }}" != "yes" ]; then
+            echo "Destroy requires confirm_destroy = yes"
+            exit 1
+          fi
+
+      - name: Terraform Init
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ vars.S3_BUCKET_NAME }}" \
+            -backend-config="key=${{ env.TF_STATE_KEY }}" \
+            -backend-config="region=${{ env.AWS_REGION_VALUE }}" \
+            -backend-config="encrypt=true"
+
+      - name: Terraform Validate
+        run: terraform validate
+
+      - name: Terraform Plan
+        if: github.event.inputs.action == 'plan'
+        run: |
+          terraform plan -no-color \
+            -var="harness_account_id=${{ vars.HARNESS_ACCOUNT_ID }}" \
+            -var="harness_api_key=${{ secrets.HARNESS_API_KEY }}" \
+            -var="harness_delegate_token=${{ secrets.HARNESS_DELEGATE_TOKEN }}" \
+            -var="github_username=${{ github.repository_owner }}"
+
+      - name: Terraform Apply
+        if: github.event.inputs.action == 'apply'
+        run: |
+          terraform apply -auto-approve -no-color \
+            -var="harness_account_id=${{ vars.HARNESS_ACCOUNT_ID }}" \
+            -var="harness_api_key=${{ secrets.HARNESS_API_KEY }}" \
+            -var="harness_delegate_token=${{ secrets.HARNESS_DELEGATE_TOKEN }}" \
+            -var="github_username=${{ github.repository_owner }}"
+
+      - name: Apply Summary
+        if: github.event.inputs.action == 'apply'
+        run: |
+          CLUSTER=$(terraform output -raw eks_cluster_name)
+          BASTION_IP=$(terraform output -raw bastion_public_ip)
+          DELEGATE=$(terraform output -raw delegate_name)
+          SERVICES=$(terraform output -raw service_created)
+          ENVIRONMENTS=$(terraform output -json environments_created | jq -r '.[]' | tr '\n' ', ')
+          VPC=$(terraform output -raw vpc_id)
+
+          {
+            echo "## 🎉 Episode 10 — Complete Enterprise Platform Created"
+            echo ""
+            echo "**One \`terraform apply\` = EVERYTHING. Zero manual clicks.**"
+            echo ""
+            echo "### Infrastructure Created"
+            echo ""
+            echo "| Resource | Value |"
+            echo "|---|---|"
+            echo "| EKS Cluster | ${CLUSTER} |"
+            echo "| VPC | ${VPC} |"
+            echo "| Bastion IP | ${BASTION_IP} |"
+            echo "| K8s Delegate (HA) | ${DELEGATE} (2 replicas) |"
+            echo "| Monitoring | Prometheus + Grafana (namespace: monitoring) |"
+            echo ""
+            echo "### Harness Resources Created"
+            echo ""
+            echo "| Category | Resources |"
+            echo "|---|---|"
+            echo "| **Services** | ${SERVICES} |"
+            echo "| **Environments** | ${ENVIRONMENTS} |"
+            echo "| **Connectors** | Prometheus, AWS Secrets Manager, Kubernetes |"
+            echo ""
+            echo "### 🔑 Connect to Bastion (SSM — no key needed)"
+            echo ""
+            echo "\`\`\`bash"
+            echo "aws ssm start-session --target $(terraform output -raw bastion_ssm_command | awk '{print $NF}') --region ${{ env.AWS_REGION_VALUE }}"
+            echo "\`\`\`"
+            echo ""
+            echo "### ☸️ Connect to EKS (from Bastion)"
+            echo ""
+            echo "\`\`\`bash"
+            echo "aws eks update-kubeconfig --region ${{ env.AWS_REGION_VALUE }} --name ${CLUSTER}"
+            echo "kubectl get nodes"
+            echo "\`\`\`"
+            echo ""
+            echo "### 🔧 SonarQube"
+            echo "URL: http://${BASTION_IP}:9000 (admin/admin)"
+            echo ""
+            echo "### 💰 Cost While Running"
+            echo "| Period | Cost |"
+            echo "|---|---|"
+            echo "| Per Day | ~\$4.50 |"
+            echo "| Per Month | ~\$135 |"
+            echo ""
+            echo "> ⚠️ **Destroy when done!** Run this workflow with action: \`destroy\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Terraform Destroy
+        if: github.event.inputs.action == 'destroy'
+        id: terraform_destroy
+        continue-on-error: true
+        run: |
+          # Pre-destroy: Clean Kubernetes resources first (LoadBalancers create AWS resources outside Terraform)
+          CLUSTER="${{ env.TF_WORKING_DIR }}"
+          CLUSTER_NAME=$(terraform output -raw eks_cluster_name 2>/dev/null || echo "ep10-enterprise-cluster")
+
+          if aws eks describe-cluster --name "${CLUSTER_NAME}" --region "${{ env.AWS_REGION_VALUE }}" >/dev/null 2>&1; then
+            echo "Cleaning Kubernetes resources before destroy..."
+            curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+            chmod +x kubectl && sudo mv kubectl /usr/local/bin/
+
+            aws eks update-kubeconfig --region "${{ env.AWS_REGION_VALUE }}" --name "${CLUSTER_NAME}"
+
+            # Delete LoadBalancer services (they create AWS LBs outside Terraform)
+            kubectl get svc -A -o jsonpath='{range .items[?(@.spec.type=="LoadBalancer")]}{.metadata.namespace}{" "}{.metadata.name}{"\n"}{end}' 2>/dev/null | while read -r NS SVC; do
+              [ -z "$NS" ] && continue
+              kubectl delete svc "$SVC" -n "$NS" --ignore-not-found=true || true
+            done
+
+            # Delete PVCs (they create EBS volumes)
+            kubectl get pvc -A --no-headers 2>/dev/null | while read -r NS PVC _; do
+              [ -z "$NS" ] && continue
+              kubectl delete pvc "$PVC" -n "$NS" --ignore-not-found=true --timeout=30s || true
+            done
+
+            # Delete non-system namespaces
+            kubectl get ns --no-headers 2>/dev/null | awk '{print $1}' | while read -r NS; do
+              case "$NS" in kube-system|kube-public|kube-node-lease|default) continue;; esac
+              kubectl delete namespace "$NS" --ignore-not-found=true --wait=false --timeout=60s || true
+            done
+
+            echo "Waiting 120s for AWS resources (LBs, ENIs) to release..."
+            sleep 120
+          fi
+
+          terraform destroy -auto-approve -no-color \
+            -var="harness_account_id=${{ vars.HARNESS_ACCOUNT_ID }}" \
+            -var="harness_api_key=${{ secrets.HARNESS_API_KEY }}" \
+            -var="harness_delegate_token=${{ secrets.HARNESS_DELEGATE_TOKEN }}" \
+            -var="github_username=${{ github.repository_owner }}"
+
+      - name: Terraform Destroy Retry (if first attempt failed)
+        if: github.event.inputs.action == 'destroy' && steps.terraform_destroy.outcome == 'failure'
+        run: |
+          echo "First destroy attempt failed. Cleaning orphaned ENIs..."
+          VPC_ID="$(terraform output -raw vpc_id 2>/dev/null || true)"
+          if [ -n "$VPC_ID" ]; then
+            aws ec2 describe-network-interfaces --region "${{ env.AWS_REGION_VALUE }}" \
+              --filters "Name=vpc-id,Values=${VPC_ID}" "Name=status,Values=available" \
+              --query 'NetworkInterfaces[].NetworkInterfaceId' --output text 2>/dev/null | \
+              tr '\t' '\n' | while read -r eni; do
+                [ -z "$eni" ] && continue
+                aws ec2 delete-network-interface --region "${{ env.AWS_REGION_VALUE }}" --network-interface-id "$eni" || true
+              done
+
+            aws ec2 describe-security-groups --region "${{ env.AWS_REGION_VALUE }}" \
+              --filters "Name=vpc-id,Values=${VPC_ID}" \
+              --query "SecurityGroups[?GroupName!='default'].GroupId" --output text 2>/dev/null | \
+              tr '\t' '\n' | while read -r sg; do
+                [ -z "$sg" ] && continue
+                aws ec2 delete-security-group --region "${{ env.AWS_REGION_VALUE }}" --group-id "$sg" || true
+              done
+          fi
+
+          sleep 30
+          terraform destroy -auto-approve -no-color \
+            -var="harness_account_id=${{ vars.HARNESS_ACCOUNT_ID }}" \
+            -var="harness_api_key=${{ secrets.HARNESS_API_KEY }}" \
+            -var="harness_delegate_token=${{ secrets.HARNESS_DELEGATE_TOKEN }}" \
+            -var="github_username=${{ github.repository_owner }}"
+
+      - name: Destroy Summary
+        if: github.event.inputs.action == 'destroy'
+        run: |
+          {
+            echo "## 🗑️ Episode 10 — Everything Destroyed"
+            echo ""
+            echo "All resources deleted:"
+            echo "- EKS Cluster"
+            echo "- VPC + Subnets + NAT Gateway"
+            echo "- K8s Delegate"
+            echo "- Prometheus + Grafana"
+            echo "- All Harness services, environments, connectors"
+            echo ""
+            echo "**Your AWS bill is now \$0.**"
+          } >> "$GITHUB_STEP_SUMMARY"

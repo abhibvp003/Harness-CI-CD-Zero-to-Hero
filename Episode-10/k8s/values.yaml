@@ -1,0 +1,23 @@
+# ═══════════════════════════════════════════════════════════════════
+# values.yaml — GitOpsUpdateReleaseRepo updates these via PR
+# Contains ACTUAL image URLs (ArgoCD reads from Git, not Harness runtime)
+# First deploy: use placeholder tag v1, pipeline updates to v<sequenceId>
+# ═══════════════════════════════════════════════════════════════════
+
+# Microservice images (GitOpsUpdateReleaseRepo updates these)
+frontendImage: ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/frontend:v1
+cartserviceImage: ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/cartservice:v1
+checkoutserviceImage: ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/checkoutservice:v1
+productcatalogserviceImage: ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/productcatalogservice:v1
+currencyserviceImage: ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/currencyservice:v1
+emailserviceImage: ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/emailservice:v1
+paymentserviceImage: ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/paymentservice:v1
+recommendationserviceImage: ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/recommendationservice:v1
+shippingserviceImage: ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/shippingservice:v1
+adserviceImage: ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/adservice:v1
+loadgeneratorImage: ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/loadgenerator:v1
+
+# Configuration
+namespace: online-boutique
+replicas: 2
+domain: CHANGE-TO-YOUR-DOMAIN.com

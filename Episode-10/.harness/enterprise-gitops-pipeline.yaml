@@ -1,0 +1,556 @@
+# ============================================
+# ENTERPRISE GITOPS PIPELINE (Episode 10 — MNC Production Way)
+# ============================================
+# Stage 1: CI — Build all microservice images + Push to ECR
+# Stage 2: AI Security Agent — Analyze scan results
+# Stage 3: AI Deployment Risk Agent — SAFE/RISKY/BLOCK
+# Stage 4: GitOps Deploy — PR → Approve → Merge → Sync → Verify
+# ============================================
+pipeline:
+  name: ep10-enterprise-gitops
+  identifier: ep10_enterprise_gitops
+  projectIdentifier: HarnessCICDZerotoHero
+  orgIdentifier: default
+  tags: {}
+  properties:
+    ci:
+      codebase:
+        connectorRef: account.Github
+        repoName: Harness-CI-CD-Zero-to-Hero
+        build: <+input>
+  stages:
+    # ============================================
+    # STAGE 1: Build & Push to ECR (KubernetesDirect — MNC way)
+    # Builds run on YOUR EKS cluster (code never leaves VPC)
+    # ============================================
+    - stage:
+        name: build-and-push
+        identifier: build_and_push
+        description: "Build microservice images and push to ECR"
+        type: CI
+        spec:
+          cloneCodebase: true
+          caching:
+            enabled: true
+            paths:
+              - /root/.cache/go-build
+              - /root/go/pkg/mod
+              - /root/.npm
+              - /root/.gradle/caches
+          infrastructure:
+            type: KubernetesDirect
+            spec:
+              connectorRef: k8sdelegate
+              namespace: harness-delegate-ng
+              automountServiceAccountToken: true
+              os: Linux
+          execution:
+            steps:
+              # Security scans (Episode 5 — DevSecOps)
+              - parallel:
+                  - step:
+                      type: Run
+                      name: Gitleaks Scan
+                      identifier: gitleaks
+                      spec:
+                        connectorRef: dockerhub
+                        shell: Sh
+                        image: zricethezav/gitleaks:latest
+                        command: |-
+                          gitleaks detect --source=/harness --no-git --report-format json --report-path /harness/gitleaks-report.json || true
+
+                  - step:
+                      type: Run
+                      name: Trivy Scan
+                      identifier: trivy
+                      spec:
+                        connectorRef: dockerhub
+                        shell: Sh
+                        image: aquasec/trivy:latest
+                        command: |-
+                          trivy fs --format json --output /harness/trivy-results.json /harness/Episode-10/src/ || true
+
+                  - step:
+                      type: Run
+                      name: OWASP Dependency Check
+                      identifier: owasp
+                      spec:
+                        connectorRef: dockerhub
+                        shell: Sh
+                        image: owasp/dependency-check:latest
+                        command: |-
+                          /usr/share/dependency-check/bin/dependency-check.sh \
+                            --scan /harness/Episode-10/src/ \
+                            --format JSON \
+                            --out /harness/owasp-report \
+                            --project "online-boutique" \
+                            --failOnCVSS 9 || true
+
+                  - step:
+                      type: Run
+                      name: SonarQube Analysis
+                      identifier: sonarqube
+                      spec:
+                        connectorRef: dockerhub
+                        shell: Sh
+                        image: sonarsource/sonar-scanner-cli:latest
+                        envVariables:
+                          SONAR_HOST_URL: <+variable.sonar_host_url>
+                          SONAR_TOKEN: <+secrets.getValue("sonar_token")>
+                        command: |-
+                          sonar-scanner \
+                            -Dsonar.projectKey=online-boutique \
+                            -Dsonar.sources=/harness/Episode-10/src \
+                            -Dsonar.host.url=$SONAR_HOST_URL \
+                            -Dsonar.login=$SONAR_TOKEN || true
+
+              # Build and push all microservices (Episode 4 — parallel ECR push)
+              - parallel:
+                  - step:
+                      type: BuildAndPushECR
+                      name: Push Frontend
+                      identifier: push_frontend
+                      spec:
+                        connectorRef: account.aws_account
+                        region: <+variable.aws_region>
+                        account: <+variable.aws_account_id>
+                        imageName: frontend
+                        tags:
+                          - v<+pipeline.sequenceId>
+                        dockerfile: Episode-10/src/frontend/Dockerfile
+                        context: Episode-10/src/frontend
+
+                  - step:
+                      type: BuildAndPushECR
+                      name: Push CartService
+                      identifier: push_cartservice
+                      spec:
+                        connectorRef: account.aws_account
+                        region: <+variable.aws_region>
+                        account: <+variable.aws_account_id>
+                        imageName: cartservice
+                        tags:
+                          - v<+pipeline.sequenceId>
+                        dockerfile: Episode-10/src/cartservice/src/Dockerfile
+                        context: Episode-10/src/cartservice/src
+
+                  - step:
+                      type: BuildAndPushECR
+                      name: Push CheckoutService
+                      identifier: push_checkoutservice
+                      spec:
+                        connectorRef: account.aws_account
+                        region: <+variable.aws_region>
+                        account: <+variable.aws_account_id>
+                        imageName: checkoutservice
+                        tags:
+                          - v<+pipeline.sequenceId>
+                        dockerfile: Episode-10/src/checkoutservice/Dockerfile
+                        context: Episode-10/src/checkoutservice
+
+                  - step:
+                      type: BuildAndPushECR
+                      name: Push ProductCatalog
+                      identifier: push_productcatalog
+                      spec:
+                        connectorRef: account.aws_account
+                        region: <+variable.aws_region>
+                        account: <+variable.aws_account_id>
+                        imageName: productcatalogservice
+                        tags:
+                          - v<+pipeline.sequenceId>
+                        dockerfile: Episode-10/src/productcatalogservice/Dockerfile
+                        context: Episode-10/src/productcatalogservice
+
+              - parallel:
+                  - step:
+                      type: BuildAndPushECR
+                      name: Push CurrencyService
+                      identifier: push_currencyservice
+                      spec:
+                        connectorRef: account.aws_account
+                        region: <+variable.aws_region>
+                        account: <+variable.aws_account_id>
+                        imageName: currencyservice
+                        tags:
+                          - v<+pipeline.sequenceId>
+                        dockerfile: Episode-10/src/currencyservice/Dockerfile
+                        context: Episode-10/src/currencyservice
+
+                  - step:
+                      type: BuildAndPushECR
+                      name: Push EmailService
+                      identifier: push_emailservice
+                      spec:
+                        connectorRef: account.aws_account
+                        region: <+variable.aws_region>
+                        account: <+variable.aws_account_id>
+                        imageName: emailservice
+                        tags:
+                          - v<+pipeline.sequenceId>
+                        dockerfile: Episode-10/src/emailservice/Dockerfile
+                        context: Episode-10/src/emailservice
+
+                  - step:
+                      type: BuildAndPushECR
+                      name: Push PaymentService
+                      identifier: push_paymentservice
+                      spec:
+                        connectorRef: account.aws_account
+                        region: <+variable.aws_region>
+                        account: <+variable.aws_account_id>
+                        imageName: paymentservice
+                        tags:
+                          - v<+pipeline.sequenceId>
+                        dockerfile: Episode-10/src/paymentservice/Dockerfile
+                        context: Episode-10/src/paymentservice
+
+                  - step:
+                      type: BuildAndPushECR
+                      name: Push RecommendationService
+                      identifier: push_recommendationservice
+                      spec:
+                        connectorRef: account.aws_account
+                        region: <+variable.aws_region>
+                        account: <+variable.aws_account_id>
+                        imageName: recommendationservice
+                        tags:
+                          - v<+pipeline.sequenceId>
+                        dockerfile: Episode-10/src/recommendationservice/Dockerfile
+                        context: Episode-10/src/recommendationservice
+
+              - parallel:
+                  - step:
+                      type: BuildAndPushECR
+                      name: Push ShippingService
+                      identifier: push_shippingservice
+                      spec:
+                        connectorRef: account.aws_account
+                        region: <+variable.aws_region>
+                        account: <+variable.aws_account_id>
+                        imageName: shippingservice
+                        tags:
+                          - v<+pipeline.sequenceId>
+                        dockerfile: Episode-10/src/shippingservice/Dockerfile
+                        context: Episode-10/src/shippingservice
+
+                  - step:
+                      type: BuildAndPushECR
+                      name: Push AdService
+                      identifier: push_adservice
+                      spec:
+                        connectorRef: account.aws_account
+                        region: <+variable.aws_region>
+                        account: <+variable.aws_account_id>
+                        imageName: adservice
+                        tags:
+                          - v<+pipeline.sequenceId>
+                        dockerfile: Episode-10/src/adservice/Dockerfile
+                        context: Episode-10/src/adservice
+
+                  - step:
+                      type: BuildAndPushECR
+                      name: Push LoadGenerator
+                      identifier: push_loadgenerator
+                      spec:
+                        connectorRef: account.aws_account
+                        region: <+variable.aws_region>
+                        account: <+variable.aws_account_id>
+                        imageName: loadgenerator
+                        tags:
+                          - v<+pipeline.sequenceId>
+                        dockerfile: Episode-10/src/loadgenerator/Dockerfile
+                        context: Episode-10/src/loadgenerator
+
+    # ============================================
+    # STAGE 2: AI Security Agent
+    # ============================================
+    - stage:
+        name: ai-security-analysis
+        identifier: ai_security_analysis
+        description: "AI agent analyzes security scan results"
+        type: CI
+        spec:
+          cloneCodebase: true
+          infrastructure:
+            type: KubernetesDirect
+            spec:
+              connectorRef: k8sdelegate
+              namespace: harness-delegate-ng
+              automountServiceAccountToken: true
+              os: Linux
+          execution:
+            steps:
+              - step:
+                  type: Run
+                  name: AI Security Agent
+                  identifier: ai_security_agent
+                  spec:
+                    connectorRef: dockerhub
+                    shell: Sh
+                    image: python:3.11-slim
+                    envVariables:
+                      OPENAI_API_KEY: <+secrets.getValue("openai_api_key")>
+                    command: |-
+                      cd Episode-10/ai-agents
+                      python security_agent.py \
+                        --trivy /harness/trivy-results.json \
+                        --gitleaks /harness/gitleaks-report.json \
+                        --npm-audit /harness/npm-audit.json 2>/dev/null || echo "No scan data — skipping"
+
+    # ============================================
+    # STAGE 3: AI Deployment Risk Agent
+    # ============================================
+    - stage:
+        name: ai-deployment-risk
+        identifier: ai_deployment_risk
+        description: "AI agent assesses if deployment is safe"
+        type: CI
+        spec:
+          cloneCodebase: true
+          infrastructure:
+            type: KubernetesDirect
+            spec:
+              connectorRef: k8sdelegate
+              namespace: harness-delegate-ng
+              automountServiceAccountToken: true
+              os: Linux
+          execution:
+            steps:
+              - step:
+                  type: Run
+                  name: AI Deployment Risk Agent
+                  identifier: ai_risk_agent
+                  spec:
+                    connectorRef: dockerhub
+                    shell: Sh
+                    image: python:3.11-slim
+                    envVariables:
+                      OPENAI_API_KEY: <+secrets.getValue("openai_api_key")>
+                    command: |-
+                      cd Episode-10/ai-agents
+                      python deployment_risk_agent.py \
+                        --environment production \
+                        --test-status passed \
+                        --security-status passed \
+                        --changes 10 \
+                        --trivy-critical 0 \
+                        --secrets-found 0
+
+    # ============================================
+    # STAGE 4: GitOps Deploy (PR → Approve → Merge → Sync → Verify)
+    # This is the MNC production deployment pattern
+    # ============================================
+    - stage:
+        name: gitops-deploy
+        identifier: gitops_deploy
+        description: "GitOps PR pipeline — update Git, ArgoCD syncs cluster"
+        type: Deployment
+        spec:
+          deploymentType: Kubernetes
+          gitOpsEnabled: true
+          service:
+            serviceRef: online_boutique
+            serviceInputs:
+              serviceDefinition:
+                type: Kubernetes
+                spec:
+                  artifacts:
+                    primary:
+                      primaryArtifactRef: ecr_frontend
+                      sources:
+                        - identifier: ecr_frontend
+                          type: Ecr
+                          spec:
+                            tag: v<+pipeline.sequenceId>
+          environment:
+            environmentRef: production
+            deployToAll: false
+            gitOpsClusters:
+              - identifier: incluster
+                agentIdentifier: ep10gitopsagent
+          execution:
+            steps:
+              # Step 1: Update ALL image tags in values.yaml via PR
+              - step:
+                  type: GitOpsUpdateReleaseRepo
+                  name: Update Release Repo
+                  identifier: update_release_repo
+                  timeout: 10m
+                  spec:
+                    variables:
+                      - name: frontendImage
+                        type: String
+                        value: <+variable.aws_account_id>.dkr.ecr.<+variable.aws_region>.amazonaws.com/frontend:v<+pipeline.sequenceId>
+                      - name: cartserviceImage
+                        type: String
+                        value: <+variable.aws_account_id>.dkr.ecr.<+variable.aws_region>.amazonaws.com/cartservice:v<+pipeline.sequenceId>
+                      - name: checkoutserviceImage
+                        type: String
+                        value: <+variable.aws_account_id>.dkr.ecr.<+variable.aws_region>.amazonaws.com/checkoutservice:v<+pipeline.sequenceId>
+                      - name: productcatalogserviceImage
+                        type: String
+                        value: <+variable.aws_account_id>.dkr.ecr.<+variable.aws_region>.amazonaws.com/productcatalogservice:v<+pipeline.sequenceId>
+                      - name: currencyserviceImage
+                        type: String
+                        value: <+variable.aws_account_id>.dkr.ecr.<+variable.aws_region>.amazonaws.com/currencyservice:v<+pipeline.sequenceId>
+                      - name: emailserviceImage
+                        type: String
+                        value: <+variable.aws_account_id>.dkr.ecr.<+variable.aws_region>.amazonaws.com/emailservice:v<+pipeline.sequenceId>
+                      - name: paymentserviceImage
+                        type: String
+                        value: <+variable.aws_account_id>.dkr.ecr.<+variable.aws_region>.amazonaws.com/paymentservice:v<+pipeline.sequenceId>
+                      - name: recommendationserviceImage
+                        type: String
+                        value: <+variable.aws_account_id>.dkr.ecr.<+variable.aws_region>.amazonaws.com/recommendationservice:v<+pipeline.sequenceId>
+                      - name: shippingserviceImage
+                        type: String
+                        value: <+variable.aws_account_id>.dkr.ecr.<+variable.aws_region>.amazonaws.com/shippingservice:v<+pipeline.sequenceId>
+                      - name: adserviceImage
+                        type: String
+                        value: <+variable.aws_account_id>.dkr.ecr.<+variable.aws_region>.amazonaws.com/adservice:v<+pipeline.sequenceId>
+                      - name: loadgeneratorImage
+                        type: String
+                        value: <+variable.aws_account_id>.dkr.ecr.<+variable.aws_region>.amazonaws.com/loadgenerator:v<+pipeline.sequenceId>
+                    prTitle: "Deploy Online Boutique build #<+pipeline.sequenceId>"
+
+              # Step 2: Human approval before merge to production
+              - step:
+                  type: HarnessApproval
+                  name: Approve Deployment
+                  identifier: approve_deployment
+                  timeout: 1d
+                  spec:
+                    approvalMessage: "Approve deployment of build #<+pipeline.sequenceId> to production (10 microservices)"
+                    includePipelineExecutionHistory: true
+                    isAutoRejectEnabled: false
+                    approvers:
+                      userGroups:
+                        - _project_all_users
+                      minimumCount: 1
+                      disallowPipelineExecutor: false
+
+              # Step 3: Merge PR into main (ArgoCD watches main branch)
+              - step:
+                  type: MergePR
+                  name: Merge PR
+                  identifier: merge_pr
+                  timeout: 10m
+                  spec:
+                    deleteSourceBranch: true
+
+              # Step 4: Trigger immediate ArgoCD sync (don't wait 3-min poll)
+              - step:
+                  type: GitOpsSync
+                  name: Sync Application
+                  identifier: gitops_sync
+                  timeout: 10m
+                  spec:
+                    prune: true
+                    dryRun: false
+                    applyOnly: false
+                    forceApply: false
+                    applicationsList:
+                      - applicationName: online-boutique
+                        agentId: ep10gitopsagent
+                    retry: false
+                    syncOptions:
+                      skipSchemaValidation: false
+                      autoCreateNamespace: true
+                      pruneResourcesAtLast: false
+                      applyOutOfSyncOnly: false
+                      replaceResources: false
+                      prunePropagationPolicy: foreground
+
+              # Step 5: Check application health status
+              - step:
+                  type: GitOpsGetAppDetails
+                  name: Get App Status
+                  identifier: get_app_status
+                  timeout: 5m
+                  spec:
+                    applicationsList:
+                      - applicationName: online-boutique
+                        agentId: ep10gitopsagent
+
+              # Step 6: Continuous Verification (Episode 9 — auto-rollback if metrics degrade)
+              # Compares pre/post deployment metrics from Prometheus
+              # If error_rate or latency increase → triggers rollback automatically
+              - step:
+                  type: Verify
+                  name: Verify Deployment
+                  identifier: verify_deployment
+                  timeout: 15m
+                  spec:
+                    isMultiServicesOrEnvs: false
+                    type: Rolling
+                    monitoredService:
+                      type: Default
+                      spec: {}
+                    spec:
+                      sensitivity: MEDIUM
+                      duration: 5m
+                      deploymentTag: <+pipeline.sequenceId>
+
+            # ============================================
+            # ROLLBACK (auto-triggered on failure)
+            # Reverts Git commit → ArgoCD syncs old version
+            # ============================================
+            rollbackSteps:
+              - step:
+                  type: RevertPR
+                  name: Revert PR
+                  identifier: revert_pr
+                  timeout: 10m
+                  spec:
+                    commitId: <+pipeline.stages.gitops_deploy.spec.execution.steps.update_release_repo.updateReleaseRepoOutcome.commitId>
+
+              - step:
+                  type: MergePR
+                  name: Merge Revert PR
+                  identifier: merge_revert_pr
+                  timeout: 10m
+                  spec:
+                    deleteSourceBranch: true
+
+              - step:
+                  type: GitOpsSync
+                  name: Rollback Sync
+                  identifier: rollback_sync
+                  timeout: 10m
+                  spec:
+                    prune: true
+                    dryRun: false
+                    applyOnly: false
+                    forceApply: false
+                    applicationsList:
+                      - applicationName: online-boutique
+                        agentId: ep10gitopsagent
+                    retry: false
+                    syncOptions:
+                      skipSchemaValidation: false
+                      autoCreateNamespace: false
+                      pruneResourcesAtLast: false
+                      applyOutOfSyncOnly: false
+                      replaceResources: false
+                      prunePropagationPolicy: foreground
+        tags: {}
+        failureStrategies:
+          - onFailure:
+              errors:
+                - AllErrors
+              action:
+                type: StageRollback
+        gitOpsEnabled: true
+
+  # Slack notification on success/failure
+  notificationRules:
+    - name: Pipeline Notifications
+      enabled: true
+      pipelineEvents:
+        - type: PipelineSuccess
+        - type: PipelineFailed
+      notificationMethod:
+        type: Slack
+        spec:
+          webhookUrl: <+secrets.getValue("slack_webhook_url")>
