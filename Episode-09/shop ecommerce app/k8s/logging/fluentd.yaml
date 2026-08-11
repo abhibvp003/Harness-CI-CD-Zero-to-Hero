@@ -67,6 +67,10 @@ spec:
               value: "false"
             - name: FLUENT_ELASTICSEARCH_LOGSTASH_FORMAT
               value: "true"
+            - name: FLUENT_CONTAINER_TAIL_EXCLUDE_PATH
+              value: "/var/log/containers/fluentd*.log"
+            - name: FLUENT_CONTAINER_TAIL_PARSER_TYPE
+              value: "cri"
             - name: FLUENT_ELASTICSEARCH_LOGSTASH_PREFIX
               value: "k8s-logs"
             - name: FLUENT_ELASTICSEARCH_USER
@@ -76,6 +80,10 @@ spec:
                 secretKeyRef:
                   name: elasticsearch-credentials
                   key: ELASTIC_PASSWORD
+            - name: FLUENT_CONTAINER_TAIL_EXCLUDE_PATH
+              value: "/var/log/containers/fluentd*.log"
+            - name: FLUENT_CONTAINER_TAIL_PARSER_TYPE
+              value: "cri"
           resources:
             requests:
               cpu: 100m
