@@ -232,6 +232,7 @@ After `terraform apply`, create CNAME records pointing subdomains to the ALB:
 | **AWS Infrastructure** | VPC, 4 subnets, NAT Gateway, Internet Gateway, Route Tables |
 | **EKS** | Cluster (Auto Mode), IAM roles, KMS encryption, Security Group |
 | **Bastion** | EC2 (t2.medium), SSM access, kubectl, Helm, Docker, SonarQube |
+| **RDS** | PostgreSQL 16.3 (private subnet, encrypted, credentials auto-stored in AWS SM) |
 | **Delegate** | K8s Delegate (HA — 2 replicas, autoscale to 6, 2Gi-4Gi memory) |
 | **GitOps Agent** | ArgoCD (HA — controller×2, repo-server×2→5, server×2→4, redis×2) |
 | **ECR** | 11 repositories + lifecycle policy (delete untagged after 7 days) |
@@ -244,7 +245,7 @@ After `terraform apply`, create CNAME records pointing subdomains to the ALB:
 | **Harness Monitored Service** | `online_boutique_production` (Prometheus health source for CV) |
 | **ArgoCD Apps** | monitoring (Helm), logging (Git), jaeger (Helm), otel-collector (Git) |
 | **Ingress** | Kibana ingress via shared ALB |
-| **Secrets** | AWS SM secret container `online-boutique/app-secrets` (empty — you fill it) |
+| **Secrets** | AWS SM: `online-boutique/app-secrets` (you fill) + `online-boutique/db-credentials` (auto-filled by Terraform) |
 | **RBAC** | ClusterRole + ClusterRoleBinding for delegate (pod create permissions) |
 
 ---
@@ -288,17 +289,25 @@ After Terraform completes, verify everything appeared:
 ## Step 6: Add Secrets in AWS Secrets Manager
 
 1. Go to **AWS Console** → **Secrets Manager** (https://console.aws.amazon.com/secretsmanager)
-2. Find secret: `online-boutique/app-secrets`
-3. Click on it → Click **"Retrieve secret value"** → **Edit**
-4. Switch to **Key/value** tab
-5. Add your key-value pairs:
+
+**6.1 — App Secrets (you fill manually):**
+1. Find secret: `online-boutique/app-secrets`
+2. Click on it → Click **"Retrieve secret value"** → **Edit**
+3. Switch to **Key/value** tab
+4. Add your key-value pairs:
 
 | Key | Value | Used By |
 |-----|-------|---------|
 | `REDIS_ADDR` | `redis-cart:6379` | cartservice |
 | `OTEL_ENDPOINT` | `otel-collector.tracing.svc.cluster.local:4317` | all services (tracing) |
 
-6. Click **Save**
+5. Click **Save**
+
+**6.2 — DB Credentials (auto-filled by Terraform — no action needed):**
+- Secret: `online-boutique/db-credentials`
+- Contains: `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USERNAME`, `DB_PASSWORD`, `DB_URL`
+- Terraform generated a random 24-char password and stored everything automatically
+- ESO pulls this into K8s Secret `db-credentials` → all pods get these env vars
 
 > ESO polls AWS SM every 1 hour. To force immediate refresh: `kubectl delete externalsecret app-secrets -n online-boutique` → ESO recreates it within 30 seconds.
 
@@ -443,12 +452,13 @@ kubectl get pods -n online-boutique
 | Resource | Per Day | Per Month |
 |----------|---------|-----------|
 | EKS cluster (Auto Mode) | ~$2.40 | ~$72 |
+| RDS PostgreSQL (db.t3.micro) | ~$0.50 | ~$15 |
 | Bastion EC2 (t2.medium) | ~$1.10 | ~$33 |
 | NAT Gateway | ~$1.10 | ~$33 |
 | ALB (1 shared) | ~$0.70 | ~$21 |
 | EBS volumes | ~$0.20 | ~$6 |
 | ECR storage | ~$0.10 | ~$3 |
-| **TOTAL (running)** | **~$5.60** | **~$168** |
+| **TOTAL (running)** | **~$6.10** | **~$183** |
 | **After destroy** | **$0.00** | **$0.00** |
 
 ---
@@ -475,15 +485,19 @@ kubectl get pods -n online-boutique
 | Resource | Episodes 6-9 | Episode 10 |
 |----------|-------------|-----------|
 | EKS Cluster | `infra.yml` (separate workflow) | `terraform apply` (same command) |
-| K8s Delegate | Manual Helm install on Bastion | Terraform `helm_release` (HA) |
-| GitOps Agent | Manual in Harness UI | Terraform `harness_platform_gitops_agent` + Helm |
-| ECR Repos | `aws ecr create-repository` in pipeline | Terraform `aws_ecr_repository` |
-| Harness Service | Manual in UI (click, click, click) | Terraform `harness_platform_service` |
-| Harness Environment | Manual in UI | Terraform `harness_platform_environment` |
-| Connectors | Manual in UI (3 screens each) | Terraform `harness_platform_connector_*` |
-| OPA Policies | Manual in UI (paste Rego) | Terraform `harness_platform_policy` |
-| Monitored Service | Manual after first deploy | Terraform `harness_platform_monitored_service` |
-| Observability | Harness pipeline + kubectl | ArgoCD App-of-Apps (Helm charts) |
-| Secrets | Harness Built-in SM | External Secrets Operator + AWS SM |
-| Ingress | 4 LoadBalancers ($$$) | 1 ALB + Ingress (cost optimized) |
+| RDS Database | Not used (MySQL in K8s pod) | Terraform `aws_db_instance` (managed, encrypted, auto-backup) |
+| K8s Delegate | Manual Helm install on Bastion | Terraform module `delegate` (HA + autoscale) |
+| GitOps Agent | Manual in Harness UI | Terraform module `gitops` (HA) |
+| ECR Repos | `aws ecr create-repository` in pipeline | Terraform module `ecr` (lifecycle policies) |
+| Harness Service | Manual in UI (click, click, click) | Terraform module `harness-platform` |
+| Harness Environment | Manual in UI | Terraform module `harness-platform` |
+| Connectors | Manual in UI (3 screens each) | Terraform module `harness-platform` |
+| OPA Policies | Manual in UI (paste Rego) | Terraform module `harness-platform` |
+| Monitored Service | Manual after first deploy | Terraform module `harness-platform` |
+| Observability | Harness pipeline + kubectl | Terraform module `observability` (ArgoCD Helm apps) |
+| Secrets | Harness Built-in SM | External Secrets Operator + AWS SM (module `external-secrets`) |
+| Database Credentials | Hardcoded in K8s secret | Auto-generated + stored in AWS SM (module `rds`) |
+| Ingress | 4 LoadBalancers ($$$) | 1 ALB + Ingress (module `ingress`) |
+| SonarQube Config | Single `sonar-project.properties` | Multi-service scan (11 source dirs) |
+| Terraform Structure | Flat files | Production modules (11 reusable modules) |
 | Total setup time | ~45 min clicking | ~20 min terraform apply |
