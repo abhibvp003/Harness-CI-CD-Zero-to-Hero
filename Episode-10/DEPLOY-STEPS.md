@@ -135,6 +135,31 @@
 
 ---
 
+## Prerequisites (New for Episode 10 — Already Configured)
+
+### A. Domain + Route53 + ACM Certificate
+
+> These are already configured and will be reused for this project. No action needed.
+
+| Resource | Status | Details |
+|----------|--------|---------|
+| **Domain** | ✅ Already registered | Your custom domain in Route53 |
+| **Hosted Zone** | ✅ Already exists | Route53 hosted zone with NS records |
+| **ACM Certificate** | ✅ Already issued | Wildcard `*.yourdomain.com` — DNS validated |
+
+After `terraform apply`, create CNAME records pointing subdomains to the ALB:
+
+| Record | Type | Points To |
+|--------|------|-----------|
+| `app.yourdomain.com` | CNAME | ALB hostname (from `kubectl get ingress`) |
+| `grafana.yourdomain.com` | CNAME | Same ALB |
+| `kibana.yourdomain.com` | CNAME | Same ALB |
+| `jaeger.yourdomain.com` | CNAME | Same ALB |
+
+> All subdomains share 1 ALB. The ALB routes by `Host` header. ACM cert auto-discovered (`certificate-arn: "auto"`).
+
+---
+
 ## Step 1: Create Harness API Key
 
 1. Login to Harness → https://app.harness.io

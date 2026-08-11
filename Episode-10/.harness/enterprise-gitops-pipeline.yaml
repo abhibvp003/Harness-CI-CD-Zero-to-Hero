@@ -98,9 +98,8 @@ pipeline:
                           SONAR_HOST_URL: <+variable.sonar_host_url>
                           SONAR_TOKEN: <+secrets.getValue("sonar_token")>
                         command: |-
+                          cd /harness/Episode-10
                           sonar-scanner \
-                            -Dsonar.projectKey=online-boutique \
-                            -Dsonar.sources=/harness/Episode-10/src \
                             -Dsonar.host.url=$SONAR_HOST_URL \
                             -Dsonar.login=$SONAR_TOKEN || true
 

@@ -23,6 +23,9 @@ spec:
           env:
             - name: PORT
               value: "3550"
+          envFrom:
+            - secretRef:
+                name: db-credentials
           resources:
             requests:
               cpu: 100m

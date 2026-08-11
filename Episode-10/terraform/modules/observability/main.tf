@@ -1,20 +1,9 @@
-# ═══════════════════════════════════════════════════════════════════
-# ArgoCD Applications — Created by Terraform (automatic, no manual edits)
-# Injects: domain, github_username, region — from variables
-# Students never touch k8s/ files — everything works automatically
-# ═══════════════════════════════════════════════════════════════════
-
-# ─────────────────────────────────────────
-# Monitoring (kube-prometheus-stack Helm chart via ArgoCD)
-# ─────────────────────────────────────────
+# Monitoring — kube-prometheus-stack via ArgoCD
 resource "kubernetes_manifest" "argocd_monitoring" {
   manifest = {
     apiVersion = "argoproj.io/v1alpha1"
     kind       = "Application"
-    metadata = {
-      name      = "monitoring"
-      namespace = "gitops"
-    }
+    metadata   = { name = "monitoring", namespace = "gitops" }
     spec = {
       project = "default"
       source = {
@@ -26,9 +15,7 @@ resource "kubernetes_manifest" "argocd_monitoring" {
             grafana = {
               enabled       = true
               adminPassword = var.grafana_admin_password
-              service = {
-                type = "ClusterIP"
-              }
+              service       = { type = "ClusterIP" }
               ingress = {
                 enabled          = true
                 ingressClassName = "alb"
@@ -45,57 +32,28 @@ resource "kubernetes_manifest" "argocd_monitoring" {
             }
             prometheus = {
               prometheusSpec = {
-                retention = "15d"
-                storageSpec = {
-                  volumeClaimTemplate = {
-                    spec = {
-                      storageClassName = "auto-ebs-sc"
-                      resources = {
-                        requests = {
-                          storage = "50Gi"
-                        }
-                      }
-                    }
-                  }
-                }
+                retention                               = "15d"
                 serviceMonitorSelectorNilUsesHelmValues = false
                 podMonitorSelectorNilUsesHelmValues     = false
+                storageSpec                             = { volumeClaimTemplate = { spec = { storageClassName = "auto-ebs-sc", resources = { requests = { storage = "50Gi" } } } } }
               }
             }
-            alertmanager = {
-              enabled = true
-            }
+            alertmanager = { enabled = true }
           }
         }
       }
-      destination = {
-        server    = "https://kubernetes.default.svc"
-        namespace = "monitoring"
-      }
-      syncPolicy = {
-        automated = {
-          prune    = true
-          selfHeal = true
-        }
-        syncOptions = ["CreateNamespace=true", "ServerSideApply=true"]
-      }
+      destination = { server = "https://kubernetes.default.svc", namespace = "monitoring" }
+      syncPolicy  = { automated = { prune = true, selfHeal = true }, syncOptions = ["CreateNamespace=true", "ServerSideApply=true"] }
     }
   }
-
-  depends_on = [helm_release.gitops_agent]
 }
 
-# ─────────────────────────────────────────
-# Logging (EFK — raw manifests from Git)
-# ─────────────────────────────────────────
+# Logging — EFK from Git
 resource "kubernetes_manifest" "argocd_logging" {
   manifest = {
     apiVersion = "argoproj.io/v1alpha1"
     kind       = "Application"
-    metadata = {
-      name      = "logging"
-      namespace = "gitops"
-    }
+    metadata   = { name = "logging", namespace = "gitops" }
     spec = {
       project = "default"
       source = {
@@ -103,34 +61,18 @@ resource "kubernetes_manifest" "argocd_logging" {
         path           = "Episode-10/k8s/logging"
         targetRevision = "main"
       }
-      destination = {
-        server    = "https://kubernetes.default.svc"
-        namespace = "logging"
-      }
-      syncPolicy = {
-        automated = {
-          prune    = true
-          selfHeal = true
-        }
-        syncOptions = ["CreateNamespace=true"]
-      }
+      destination = { server = "https://kubernetes.default.svc", namespace = "logging" }
+      syncPolicy  = { automated = { prune = true, selfHeal = true }, syncOptions = ["CreateNamespace=true"] }
     }
   }
-
-  depends_on = [helm_release.gitops_agent]
 }
 
-# ─────────────────────────────────────────
-# Tracing — Jaeger (Helm) + OTel Collector (Git manifests)
-# ─────────────────────────────────────────
+# Jaeger — Helm
 resource "kubernetes_manifest" "argocd_jaeger" {
   manifest = {
     apiVersion = "argoproj.io/v1alpha1"
     kind       = "Application"
-    metadata = {
-      name      = "jaeger"
-      namespace = "gitops"
-    }
+    metadata   = { name = "jaeger", namespace = "gitops" }
     spec = {
       project = "default"
       source = {
@@ -139,9 +81,7 @@ resource "kubernetes_manifest" "argocd_jaeger" {
         targetRevision = "3.1.1"
         helm = {
           valuesObject = {
-            provisionDataStore = {
-              cassandra = false
-            }
+            provisionDataStore = { cassandra = false }
             allInOne = {
               enabled = true
               tag     = "1.58"
@@ -159,43 +99,24 @@ resource "kubernetes_manifest" "argocd_jaeger" {
                 hosts = ["jaeger.${var.domain_name}"]
               }
             }
-            storage = {
-              type = "badger"
-            }
-            collector = {
-              enabled = false
-            }
-            query = {
-              enabled = false
-            }
+            storage   = { type = "badger" }
+            collector = { enabled = false }
+            query     = { enabled = false }
           }
         }
       }
-      destination = {
-        server    = "https://kubernetes.default.svc"
-        namespace = "tracing"
-      }
-      syncPolicy = {
-        automated = {
-          prune    = true
-          selfHeal = true
-        }
-        syncOptions = ["CreateNamespace=true"]
-      }
+      destination = { server = "https://kubernetes.default.svc", namespace = "tracing" }
+      syncPolicy  = { automated = { prune = true, selfHeal = true }, syncOptions = ["CreateNamespace=true"] }
     }
   }
-
-  depends_on = [helm_release.gitops_agent]
 }
 
+# OTel Collector — Git manifests
 resource "kubernetes_manifest" "argocd_otel" {
   manifest = {
     apiVersion = "argoproj.io/v1alpha1"
     kind       = "Application"
-    metadata = {
-      name      = "otel-collector"
-      namespace = "gitops"
-    }
+    metadata   = { name = "otel-collector", namespace = "gitops" }
     spec = {
       project = "default"
       source = {
@@ -203,27 +124,13 @@ resource "kubernetes_manifest" "argocd_otel" {
         path           = "Episode-10/k8s/tracing"
         targetRevision = "main"
       }
-      destination = {
-        server    = "https://kubernetes.default.svc"
-        namespace = "tracing"
-      }
-      syncPolicy = {
-        automated = {
-          prune    = true
-          selfHeal = true
-        }
-        syncOptions = ["CreateNamespace=true"]
-      }
+      destination = { server = "https://kubernetes.default.svc", namespace = "tracing" }
+      syncPolicy  = { automated = { prune = true, selfHeal = true }, syncOptions = ["CreateNamespace=true"] }
     }
   }
-
-  depends_on = [helm_release.gitops_agent]
 }
 
-
-# ─────────────────────────────────────────
-# Kibana Ingress (created by Terraform — domain injected automatically)
-# ─────────────────────────────────────────
+# Kibana Ingress
 resource "kubernetes_ingress_v1" "kibana" {
   metadata {
     name      = "kibana-ingress"
@@ -238,7 +145,6 @@ resource "kubernetes_ingress_v1" "kibana" {
       "alb.ingress.kubernetes.io/group.name"      = "ep10-shared-alb"
     }
   }
-
   spec {
     rule {
       host = "kibana.${var.domain_name}"
@@ -249,15 +155,12 @@ resource "kubernetes_ingress_v1" "kibana" {
           backend {
             service {
               name = "kibana"
-              port {
-                number = 5601
-              }
+              port { number = 5601 }
             }
           }
         }
       }
     }
   }
-
   depends_on = [kubernetes_manifest.argocd_logging]
 }

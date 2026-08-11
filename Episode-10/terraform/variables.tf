@@ -120,3 +120,24 @@ variable "github_username" {
   description = "Your GitHub username (for GitOps repo URL)"
   type        = string
 }
+
+# ─────────────────────────────────────────
+# RDS (PostgreSQL)
+# ─────────────────────────────────────────
+variable "rds_instance_class" {
+  description = "RDS instance type"
+  type        = string
+  default     = "db.t3.micro"
+}
+
+variable "rds_db_name" {
+  description = "Database name"
+  type        = string
+  default     = "onlineboutique"
+}
+
+variable "rds_username" {
+  description = "Database master username"
+  type        = string
+  default     = "dbadmin"
+}

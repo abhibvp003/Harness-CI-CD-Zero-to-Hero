@@ -23,6 +23,9 @@ spec:
           env:
             - name: REDIS_ADDR
               value: "redis-cart:6379"
+          envFrom:
+            - secretRef:
+                name: db-credentials
           resources:
             requests:
               cpu: 200m

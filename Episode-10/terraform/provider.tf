@@ -32,6 +32,10 @@ terraform {
       source  = "hashicorp/tls"
       version = "~> 4.0"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.6"
+    }
   }
 
   backend "s3" {}
@@ -44,20 +48,17 @@ provider "aws" {
   region = var.aws_region
 }
 
-data "aws_caller_identity" "current" {}
-data "aws_availability_zones" "available" {}
-
 # ═══════════════════════════════════════════════════════════════════
 # Kubernetes Provider (connects AFTER EKS is created)
 # ═══════════════════════════════════════════════════════════════════
 provider "kubernetes" {
-  host                   = aws_eks_cluster.main.endpoint
-  cluster_ca_certificate = base64decode(aws_eks_cluster.main.certificate_authority[0].data)
+  host                   = module.eks.cluster_endpoint
+  cluster_ca_certificate = base64decode(module.eks.cluster_ca_certificate)
 
   exec {
     api_version = "client.authentication.k8s.io/v1beta1"
     command     = "aws"
-    args        = ["eks", "get-token", "--cluster-name", aws_eks_cluster.main.name, "--region", var.aws_region]
+    args        = ["eks", "get-token", "--cluster-name", var.cluster_name, "--region", var.aws_region]
   }
 }
 
@@ -66,13 +67,13 @@ provider "kubernetes" {
 # ═══════════════════════════════════════════════════════════════════
 provider "helm" {
   kubernetes {
-    host                   = aws_eks_cluster.main.endpoint
-    cluster_ca_certificate = base64decode(aws_eks_cluster.main.certificate_authority[0].data)
+    host                   = module.eks.cluster_endpoint
+    cluster_ca_certificate = base64decode(module.eks.cluster_ca_certificate)
 
     exec {
       api_version = "client.authentication.k8s.io/v1beta1"
       command     = "aws"
-      args        = ["eks", "get-token", "--cluster-name", aws_eks_cluster.main.name, "--region", var.aws_region]
+      args        = ["eks", "get-token", "--cluster-name", var.cluster_name, "--region", var.aws_region]
     }
   }
 }

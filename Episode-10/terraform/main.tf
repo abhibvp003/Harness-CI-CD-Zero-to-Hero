@@ -1,0 +1,158 @@
+# ═══════════════════════════════════════════════════════════════════
+# ROOT MODULE — Orchestrates all infrastructure modules
+# One `terraform apply` creates the entire enterprise platform
+# ═══════════════════════════════════════════════════════════════════
+
+locals {
+  common_tags = {
+    Project   = "online-boutique"
+    Episode   = "10"
+    ManagedBy = "terraform"
+  }
+
+  microservices = [
+    "frontend", "cartservice", "checkoutservice", "productcatalogservice",
+    "currencyservice", "emailservice", "paymentservice",
+    "recommendationservice", "shippingservice", "adservice", "loadgenerator"
+  ]
+}
+
+data "aws_availability_zones" "available" {}
+
+# ── VPC ──
+module "vpc" {
+  source             = "./modules/vpc"
+  vpc_cidr           = var.vpc_cidr
+  cluster_name       = var.cluster_name
+  availability_zones = slice(data.aws_availability_zones.available.names, 0, 2)
+  tags               = local.common_tags
+}
+
+# ── EKS ──
+module "eks" {
+  source          = "./modules/eks"
+  cluster_name    = var.cluster_name
+  cluster_version = var.cluster_version
+  subnet_ids      = module.vpc.all_subnet_ids
+  vpc_id          = module.vpc.vpc_id
+  vpc_cidr        = var.vpc_cidr
+  tags            = local.common_tags
+}
+
+# ── StorageClass ──
+resource "kubernetes_storage_class" "ebs" {
+  metadata {
+    name        = "auto-ebs-sc"
+    annotations = { "storageclass.kubernetes.io/is-default-class" = "true" }
+  }
+  storage_provisioner    = "ebs.csi.eks.amazonaws.com"
+  volume_binding_mode    = "WaitForFirstConsumer"
+  allow_volume_expansion = true
+  parameters             = { type = "gp3", encrypted = "true" }
+  depends_on             = [module.eks]
+}
+
+# ── Bastion ──
+module "bastion" {
+  source           = "./modules/bastion"
+  cluster_name     = var.cluster_name
+  instance_type    = var.bastion_instance_type
+  subnet_id        = module.vpc.public_subnet_ids[1]
+  vpc_id           = module.vpc.vpc_id
+  eks_cluster_name = module.eks.cluster_name
+  tags             = local.common_tags
+}
+
+# ── ECR ──
+module "ecr" {
+  source           = "./modules/ecr"
+  repository_names = local.microservices
+  tags             = local.common_tags
+}
+
+# ── RDS ──
+module "rds" {
+  source         = "./modules/rds"
+  cluster_name   = var.cluster_name
+  vpc_id         = module.vpc.vpc_id
+  vpc_cidr       = var.vpc_cidr
+  subnet_ids     = module.vpc.private_subnet_ids
+  instance_class = var.rds_instance_class
+  db_name        = var.rds_db_name
+  db_username    = var.rds_username
+  secret_prefix  = "online-boutique"
+  tags           = local.common_tags
+}
+
+# ── Delegate ──
+module "delegate" {
+  source           = "./modules/delegate"
+  account_id       = var.harness_account_id
+  delegate_token   = var.harness_delegate_token
+  delegate_name    = var.delegate_name
+  replicas         = var.delegate_replicas
+  image_tag        = var.delegate_image_tag
+  eks_cluster_name = module.eks.cluster_name
+  depends_on       = [kubernetes_storage_class.ebs]
+}
+
+# ── Ingress (ALB Controller) ──
+module "ingress" {
+  source           = "./modules/ingress"
+  cluster_name     = var.cluster_name
+  aws_region       = var.aws_region
+  vpc_id           = module.vpc.vpc_id
+  domain_name      = var.domain_name
+  node_role_name   = module.eks.node_role_name
+  eks_cluster_name = module.eks.cluster_name
+  tags             = local.common_tags
+  depends_on       = [module.eks]
+}
+
+# ── External Secrets Operator ──
+module "external_secrets" {
+  source      = "./modules/external-secrets"
+  aws_region  = var.aws_region
+  secret_name = "online-boutique/app-secrets"
+  tags        = local.common_tags
+  depends_on  = [module.eks]
+}
+
+# ── GitOps Agent ──
+module "gitops" {
+  source             = "./modules/gitops"
+  harness_account_id = var.harness_account_id
+  harness_org_id     = var.harness_org_id
+  harness_project_id = var.harness_project_id
+  github_username    = var.github_username
+  agent_identifier   = "ep10gitopsagent"
+  agent_name         = "ep10-gitops-agent"
+  app_identifier     = "onlineboutique"
+  app_name           = "online-boutique"
+  app_path           = "Episode-10/k8s"
+  app_namespace      = "online-boutique"
+  service_identifier = "online_boutique"
+  depends_on         = [module.delegate]
+}
+
+# ── Harness Platform Resources ──
+module "harness_platform" {
+  source                 = "./modules/harness-platform"
+  org_id                 = var.harness_org_id
+  project_id             = var.harness_project_id
+  delegate_name          = var.delegate_name
+  aws_region             = var.aws_region
+  domain_name            = var.domain_name
+  github_username        = var.github_username
+  grafana_admin_password = var.grafana_admin_password
+  depends_on             = [module.delegate]
+}
+
+# ── Observability (ArgoCD Apps) ──
+module "observability" {
+  source                 = "./modules/observability"
+  domain_name            = var.domain_name
+  github_username        = var.github_username
+  grafana_admin_password = var.grafana_admin_password
+  depends_on             = [module.gitops]
+}

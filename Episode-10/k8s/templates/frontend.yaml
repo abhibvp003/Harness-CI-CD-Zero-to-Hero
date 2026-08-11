@@ -42,6 +42,9 @@ spec:
               value: "checkoutservice:5050"
             - name: AD_SERVICE_ADDR
               value: "adservice:9555"
+          envFrom:
+            - secretRef:
+                name: db-credentials
           resources:
             requests:
               cpu: 100m

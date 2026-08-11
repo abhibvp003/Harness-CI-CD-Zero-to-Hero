@@ -25,6 +25,9 @@ spec:
               value: "8080"
             - name: PRODUCT_CATALOG_SERVICE_ADDR
               value: "productcatalogservice:3550"
+          envFrom:
+            - secretRef:
+                name: db-credentials
           resources:
             requests:
               cpu: 100m
