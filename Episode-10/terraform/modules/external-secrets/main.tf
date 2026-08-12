@@ -38,9 +38,23 @@ resource "kubernetes_manifest" "cluster_secret_store" {
   depends_on = [helm_release.external_secrets]
 }
 
-# Creates an AWS Secrets Manager secret to hold application secrets
+# Creates AWS SM secret with key names pre-filled (you edit values in AWS Console)
 resource "aws_secretsmanager_secret" "app_secrets" {
   name                    = var.secret_name
   recovery_window_in_days = 0
   tags                    = var.tags
+}
+
+resource "aws_secretsmanager_secret_version" "app_secrets" {
+  secret_id = aws_secretsmanager_secret.app_secrets.id
+  secret_string = jsonencode({
+    REDIS_ADDR       = "CHANGE_ME"
+    OTEL_ENDPOINT    = "CHANGE_ME"
+    ANY_OTHER_SECRET = "CHANGE_ME"
+  })
+
+  # Ignore changes — you update values manually in AWS Console
+  lifecycle {
+    ignore_changes = [secret_string]
+  }
 }
