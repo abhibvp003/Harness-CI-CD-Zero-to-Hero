@@ -1,22 +1,6 @@
 # ═══════════════════════════════════════════════════════════════════
 # Kong Gateway — API Gateway + Ingress Controller (Production MNC Setup)
-#
-# How MNCs use Kong:
-#   1. Single entry point for ALL microservices (replaces ALB Controller)
-#   2. Rate limiting per IP/consumer (protect against DDoS/abuse)
-#   3. JWT/OAuth authentication at gateway level (not in each service)
-#   4. Request/Response logging → Fluentd → EFK (centralized audit)
-#   5. Prometheus metrics per route (latency, errors, bandwidth)
-#   6. Circuit breaker (stop forwarding to unhealthy upstream)
-#   7. CORS handling at gateway (not duplicated in services)
-#   8. IP restriction (whitelist/blacklist)
-#   9. Kong Manager UI for visibility (routes, plugins, health)
-#   10. HA + autoscaling (2-6 replicas based on CPU)
-#
-# Architecture:
-#   Internet → NLB (ACM TLS) → Kong Gateway → Microservices
-#                                    ↓
-#                              Rate limit + Auth + Log + Metrics
+# Single entry point for ALL microservices with HA + autoscaling
 # ═══════════════════════════════════════════════════════════════════
 
 # Lookup existing ACM Certificate
@@ -615,4 +599,90 @@ resource "kubernetes_manifest" "kong_manager_auth" {
     }
   }
   depends_on = [helm_release.kong]
+}
+
+
+# JWT Authentication — validates tokens at gateway level, auth not duplicated in each service
+# Auto-generate JWT secret (never hardcoded)
+resource "random_password" "jwt_secret" {
+  length  = 64
+  special = false
+}
+
+# Store JWT secret in AWS Secrets Manager (apps read from here to sign tokens)
+resource "aws_secretsmanager_secret" "jwt_secret" {
+  name                    = "online-boutique/jwt-secret"
+  recovery_window_in_days = 0
+}
+
+resource "aws_secretsmanager_secret_version" "jwt_secret" {
+  secret_id = aws_secretsmanager_secret.jwt_secret.id
+  secret_string = jsonencode({
+    JWT_SECRET = random_password.jwt_secret.result
+    JWT_ISSUER = "online-boutique-issuer"
+    JWT_ALGO   = "HS256"
+  })
+}
+
+# JWT Plugin (apply to specific routes via annotation: konghq.com/plugins: jwt-auth)
+resource "kubernetes_manifest" "kong_jwt_auth" {
+  manifest = {
+    apiVersion = "configuration.konghq.com/v1"
+    kind       = "KongPlugin"
+    metadata = {
+      name      = "jwt-auth"
+      namespace = "kong"
+    }
+    plugin = "jwt"
+    config = {
+      # Where to find the JWT token in the request
+      header_names    = ["Authorization"]
+      uri_param_names = ["jwt"]
+      cookie_names    = []
+      # Claims to validate
+      claims_to_verify = ["exp"] # Verify token not expired
+      # Key claim — identifies which consumer owns the token
+      key_claim_name = "iss"
+      # Secret is base64 encoded
+      secret_is_base64 = false
+      # Forward decoded claims to upstream service as headers
+      run_on_preflight = true
+    }
+  }
+  depends_on = [helm_release.kong]
+}
+
+# JWT Consumer — represents your application/service that issues tokens
+resource "kubernetes_manifest" "kong_jwt_consumer" {
+  manifest = {
+    apiVersion = "configuration.konghq.com/v1"
+    kind       = "KongConsumer"
+    metadata = {
+      name        = "online-boutique-app"
+      namespace   = "kong"
+      annotations = { "kubernetes.io/ingress.class" = "kong" }
+    }
+    username = "online-boutique-app"
+  }
+  depends_on = [helm_release.kong]
+}
+
+# JWT Credential for the consumer (secret used to sign/verify tokens)
+resource "kubernetes_secret" "kong_jwt_credential" {
+  metadata {
+    name      = "online-boutique-jwt-credential"
+    namespace = "kong"
+    labels = {
+      "konghq.com/credential" = "jwt"
+    }
+  }
+
+  data = {
+    kongCredType = "jwt"
+    key          = "online-boutique-issuer" # iss claim value in JWT
+    algorithm    = "HS256"
+    secret       = random_password.jwt_secret.result # Auto-generated, stored in AWS SM
+  }
+
+  depends_on = [kubernetes_manifest.kong_jwt_consumer]
 }
