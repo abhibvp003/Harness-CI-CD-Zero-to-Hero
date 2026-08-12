@@ -3,6 +3,22 @@
 # All via ArgoCD for GitOps self-healing and drift detection
 # ═══════════════════════════════════════════════════════════════════
 
+# Auto-generate EFK password and store in AWS SM
+resource "random_password" "efk" {
+  length  = 16
+  special = false
+}
+
+resource "aws_secretsmanager_secret" "efk" {
+  name                    = "online-boutique/efk-password"
+  recovery_window_in_days = 0
+}
+
+resource "aws_secretsmanager_secret_version" "efk" {
+  secret_id     = aws_secretsmanager_secret.efk.id
+  secret_string = random_password.efk.result
+}
+
 # Elasticsearch — Helm chart via ArgoCD
 resource "kubernetes_manifest" "argocd_elasticsearch" {
   manifest = {
@@ -32,7 +48,7 @@ resource "kubernetes_manifest" "argocd_elasticsearch" {
             }
             secret = {
               enabled  = true
-              password = var.efk_password
+              password = random_password.efk.result
             }
           }
         }
@@ -98,7 +114,7 @@ resource "kubernetes_manifest" "argocd_fluentd" {
                   host elasticsearch-master.logging.svc.cluster.local
                   port 9200
                   user elastic
-                  password ${var.efk_password}
+                  password ${random_password.efk.result}
                   logstash_format true
                   logstash_prefix k8s-logs
                 </match>

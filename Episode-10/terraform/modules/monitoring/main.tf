@@ -3,6 +3,22 @@
 # Includes: auto-loaded dashboards for Online Boutique + Kong Gateway
 # ═══════════════════════════════════════════════════════════════════
 
+# Auto-generate Grafana password and store in AWS SM
+resource "random_password" "grafana" {
+  length  = 16
+  special = false
+}
+
+resource "aws_secretsmanager_secret" "grafana" {
+  name                    = "online-boutique/grafana-password"
+  recovery_window_in_days = 0
+}
+
+resource "aws_secretsmanager_secret_version" "grafana" {
+  secret_id     = aws_secretsmanager_secret.grafana.id
+  secret_string = random_password.grafana.result
+}
+
 # Prometheus + Grafana via ArgoCD (Helm chart)
 resource "kubernetes_manifest" "argocd_monitoring" {
   manifest = {
@@ -19,7 +35,7 @@ resource "kubernetes_manifest" "argocd_monitoring" {
           valuesObject = {
             grafana = {
               enabled       = true
-              adminPassword = var.grafana_admin_password
+              adminPassword = random_password.grafana.result
               service       = { type = "ClusterIP" }
               ingress = {
                 enabled          = true

@@ -98,10 +98,9 @@ module "delegate" {
 
 # ── Kong Gateway (API Gateway + Ingress Controller) ──
 module "kong_gateway" {
-  source              = "./modules/kong-gateway"
-  domain_name         = var.domain_name
-  kong_admin_password = var.kong_admin_password
-  depends_on          = [module.eks]
+  source      = "./modules/kong-gateway"
+  domain_name = var.domain_name
+  depends_on  = [module.eks, module.external_secrets]
 }
 
 # ── ExternalDNS (Auto-creates Route53 records from Ingress) ──
@@ -141,32 +140,29 @@ module "gitops" {
 
 # ── Harness Platform Resources ──
 module "harness_platform" {
-  source                 = "./modules/harness-platform"
-  org_id                 = var.harness_org_id
-  project_id             = var.harness_project_id
-  delegate_name          = var.delegate_name
-  aws_region             = var.aws_region
-  domain_name            = var.domain_name
-  github_username        = var.github_username
-  grafana_admin_password = var.grafana_admin_password
-  depends_on             = [module.delegate]
+  source          = "./modules/harness-platform"
+  org_id          = var.harness_org_id
+  project_id      = var.harness_project_id
+  delegate_name   = var.delegate_name
+  aws_region      = var.aws_region
+  domain_name     = var.domain_name
+  github_username = var.github_username
+  depends_on      = [module.delegate]
 }
 
 # ── Monitoring (Prometheus + Grafana) ──
 module "monitoring" {
-  source                 = "./modules/monitoring"
-  domain_name            = var.domain_name
-  grafana_admin_password = var.grafana_admin_password
-  depends_on             = [module.gitops]
+  source      = "./modules/monitoring"
+  domain_name = var.domain_name
+  depends_on  = [module.gitops, module.external_secrets]
 }
 
 # ── Logging (EFK — Elasticsearch + Fluentd + Kibana) ──
 module "logging" {
   source          = "./modules/logging"
   domain_name     = var.domain_name
-  efk_password    = var.efk_password
   github_username = var.github_username
-  depends_on      = [module.gitops]
+  depends_on      = [module.gitops, module.external_secrets]
 }
 
 # ── Tracing (Jaeger + OTel Collector) ──

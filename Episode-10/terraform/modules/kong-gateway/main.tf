@@ -545,10 +545,23 @@ resource "kubernetes_manifest" "kong_grpc_gateway" {
 }
 
 # ═══════════════════════════════════════════════════════════════════
-# Kong Manager Authentication (Basic Auth — protects admin UI)
-# Access: kong.yourdomain.com → prompts username/password
-# Credentials: admin / KongAdmin@2026 (stored in K8s Secret)
-# ═══════════════════════════════════════════════════════════════════
+# Kong Manager Authentication (Basic Auth — password auto-generated, stored in AWS SM)
+
+# Auto-generate Kong admin password and store in AWS SM
+resource "random_password" "kong_admin" {
+  length  = 16
+  special = false
+}
+
+resource "aws_secretsmanager_secret" "kong_admin" {
+  name                    = "online-boutique/kong-admin-password"
+  recovery_window_in_days = 0
+}
+
+resource "aws_secretsmanager_secret_version" "kong_admin" {
+  secret_id     = aws_secretsmanager_secret.kong_admin.id
+  secret_string = random_password.kong_admin.result
+}
 
 # Kong Consumer (the admin user)
 resource "kubernetes_manifest" "kong_admin_consumer" {
@@ -578,7 +591,7 @@ resource "kubernetes_secret" "kong_admin_credentials" {
   data = {
     kongCredType = "basic-auth"
     username     = "admin"
-    password     = var.kong_admin_password
+    password     = random_password.kong_admin.result
   }
 
   depends_on = [kubernetes_manifest.kong_admin_consumer]

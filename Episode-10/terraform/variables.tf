@@ -89,16 +89,6 @@ variable "delegate_image_tag" {
 }
 
 # ─────────────────────────────────────────
-# Monitoring
-# ─────────────────────────────────────────
-variable "grafana_admin_password" {
-  description = "Grafana admin password (used in ArgoCD monitoring app)"
-  type        = string
-  default     = "admin123"
-  sensitive   = true
-}
-
-# ─────────────────────────────────────────
 # Networking (Optional — for custom domain)
 # ─────────────────────────────────────────
 variable "domain_name" {
@@ -119,23 +109,6 @@ variable "hosted_zone_id" {
 variable "github_username" {
   description = "Your GitHub username (for GitOps repo URL)"
   type        = string
-}
-
-# ─────────────────────────────────────────
-# Kong Gateway
-# ─────────────────────────────────────────
-variable "kong_admin_password" {
-  description = "Kong Manager UI admin password (from GitHub Secrets)"
-  type        = string
-  sensitive   = true
-  default     = "KongAdmin@2026"
-}
-
-variable "efk_password" {
-  description = "Elasticsearch/Kibana login password (from GitHub Secrets)"
-  type        = string
-  sensitive   = true
-  default     = "HarnessEFK@2026"
 }
 
 # ─────────────────────────────────────────
