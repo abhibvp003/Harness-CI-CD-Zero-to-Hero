@@ -33,9 +33,9 @@ spec:
             - name: FRONTEND_ADDR
               value: "frontend:80"
             - name: USERS
-              value: "10"
+              value: "{{.Values.loadgeneratorUsers}}"
             - name: SPAWN_RATE
-              value: "1"
+              value: "{{.Values.loadgeneratorSpawnRate}}"
           resources:
             requests:
               cpu: 100m

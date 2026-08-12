@@ -98,9 +98,10 @@ module "delegate" {
 
 # ── Kong Gateway (API Gateway + Ingress Controller) ──
 module "kong_gateway" {
-  source      = "./modules/kong-gateway"
-  domain_name = var.domain_name
-  depends_on  = [module.eks]
+  source              = "./modules/kong-gateway"
+  domain_name         = var.domain_name
+  kong_admin_password = var.kong_admin_password
+  depends_on          = [module.eks]
 }
 
 # ── ExternalDNS (Auto-creates Route53 records from Ingress) ──
@@ -151,11 +152,27 @@ module "harness_platform" {
   depends_on             = [module.delegate]
 }
 
-# ── Observability (ArgoCD Apps) ──
-module "observability" {
-  source                 = "./modules/observability"
+# ── Monitoring (Prometheus + Grafana) ──
+module "monitoring" {
+  source                 = "./modules/monitoring"
   domain_name            = var.domain_name
-  github_username        = var.github_username
   grafana_admin_password = var.grafana_admin_password
   depends_on             = [module.gitops]
+}
+
+# ── Logging (EFK — Elasticsearch + Fluentd + Kibana) ──
+module "logging" {
+  source          = "./modules/logging"
+  domain_name     = var.domain_name
+  efk_password    = var.efk_password
+  github_username = var.github_username
+  depends_on      = [module.gitops]
+}
+
+# ── Tracing (Jaeger + OTel Collector) ──
+module "tracing" {
+  source          = "./modules/tracing"
+  domain_name     = var.domain_name
+  github_username = var.github_username
+  depends_on      = [module.gitops]
 }

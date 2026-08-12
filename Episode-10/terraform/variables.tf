@@ -122,6 +122,23 @@ variable "github_username" {
 }
 
 # ─────────────────────────────────────────
+# Kong Gateway
+# ─────────────────────────────────────────
+variable "kong_admin_password" {
+  description = "Kong Manager UI admin password (from GitHub Secrets)"
+  type        = string
+  sensitive   = true
+  default     = "KongAdmin@2026"
+}
+
+variable "efk_password" {
+  description = "Elasticsearch/Kibana login password (from GitHub Secrets)"
+  type        = string
+  sensitive   = true
+  default     = "HarnessEFK@2026"
+}
+
+# ─────────────────────────────────────────
 # RDS (PostgreSQL)
 # ─────────────────────────────────────────
 variable "rds_instance_class" {

@@ -594,7 +594,7 @@ resource "kubernetes_secret" "kong_admin_credentials" {
   data = {
     kongCredType = "basic-auth"
     username     = "admin"
-    password     = "KongAdmin@2026"
+    password     = var.kong_admin_password
   }
 
   depends_on = [kubernetes_manifest.kong_admin_consumer]

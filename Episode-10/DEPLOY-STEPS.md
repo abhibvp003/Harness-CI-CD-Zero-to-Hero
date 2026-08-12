@@ -212,6 +212,8 @@ After `terraform apply`, **ExternalDNS automatically creates Route53 records** w
 | `HARNESS_API_KEY` | `pat.xxxx...` | From Step 1 (the token you copied) |
 | `HARNESS_DELEGATE_TOKEN` | Token string | From Step 2 (the delegate token) |
 | `GRAFANA_ADMIN_PASSWORD` | Your Grafana password | Choose any (default: `admin123` if not set) |
+| `KONG_ADMIN_PASSWORD` | Your Kong Manager password | Choose any (default: `KongAdmin@2026` if not set) |
+| `EFK_PASSWORD` | Your Elasticsearch/Kibana password | Choose any (default: `HarnessEFK@2026` if not set) |
 
 > **Already should exist** (from Episode 3): `AWS_ROLE_ARN`, `S3_BUCKET_NAME`. If missing, see [kubernetes/README.md — Step 5](../kubernetes/README.md#step-5-add-github-variables).
 

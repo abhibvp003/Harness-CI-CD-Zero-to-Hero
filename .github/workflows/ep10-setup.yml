@@ -91,7 +91,10 @@ jobs:
             -var="github_username=${{ github.repository_owner }}" \
             -var="domain_name=${{ vars.DOMAIN_NAME }}" \
             -var="cluster_name=${{ vars.CLUSTER_NAME || 'ep10-enterprise-cluster' }}" \
-            -var="grafana_admin_password=${{ secrets.GRAFANA_ADMIN_PASSWORD || 'admin123' }}"
+            -var="grafana_admin_password=${{ secrets.GRAFANA_ADMIN_PASSWORD || 'admin123' }}" \
+            -var="kong_admin_password=${{ secrets.KONG_ADMIN_PASSWORD || 'KongAdmin@2026' }}" \
+            -var="efk_password=${{ secrets.EFK_PASSWORD || 'HarnessEFK@2026' }}" \
+            -var="efk_password=${{ secrets.EFK_PASSWORD || 'HarnessEFK@2026' }}"
 
       - name: Terraform Apply
         if: github.event.inputs.action == 'apply'
@@ -103,7 +106,9 @@ jobs:
             -var="github_username=${{ github.repository_owner }}" \
             -var="domain_name=${{ vars.DOMAIN_NAME }}" \
             -var="cluster_name=${{ vars.CLUSTER_NAME || 'ep10-enterprise-cluster' }}" \
-            -var="grafana_admin_password=${{ secrets.GRAFANA_ADMIN_PASSWORD || 'admin123' }}"
+            -var="grafana_admin_password=${{ secrets.GRAFANA_ADMIN_PASSWORD || 'admin123' }}" \
+            -var="kong_admin_password=${{ secrets.KONG_ADMIN_PASSWORD || 'KongAdmin@2026' }}" \
+            -var="efk_password=${{ secrets.EFK_PASSWORD || 'HarnessEFK@2026' }}"
 
       - name: Apply Summary
         if: github.event.inputs.action == 'apply'

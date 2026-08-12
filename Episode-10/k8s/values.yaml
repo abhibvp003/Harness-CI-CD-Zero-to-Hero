@@ -21,3 +21,11 @@ loadgeneratorImage: ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/loadgenerator:v1
 namespace: online-boutique
 replicas: 2
 domain: CHANGE-TO-YOUR-DOMAIN.com # Placeholder — ArgoCD overrides this via helm.parameters from Terraform (var.domain_name)
+
+# Tracing (OpenTelemetry → OTel Collector → Jaeger)
+enableTracing: "1"
+collectorServiceAddr: "otel-collector.tracing.svc.cluster.local:4317"
+
+# Load Generator (traffic volume for testing + Prometheus metrics)
+loadgeneratorUsers: "10"
+loadgeneratorSpawnRate: "1"
