@@ -88,7 +88,10 @@ jobs:
             -var="harness_account_id=${{ vars.HARNESS_ACCOUNT_ID }}" \
             -var="harness_api_key=${{ secrets.HARNESS_API_KEY }}" \
             -var="harness_delegate_token=${{ secrets.HARNESS_DELEGATE_TOKEN }}" \
-            -var="github_username=${{ github.repository_owner }}"
+            -var="github_username=${{ github.repository_owner }}" \
+            -var="domain_name=${{ vars.DOMAIN_NAME }}" \
+            -var="cluster_name=${{ vars.CLUSTER_NAME || 'ep10-enterprise-cluster' }}" \
+            -var="grafana_admin_password=${{ secrets.GRAFANA_ADMIN_PASSWORD || 'admin123' }}"
 
       - name: Terraform Apply
         if: github.event.inputs.action == 'apply'
@@ -97,7 +100,10 @@ jobs:
             -var="harness_account_id=${{ vars.HARNESS_ACCOUNT_ID }}" \
             -var="harness_api_key=${{ secrets.HARNESS_API_KEY }}" \
             -var="harness_delegate_token=${{ secrets.HARNESS_DELEGATE_TOKEN }}" \
-            -var="github_username=${{ github.repository_owner }}"
+            -var="github_username=${{ github.repository_owner }}" \
+            -var="domain_name=${{ vars.DOMAIN_NAME }}" \
+            -var="cluster_name=${{ vars.CLUSTER_NAME || 'ep10-enterprise-cluster' }}" \
+            -var="grafana_admin_password=${{ secrets.GRAFANA_ADMIN_PASSWORD || 'admin123' }}"
 
       - name: Apply Summary
         if: github.event.inputs.action == 'apply'
@@ -199,7 +205,10 @@ jobs:
             -var="harness_account_id=${{ vars.HARNESS_ACCOUNT_ID }}" \
             -var="harness_api_key=${{ secrets.HARNESS_API_KEY }}" \
             -var="harness_delegate_token=${{ secrets.HARNESS_DELEGATE_TOKEN }}" \
-            -var="github_username=${{ github.repository_owner }}"
+            -var="github_username=${{ github.repository_owner }}" \
+            -var="domain_name=${{ vars.DOMAIN_NAME }}" \
+            -var="cluster_name=${{ vars.CLUSTER_NAME || 'ep10-enterprise-cluster' }}" \
+            -var="grafana_admin_password=${{ secrets.GRAFANA_ADMIN_PASSWORD || 'admin123' }}"
 
       - name: Terraform Destroy Retry (if first attempt failed)
         if: github.event.inputs.action == 'destroy' && steps.terraform_destroy.outcome == 'failure'
@@ -229,7 +238,10 @@ jobs:
             -var="harness_account_id=${{ vars.HARNESS_ACCOUNT_ID }}" \
             -var="harness_api_key=${{ secrets.HARNESS_API_KEY }}" \
             -var="harness_delegate_token=${{ secrets.HARNESS_DELEGATE_TOKEN }}" \
-            -var="github_username=${{ github.repository_owner }}"
+            -var="github_username=${{ github.repository_owner }}" \
+            -var="domain_name=${{ vars.DOMAIN_NAME }}" \
+            -var="cluster_name=${{ vars.CLUSTER_NAME || 'ep10-enterprise-cluster' }}" \
+            -var="grafana_admin_password=${{ secrets.GRAFANA_ADMIN_PASSWORD || 'admin123' }}"
 
       - name: Destroy Summary
         if: github.event.inputs.action == 'destroy'

@@ -96,17 +96,19 @@ module "delegate" {
   depends_on       = [kubernetes_storage_class.ebs]
 }
 
-# ── Ingress (ALB Controller) ──
-module "ingress" {
-  source           = "./modules/ingress"
-  cluster_name     = var.cluster_name
-  aws_region       = var.aws_region
-  vpc_id           = module.vpc.vpc_id
-  domain_name      = var.domain_name
-  node_role_name   = module.eks.node_role_name
-  eks_cluster_name = module.eks.cluster_name
-  tags             = local.common_tags
-  depends_on       = [module.eks]
+# ── Kong Gateway (API Gateway + Ingress Controller) ──
+module "kong_gateway" {
+  source      = "./modules/kong-gateway"
+  domain_name = var.domain_name
+  depends_on  = [module.eks]
+}
+
+# ── ExternalDNS (Auto-creates Route53 records from Ingress) ──
+module "external_dns" {
+  source      = "./modules/external-dns"
+  domain_name = var.domain_name
+  aws_region  = var.aws_region
+  depends_on  = [module.kong_gateway]
 }
 
 # ── External Secrets Operator ──
@@ -125,6 +127,7 @@ module "gitops" {
   harness_org_id     = var.harness_org_id
   harness_project_id = var.harness_project_id
   github_username    = var.github_username
+  domain_name        = var.domain_name # Injected into ArgoCD Application helm.parameters (overrides values.yaml placeholder)
   agent_identifier   = "ep10gitopsagent"
   agent_name         = "ep10-gitops-agent"
   app_identifier     = "onlineboutique"

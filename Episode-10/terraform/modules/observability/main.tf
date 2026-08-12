@@ -1,4 +1,5 @@
 # Monitoring — kube-prometheus-stack via ArgoCD
+# Ingress: grafana.yourdomain.com → Kong Gateway routes to Grafana
 resource "kubernetes_manifest" "argocd_monitoring" {
   manifest = {
     apiVersion = "argoproj.io/v1alpha1"
@@ -18,14 +19,9 @@ resource "kubernetes_manifest" "argocd_monitoring" {
               service       = { type = "ClusterIP" }
               ingress = {
                 enabled          = true
-                ingressClassName = "alb"
+                ingressClassName = "kong"
                 annotations = {
-                  "alb.ingress.kubernetes.io/scheme"          = "internet-facing"
-                  "alb.ingress.kubernetes.io/target-type"     = "ip"
-                  "alb.ingress.kubernetes.io/listen-ports"    = "[{\"HTTPS\":443},{\"HTTP\":80}]"
-                  "alb.ingress.kubernetes.io/ssl-redirect"    = "443"
-                  "alb.ingress.kubernetes.io/certificate-arn" = "auto"
-                  "alb.ingress.kubernetes.io/group.name"      = "ep10-shared-alb"
+                  "konghq.com/strip-path" = "false"
                 }
                 hosts = ["grafana.${var.domain_name}"]
               }
@@ -68,6 +64,7 @@ resource "kubernetes_manifest" "argocd_logging" {
 }
 
 # Jaeger — Helm
+# Ingress: jaeger.yourdomain.com → Kong Gateway routes to Jaeger
 resource "kubernetes_manifest" "argocd_jaeger" {
   manifest = {
     apiVersion = "argoproj.io/v1alpha1"
@@ -87,14 +84,9 @@ resource "kubernetes_manifest" "argocd_jaeger" {
               tag     = "1.58"
               ingress = {
                 enabled          = true
-                ingressClassName = "alb"
+                ingressClassName = "kong"
                 annotations = {
-                  "alb.ingress.kubernetes.io/scheme"          = "internet-facing"
-                  "alb.ingress.kubernetes.io/target-type"     = "ip"
-                  "alb.ingress.kubernetes.io/listen-ports"    = "[{\"HTTPS\":443},{\"HTTP\":80}]"
-                  "alb.ingress.kubernetes.io/ssl-redirect"    = "443"
-                  "alb.ingress.kubernetes.io/certificate-arn" = "auto"
-                  "alb.ingress.kubernetes.io/group.name"      = "ep10-shared-alb"
+                  "konghq.com/strip-path" = "false"
                 }
                 hosts = ["jaeger.${var.domain_name}"]
               }
@@ -131,21 +123,17 @@ resource "kubernetes_manifest" "argocd_otel" {
 }
 
 # Kibana Ingress
+# Ingress: kibana.yourdomain.com → Kong routes to Kibana service
 resource "kubernetes_ingress_v1" "kibana" {
   metadata {
     name      = "kibana-ingress"
     namespace = "logging"
     annotations = {
-      "kubernetes.io/ingress.class"               = "alb"
-      "alb.ingress.kubernetes.io/scheme"          = "internet-facing"
-      "alb.ingress.kubernetes.io/target-type"     = "ip"
-      "alb.ingress.kubernetes.io/listen-ports"    = "[{\"HTTPS\":443},{\"HTTP\":80}]"
-      "alb.ingress.kubernetes.io/ssl-redirect"    = "443"
-      "alb.ingress.kubernetes.io/certificate-arn" = "auto"
-      "alb.ingress.kubernetes.io/group.name"      = "ep10-shared-alb"
+      "konghq.com/strip-path" = "false"
     }
   }
   spec {
+    ingress_class_name = "kong"
     rule {
       host = "kibana.${var.domain_name}"
       http {

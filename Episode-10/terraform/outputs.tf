@@ -38,10 +38,6 @@ output "rds_endpoint" {
   value = module.rds.endpoint
 }
 
-output "acm_certificate_arn" {
-  value = module.ingress.acm_certificate_arn
-}
-
 output "aws_account_id" {
   value = data.aws_caller_identity.current.account_id
 }

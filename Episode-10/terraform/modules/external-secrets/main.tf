@@ -1,3 +1,4 @@
+# Installs External Secrets Operator via Helm to sync secrets into K8s
 resource "helm_release" "external_secrets" {
   name             = "external-secrets"
   repository       = "https://charts.external-secrets.io"
@@ -14,6 +15,7 @@ resource "helm_release" "external_secrets" {
   ]
 }
 
+# ClusterSecretStore that connects to AWS Secrets Manager
 resource "kubernetes_manifest" "cluster_secret_store" {
   manifest = {
     apiVersion = "external-secrets.io/v1beta1"
@@ -36,6 +38,7 @@ resource "kubernetes_manifest" "cluster_secret_store" {
   depends_on = [helm_release.external_secrets]
 }
 
+# Creates an AWS Secrets Manager secret to hold application secrets
 resource "aws_secretsmanager_secret" "app_secrets" {
   name                    = var.secret_name
   recovery_window_in_days = 0

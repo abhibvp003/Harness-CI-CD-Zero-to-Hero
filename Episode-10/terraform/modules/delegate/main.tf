@@ -1,3 +1,4 @@
+# Deploys the Harness Delegate into EKS using a Helm chart
 resource "helm_release" "delegate" {
   name             = "harness-delegate-ng"
   repository       = "https://app.harness.io/storage/harness-download/delegate-helm-chart/"
@@ -31,6 +32,7 @@ resource "helm_release" "delegate" {
   timeout = 600
 }
 
+# Creates a namespace where Harness CI builds will run
 resource "kubernetes_namespace" "builds" {
   metadata {
     name   = "harness-builds"
@@ -38,6 +40,7 @@ resource "kubernetes_namespace" "builds" {
   }
 }
 
+# ClusterRole granting the delegate broad access to K8s resources
 resource "kubernetes_cluster_role" "delegate" {
   metadata { name = "harness-delegate-cluster-role" }
 
@@ -68,6 +71,7 @@ resource "kubernetes_cluster_role" "delegate" {
   }
 }
 
+# Binds the ClusterRole to the delegate's service account
 resource "kubernetes_cluster_role_binding" "delegate" {
   metadata { name = "harness-delegate-cluster-rolebinding" }
   role_ref {

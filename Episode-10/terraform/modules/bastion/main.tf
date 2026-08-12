@@ -1,3 +1,4 @@
+# IAM role that lets the bastion EC2 instance call AWS services
 resource "aws_iam_role" "bastion" {
   name = "${var.cluster_name}-bastion-role"
   assume_role_policy = jsonencode({
@@ -10,16 +11,19 @@ resource "aws_iam_role" "bastion" {
   })
 }
 
+# Attach admin permissions so bastion can manage all AWS resources
 resource "aws_iam_role_policy_attachment" "bastion_admin" {
   policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess"
   role       = aws_iam_role.bastion.name
 }
 
+# Instance profile that links the IAM role to the EC2 instance
 resource "aws_iam_instance_profile" "bastion" {
   name = "${var.cluster_name}-bastion-profile"
   role = aws_iam_role.bastion.name
 }
 
+# Security group controlling network traffic to/from the bastion
 resource "aws_security_group" "bastion" {
   name_prefix = "${var.cluster_name}-bastion-"
   vpc_id      = var.vpc_id
@@ -41,6 +45,7 @@ resource "aws_security_group" "bastion" {
   tags = merge(var.tags, { Name = "${var.cluster_name}-bastion-sg" })
 }
 
+# The bastion EC2 instance used to access the private EKS cluster
 resource "aws_instance" "bastion" {
   ami                         = "ami-02b64aa047cb5edf5"
   instance_type               = var.instance_type
@@ -58,6 +63,7 @@ resource "aws_instance" "bastion" {
   tags = merge(var.tags, { Name = "${var.cluster_name}-bastion" })
 }
 
+# Grants the bastion IAM role access to the EKS cluster
 resource "aws_eks_access_entry" "bastion" {
   cluster_name  = var.eks_cluster_name
   principal_arn = aws_iam_role.bastion.arn
@@ -65,6 +71,7 @@ resource "aws_eks_access_entry" "bastion" {
   lifecycle { ignore_changes = [principal_arn] }
 }
 
+# Gives the bastion full admin access within the EKS cluster
 resource "aws_eks_access_policy_association" "bastion_admin" {
   cluster_name  = var.eks_cluster_name
   principal_arn = aws_iam_role.bastion.arn

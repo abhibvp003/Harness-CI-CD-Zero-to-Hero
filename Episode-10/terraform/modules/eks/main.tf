@@ -1,3 +1,4 @@
+# IAM role that allows EKS service to manage the cluster
 resource "aws_iam_role" "eks_cluster" {
   name = "${var.cluster_name}-cluster-role"
   assume_role_policy = jsonencode({
@@ -10,6 +11,7 @@ resource "aws_iam_role" "eks_cluster" {
   })
 }
 
+# Attaches required AWS managed policies to the EKS cluster role
 resource "aws_iam_role_policy_attachment" "cluster_policies" {
   for_each = toset([
     "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy",
@@ -23,6 +25,7 @@ resource "aws_iam_role_policy_attachment" "cluster_policies" {
   role       = aws_iam_role.eks_cluster.name
 }
 
+# IAM role for worker nodes (EC2 instances running your pods)
 resource "aws_iam_role" "eks_nodes" {
   name = "${var.cluster_name}-node-role"
   assume_role_policy = jsonencode({
@@ -35,6 +38,7 @@ resource "aws_iam_role" "eks_nodes" {
   })
 }
 
+# Attaches required policies so worker nodes can join the cluster
 resource "aws_iam_role_policy_attachment" "node_policies" {
   for_each = toset([
     "arn:aws:iam::aws:policy/AmazonEKSWorkerNodeMinimalPolicy",
@@ -45,11 +49,19 @@ resource "aws_iam_role_policy_attachment" "node_policies" {
   role       = aws_iam_role.eks_nodes.name
 }
 
+# Gives nodes full ECR access to push/pull container images
 resource "aws_iam_role_policy_attachment" "node_ecr_full" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryFullAccess"
   role       = aws_iam_role.eks_nodes.name
 }
 
+# Route53 permissions (for ExternalDNS to create/delete DNS records)
+resource "aws_iam_role_policy_attachment" "node_route53" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonRoute53FullAccess"
+  role       = aws_iam_role.eks_nodes.name
+}
+
+# Security group that controls network access to the EKS API server
 resource "aws_security_group" "eks_cluster" {
   name        = "${var.cluster_name}-eks-sg"
   description = "Security group for EKS cluster"
@@ -73,6 +85,7 @@ resource "aws_security_group" "eks_cluster" {
   tags = merge(var.tags, { Name = "${var.cluster_name}-eks-sg" })
 }
 
+# KMS key used to encrypt Kubernetes secrets at rest
 resource "aws_kms_key" "eks" {
   description             = "KMS key for EKS secrets encryption"
   deletion_window_in_days = 7
@@ -80,11 +93,13 @@ resource "aws_kms_key" "eks" {
   tags                    = merge(var.tags, { Name = "${var.cluster_name}-eks-kms" })
 }
 
+# Friendly alias name for the KMS encryption key
 resource "aws_kms_alias" "eks" {
   name          = "alias/${var.cluster_name}-eks"
   target_key_id = aws_kms_key.eks.key_id
 }
 
+# The EKS cluster itself — this is where all K8s workloads run
 resource "aws_eks_cluster" "main" {
   name     = var.cluster_name
   version  = var.cluster_version
@@ -133,6 +148,7 @@ resource "aws_eks_cluster" "main" {
   tags = merge(var.tags, { Name = var.cluster_name })
 }
 
+# CloudWatch log group to store EKS control plane logs
 resource "aws_cloudwatch_log_group" "eks" {
   name              = "/aws/eks/${var.cluster_name}/cluster"
   retention_in_days = 7

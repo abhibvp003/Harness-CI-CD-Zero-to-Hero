@@ -1,3 +1,4 @@
+# Creates the main VPC — the virtual network for all our resources
 resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
@@ -6,11 +7,13 @@ resource "aws_vpc" "main" {
   tags = merge(var.tags, { Name = "${var.cluster_name}-vpc" })
 }
 
+# Internet gateway allowing public subnets to reach the internet
 resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
   tags   = merge(var.tags, { Name = "${var.cluster_name}-igw" })
 }
 
+# First public subnet in availability zone 1 (for load balancers)
 resource "aws_subnet" "public_1" {
   vpc_id                  = aws_vpc.main.id
   cidr_block              = cidrsubnet(var.vpc_cidr, 8, 1)
@@ -24,6 +27,7 @@ resource "aws_subnet" "public_1" {
   })
 }
 
+# Second public subnet in availability zone 2 (for high availability)
 resource "aws_subnet" "public_2" {
   vpc_id                  = aws_vpc.main.id
   cidr_block              = cidrsubnet(var.vpc_cidr, 8, 2)
@@ -37,6 +41,7 @@ resource "aws_subnet" "public_2" {
   })
 }
 
+# First private subnet in AZ 1 (where EKS pods run, no public IP)
 resource "aws_subnet" "private_1" {
   vpc_id            = aws_vpc.main.id
   cidr_block        = cidrsubnet(var.vpc_cidr, 8, 3)
@@ -49,6 +54,7 @@ resource "aws_subnet" "private_1" {
   })
 }
 
+# Second private subnet in AZ 2 (for multi-AZ resilience)
 resource "aws_subnet" "private_2" {
   vpc_id            = aws_vpc.main.id
   cidr_block        = cidrsubnet(var.vpc_cidr, 8, 4)
@@ -61,11 +67,13 @@ resource "aws_subnet" "private_2" {
   })
 }
 
+# Elastic IP for the NAT gateway (static public IP address)
 resource "aws_eip" "nat" {
   domain = "vpc"
   tags   = merge(var.tags, { Name = "${var.cluster_name}-nat-eip" })
 }
 
+# NAT gateway lets private subnets reach the internet for updates
 resource "aws_nat_gateway" "main" {
   allocation_id = aws_eip.nat.id
   subnet_id     = aws_subnet.public_1.id
@@ -73,6 +81,7 @@ resource "aws_nat_gateway" "main" {
   depends_on    = [aws_internet_gateway.main]
 }
 
+# Route table sending public subnet traffic to the internet gateway
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
   route {
@@ -82,6 +91,7 @@ resource "aws_route_table" "public" {
   tags = merge(var.tags, { Name = "${var.cluster_name}-public-rt" })
 }
 
+# Route table sending private subnet traffic through the NAT gateway
 resource "aws_route_table" "private" {
   vpc_id = aws_vpc.main.id
   route {
@@ -91,21 +101,25 @@ resource "aws_route_table" "private" {
   tags = merge(var.tags, { Name = "${var.cluster_name}-private-rt" })
 }
 
+# Links public subnet 1 to the public route table
 resource "aws_route_table_association" "public_1" {
   subnet_id      = aws_subnet.public_1.id
   route_table_id = aws_route_table.public.id
 }
 
+# Links public subnet 2 to the public route table
 resource "aws_route_table_association" "public_2" {
   subnet_id      = aws_subnet.public_2.id
   route_table_id = aws_route_table.public.id
 }
 
+# Links private subnet 1 to the private route table
 resource "aws_route_table_association" "private_1" {
   subnet_id      = aws_subnet.private_1.id
   route_table_id = aws_route_table.private.id
 }
 
+# Links private subnet 2 to the private route table
 resource "aws_route_table_association" "private_2" {
   subnet_id      = aws_subnet.private_2.id
   route_table_id = aws_route_table.private.id

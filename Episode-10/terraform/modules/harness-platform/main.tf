@@ -1,4 +1,6 @@
 # ── Connectors ──
+
+# Connector to query Prometheus metrics for continuous verification
 resource "harness_platform_connector_prometheus" "prometheus" {
   identifier         = "prometheus"
   name               = "prometheus"
@@ -8,6 +10,7 @@ resource "harness_platform_connector_prometheus" "prometheus" {
   delegate_selectors = [var.delegate_name]
 }
 
+# Connector for reading secrets from AWS Secrets Manager
 resource "harness_platform_connector_aws_secret_manager" "aws_sm" {
   identifier         = "aws_secrets_manager"
   name               = "aws-secrets-manager"
@@ -19,6 +22,7 @@ resource "harness_platform_connector_aws_secret_manager" "aws_sm" {
   credentials { inherit_from_delegate = true }
 }
 
+# Kubernetes connector that uses the delegate to talk to the cluster
 resource "harness_platform_connector_kubernetes" "k8s" {
   identifier = "k8sdelegate"
   name       = "k8s-delegate"
@@ -28,6 +32,8 @@ resource "harness_platform_connector_kubernetes" "k8s" {
 }
 
 # ── Service ──
+
+# Defines the online-boutique microservice in Harness CD
 resource "harness_platform_service" "online_boutique" {
   identifier = "online_boutique"
   name       = "online-boutique"
@@ -71,6 +77,8 @@ resource "harness_platform_service" "online_boutique" {
 }
 
 # ── Environments ──
+
+# Production environment where verified releases get deployed
 resource "harness_platform_environment" "production" {
   identifier = "production"
   name       = "production"
@@ -87,6 +95,7 @@ resource "harness_platform_environment" "production" {
   YAML
 }
 
+# Development environment for testing before production
 resource "harness_platform_environment" "development" {
   identifier = "development"
   name       = "development"
@@ -104,6 +113,8 @@ resource "harness_platform_environment" "development" {
 }
 
 # ── OPA Policy ──
+
+# OPA policy that enforces governance rules on production deploys
 resource "harness_platform_policy" "production_governance" {
   identifier = "production_governance"
   name       = "Production Governance"
@@ -112,6 +123,7 @@ resource "harness_platform_policy" "production_governance" {
   rego       = file("${path.module}/../../policies/production-governance.rego")
 }
 
+# Policy set that runs the governance check on pipeline execution
 resource "harness_platform_policyset" "production" {
   identifier = "production_policy_set"
   name       = "Production Policy Set"
@@ -127,6 +139,8 @@ resource "harness_platform_policyset" "production" {
 }
 
 # ── Monitored Service (CV) ──
+
+# Monitored service that tracks error rate for continuous verification
 resource "harness_platform_monitored_service" "online_boutique" {
   identifier = "online_boutique_production"
   org_id     = var.org_id

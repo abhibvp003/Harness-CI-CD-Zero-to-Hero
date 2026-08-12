@@ -48,3 +48,10 @@ variable "service_identifier" {
   type    = string
   default = "online_boutique"
 }
+
+variable "domain_name" {
+  description = "Domain name injected into Helm chart at ArgoCD sync time (overrides values.yaml placeholder)"
+  type        = string
+  # Comes from GitHub Actions variable: vars.DOMAIN_NAME
+  # ArgoCD uses this to render Ingress host: app.yourdomain.com
+}

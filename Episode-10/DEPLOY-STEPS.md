@@ -147,16 +147,17 @@
 | **Hosted Zone** | ✅ Already exists | Route53 hosted zone with NS records |
 | **ACM Certificate** | ✅ Already issued | Wildcard `*.yourdomain.com` — DNS validated |
 
-After `terraform apply`, create CNAME records pointing subdomains to the ALB:
+After `terraform apply`, **ExternalDNS automatically creates Route53 records** when Ingress resources are applied. No manual CNAME creation needed.
 
-| Record | Type | Points To |
-|--------|------|-----------|
-| `app.yourdomain.com` | CNAME | ALB hostname (from `kubectl get ingress`) |
-| `grafana.yourdomain.com` | CNAME | Same ALB |
-| `kibana.yourdomain.com` | CNAME | Same ALB |
-| `jaeger.yourdomain.com` | CNAME | Same ALB |
+| Record | Type | Auto-Created By |
+|--------|------|----------------|
+| `app.yourdomain.com` | CNAME → NLB | ExternalDNS (from k8s/templates/ingress.yaml) |
+| `grafana.yourdomain.com` | CNAME → NLB | ExternalDNS (from ArgoCD monitoring app) |
+| `kibana.yourdomain.com` | CNAME → NLB | ExternalDNS (from Terraform Kibana ingress) |
+| `jaeger.yourdomain.com` | CNAME → NLB | ExternalDNS (from ArgoCD Jaeger app) |
+| `kong.yourdomain.com` | CNAME → NLB | ExternalDNS (from Kong Manager ingress) |
 
-> All subdomains share 1 ALB. The ALB routes by `Host` header. ACM cert auto-discovered (`certificate-arn: "auto"`).
+> On `terraform destroy`, ExternalDNS deletes ONLY these records. Your other Route53 records (NS, SOA, MX) are untouched.
 
 ---
 
@@ -201,6 +202,8 @@ After `terraform apply`, create CNAME records pointing subdomains to the ALB:
 | Name | Value | How to Get |
 |------|-------|-----------|
 | `HARNESS_ACCOUNT_ID` | Your 22-character Account ID | Harness → Account Settings → Overview → Account ID |
+| `DOMAIN_NAME` | `yourdomain.com` | Your Route53 registered domain |
+| `CLUSTER_NAME` | `ep10-enterprise-cluster` | (or any name you prefer) |
 
 **Add Secrets (click Secrets tab → + New repository secret):**
 
@@ -208,8 +211,11 @@ After `terraform apply`, create CNAME records pointing subdomains to the ALB:
 |------|-------|-----------|
 | `HARNESS_API_KEY` | `pat.xxxx...` | From Step 1 (the token you copied) |
 | `HARNESS_DELEGATE_TOKEN` | Token string | From Step 2 (the delegate token) |
+| `GRAFANA_ADMIN_PASSWORD` | Your Grafana password | Choose any (default: `admin123` if not set) |
 
-> **Already should exist** (from Episode 3): `AWS_ROLE_ARN`, `S3_BUCKET_NAME`, `AWS_REGION`. If missing, see [kubernetes/README.md — Step 5](../kubernetes/README.md#step-5-add-github-variables).
+> **Already should exist** (from Episode 3): `AWS_ROLE_ARN`, `S3_BUCKET_NAME`. If missing, see [kubernetes/README.md — Step 5](../kubernetes/README.md#step-5-add-github-variables).
+
+> **MNC Pattern:** No `terraform.tfvars` file. All variables passed via GitHub Actions `-var` flags. Secrets never touch disk — they're decrypted only at runtime.
 
 ---
 
@@ -400,6 +406,7 @@ kubectl get pods -n online-boutique
 | Service | URL | Login |
 |---------|-----|-------|
 | Online Boutique | `https://app.yourdomain.com` | No login |
+| Kong Manager | `https://kong.yourdomain.com` | admin / KongAdmin@2026 |
 | Grafana | `https://grafana.yourdomain.com` | admin / admin123 |
 | Kibana | `https://kibana.yourdomain.com` | elastic / HarnessEFK@2026 |
 | Jaeger | `https://jaeger.yourdomain.com` | No login |
@@ -474,7 +481,7 @@ kubectl get pods -n online-boutique
 | GitOpsSync fails "no app" | Application not created | Check `gitops.tf` ran, verify in GitOps → Applications |
 | Verify fails "no data" | Prometheus not scraping | Check monitoring ArgoCD app is Synced |
 | ArgoCD app OutOfSync | First sync needs manual trigger | GitOps → Applications → Sync button |
-| ALB not creating | LB controller not running | `kubectl get pods -n kube-system -l app.kubernetes.io/name=aws-load-balancer-controller` |
+| ALB not creating | Kong not running | `kubectl get pods -n kong` |
 | ESO not creating secrets | Secret doesn't exist in AWS SM | Go to AWS Console → Secrets Manager → add values |
 | Terraform destroy fails | ENIs/LBs not released | Wait 2 min, run destroy again (retry built-in) |
 
