@@ -1,5 +1,5 @@
 # ═══════════════════════════════════════════════════════════════════
-# Kong Gateway — API Gateway + Ingress Controller (Production MNC Setup)
+# Kong Gateway — API Gateway + Ingress Controller
 # Single entry point for ALL microservices with HA + autoscaling
 # ═══════════════════════════════════════════════════════════════════
 
@@ -601,9 +601,10 @@ resource "kubernetes_manifest" "kong_manager_auth" {
   depends_on = [helm_release.kong]
 }
 
-
+# ═══════════════════════════════════════════════════════════════════
 # JWT Authentication — validates tokens at gateway level, auth not duplicated in each service
 # Auto-generate JWT secret (never hardcoded)
+# ═══════════════════════════════════════════════════════════════════
 resource "random_password" "jwt_secret" {
   length  = 64
   special = false
