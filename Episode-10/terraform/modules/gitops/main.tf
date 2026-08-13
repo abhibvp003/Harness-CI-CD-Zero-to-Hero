@@ -30,8 +30,9 @@ resource "helm_release" "gitops_agent" {
   chart            = "gitops-helm"
   namespace        = "gitops"
   create_namespace = false
-  atomic           = false # Chart bug: agent needs ConfigMap patch — atomic would uninstall before patch runs
+  atomic           = false # helm Chart bug: agent needs ConfigMap patch — atomic would uninstall before patch runs
   cleanup_on_fail  = true  # Clean up failed resources
+  # Helm installs chart → agent starts broken → ConfigMap patch applies → agent restarts → becomes healthy
   values = [
     yamlencode({
       global = {
