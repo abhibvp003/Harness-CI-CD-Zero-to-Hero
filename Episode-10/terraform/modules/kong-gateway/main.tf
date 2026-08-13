@@ -249,7 +249,7 @@ resource "kubectl_manifest" "kong_ip_restriction" {
     }
     plugin = "ip-restriction"
     config = {
-      deny = []
+      deny = ["192.0.2.0/24"] # RFC 5737 TEST-NET (placeholder — add real IPs to block)
     }
   })
   depends_on = [helm_release.kong]
@@ -465,7 +465,7 @@ resource "kubectl_manifest" "kong_zipkin" {
       tags_header         = "Zipkin-Tags"
       static_tags = [
         { name = "kong.env", value = "production" },
-        { name = "kong.service", value = "online-boutique" }
+        { name = "app.name", value = "online-boutique" }
       ]
     }
   })
