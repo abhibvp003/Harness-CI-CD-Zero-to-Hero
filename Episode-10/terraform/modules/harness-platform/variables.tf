@@ -26,3 +26,8 @@ variable "opa_policy_rego" {
   description = "OPA policy rego content"
   type        = string
 }
+
+variable "github_repo" {
+  description = "GitHub repository name"
+  type        = string
+}

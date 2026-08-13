@@ -127,3 +127,17 @@ variable "rds_username" {
   type        = string
   default     = "dbadmin"
 }
+
+# ─────────────────────────────────────────
+# GitHub Repository
+# ─────────────────────────────────────────
+variable "github_repo" {
+  description = "GitHub repository name (set via GitHub Variable: GITHUB_REPO)"
+  type        = string
+}
+
+variable "github_pat" {
+  description = "GitHub Personal Access Token (for GitOps repo write — set via GitHub Secret: GITHUB_PAT)"
+  type        = string
+  sensitive   = true
+}

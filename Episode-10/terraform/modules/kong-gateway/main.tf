@@ -20,10 +20,9 @@ resource "helm_release" "kong" {
   namespace        = "kong"
   create_namespace = true
   version          = "2.39.3"
-  skip_crds        = true
-  atomic           = true
-  timeout          = 600
-
+  skip_crds        = true # Don't install CRDs from chart (use when CRDs already exist from previous install)
+  atomic           = true # If install/upgrade fails → auto rollback to previous working version (no broken state left)
+  timeout          = 600  # Wait up to 600 seconds (10 min) for pods to become Ready before marking as failed
   values = [
     yamlencode({
       # Ingress Controller

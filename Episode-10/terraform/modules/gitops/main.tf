@@ -30,9 +30,8 @@ resource "helm_release" "gitops_agent" {
   chart            = "gitops-helm"
   namespace        = "gitops"
   create_namespace = false
-  atomic           = true
-  cleanup_on_fail  = true
-
+  atomic           = true # If install/upgrade fails → auto rollback to previous working version (no broken state left)
+  cleanup_on_fail  = true # On rollback, delete any new resources that were created during the failed attempt
   values = [
     yamlencode({
       global = {
@@ -102,11 +101,11 @@ resource "helm_release" "gitops_agent" {
   ]
 
   wait       = true
-  timeout    = 900
+  timeout    = 900 # 15 min — ArgoCD HA (redis-ha + repo-server + controller) needs time to start
   depends_on = [harness_platform_gitops_agent.agent]
 }
 
-# Connects the GitHub repository as a source for GitOps syncs
+# Connects the GitHub repository as a source for GitOps syncs (needs PAT for PR write access)
 resource "harness_platform_gitops_repository" "repo" {
   identifier = "repo"
   account_id = var.harness_account_id
@@ -115,10 +114,12 @@ resource "harness_platform_gitops_repository" "repo" {
   agent_id   = harness_platform_gitops_agent.agent.identifier
 
   repo {
-    repo            = "https://github.com/${var.github_username}/Harness-CI-CD-Zero-to-Hero"
-    name            = "Harness-CI-CD-Zero-to-Hero"
+    repo            = "https://github.com/${var.github_username}/${var.github_repo}"
+    name            = var.github_repo
     type_           = "git"
-    connection_type = "HTTPS_ANONYMOUS"
+    connection_type = "HTTPS"
+    username        = var.github_username # automatic {reads the repo name directly from GitHub} {github action : ${{ github.event.repository.name }}}
+    password        = var.github_pat      # github Secrets 
   }
 
   depends_on = [helm_release.gitops_agent]
@@ -168,11 +169,11 @@ resource "harness_platform_gitops_applications" "app" {
     spec {
       sync_policy { sync_options = ["CreateNamespace=true"] }
       source {
-        repo_url        = "https://github.com/${var.github_username}/Harness-CI-CD-Zero-to-Hero"
+        repo_url        = "https://github.com/${var.github_username}/${var.github_repo}"
         path            = var.app_path
         target_revision = "main"
         helm {
-          # MNC Pattern: ArgoCD injects domain at sync time — no need to edit values.yaml manually
+          # ArgoCD injects domain at sync time — no need to edit values.yaml manually
           parameters {
             name  = "domain"
             value = var.domain_name

@@ -14,6 +14,11 @@ variable "github_username" {
   type = string
 }
 
+variable "github_repo" {
+  description = "GitHub repository name (for GitOps source)"
+  type        = string
+}
+
 variable "agent_identifier" {
   type    = string
   default = "ep10gitopsagent"
@@ -54,4 +59,10 @@ variable "domain_name" {
   type        = string
   # Comes from GitHub Actions variable: vars.DOMAIN_NAME
   # ArgoCD uses this to render Ingress host: app.yourdomain.com
+}
+
+variable "github_pat" {
+  description = "GitHub Personal Access Token (for GitOps PR write access)"
+  type        = string
+  sensitive   = true
 }

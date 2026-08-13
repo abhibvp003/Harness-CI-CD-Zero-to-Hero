@@ -47,7 +47,7 @@ resource "harness_platform_service" "online_boutique" {
                     spec:
                       connectorRef: account.Github
                       gitFetchType: Branch
-                      repoName: Harness-CI-CD-Zero-to-Hero
+                      repoName: ${var.github_repo}
                       branch: main
                       paths:
                         - Episode-10/k8s/values.yaml
