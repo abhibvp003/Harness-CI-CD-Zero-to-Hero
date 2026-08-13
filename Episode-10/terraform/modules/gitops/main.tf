@@ -198,6 +198,7 @@ resource "harness_platform_gitops_applications" "app" {
 
   application {
     metadata {
+      name = var.app_name
       labels = {
         "harness.io/envRef"     = "production"
         "harness.io/serviceRef" = var.service_identifier
