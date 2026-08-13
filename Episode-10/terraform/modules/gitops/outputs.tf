@@ -3,7 +3,7 @@ output "agent_identifier" {
 }
 
 output "cluster_identifier" {
-  value = harness_platform_gitops_cluster.incluster.identifier
+  value = "incluster"
 }
 
 output "repo_identifier" {
