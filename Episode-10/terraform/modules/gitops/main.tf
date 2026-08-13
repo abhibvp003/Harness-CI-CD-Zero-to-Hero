@@ -1,6 +1,7 @@
 # ═══════════════════════════════════════════════════════════════════
 # GitOps Module — Official Harness Pattern (from harness-community/gitops-terraform-onboarding)
 # Flow: Register Agent → Get Deploy YAML → kubectl apply → Wait → Create Repo → Cluster → App
+#Harness API → Terraform data source → /tmp/gitops_agent.yaml → kubectl apply → deleted when runner exits
 # ═══════════════════════════════════════════════════════════════════
 
 # Step 1: Create namespace
@@ -90,8 +91,8 @@ resource "harness_platform_gitops_repository" "repo" {
     name            = var.github_repo
     insecure        = true
     connection_type = "HTTPS"
-    username        = var.github_username
-    password        = var.github_pat
+    username        = var.github_username # automatic {reads the repo name directly from GitHub} {github action : ${{ github.event.repository.name }}}
+    password        = var.github_pat      # github Secrets 
   }
 
   depends_on = [null_resource.install_gitops_agent]
@@ -147,6 +148,7 @@ resource "harness_platform_gitops_applications" "app" {
         target_revision = var.github_branch
         helm {
           parameters {
+            # Overrides "domain" in values.yaml at sync time (GitHub Var → Terraform → ArgoCD → Ingress host)
             name  = "domain"
             value = var.domain_name
           }
