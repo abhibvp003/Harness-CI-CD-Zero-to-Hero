@@ -90,7 +90,7 @@ jobs:
             -var="harness_delegate_token=${{ secrets.HARNESS_DELEGATE_TOKEN }}" \
             -var="github_username=${{ github.repository_owner }}" \
             -var="github_repo=${{ github.event.repository.name }}" \
-            -var="github_branch=${{ vars.GITHUB_BRANCH }}" \
+            -var="github_branch=${{ vars.GIT_BRANCH }}" \
             -var="github_pat=${{ secrets.GH_PAT }}" \
             -var="domain_name=${{ vars.DOMAIN_NAME }}" \
             -var="cluster_name=${{ vars.CLUSTER_NAME }}" \
@@ -109,7 +109,7 @@ jobs:
             -var="harness_delegate_token=${{ secrets.HARNESS_DELEGATE_TOKEN }}" \
             -var="github_username=${{ github.repository_owner }}" \
             -var="github_repo=${{ github.event.repository.name }}" \
-            -var="github_branch=${{ vars.GITHUB_BRANCH }}" \
+            -var="github_branch=${{ vars.GIT_BRANCH }}" \
             -var="github_pat=${{ secrets.GH_PAT }}" \
             -var="domain_name=${{ vars.DOMAIN_NAME }}" \
             -var="cluster_name=${{ vars.CLUSTER_NAME }}" \
@@ -141,7 +141,7 @@ jobs:
             -var="harness_delegate_token=${{ secrets.HARNESS_DELEGATE_TOKEN }}" \
             -var="github_username=${{ github.repository_owner }}" \
             -var="github_repo=${{ github.event.repository.name }}" \
-            -var="github_branch=${{ vars.GITHUB_BRANCH }}" \
+            -var="github_branch=${{ vars.GIT_BRANCH }}" \
             -var="github_pat=${{ secrets.GH_PAT }}" \
             -var="domain_name=${{ vars.DOMAIN_NAME }}" \
             -var="cluster_name=${{ vars.CLUSTER_NAME }}" \
@@ -252,7 +252,7 @@ jobs:
             -var="harness_delegate_token=${{ secrets.HARNESS_DELEGATE_TOKEN }}" \
             -var="github_username=${{ github.repository_owner }}" \
             -var="github_repo=${{ github.event.repository.name }}" \
-            -var="github_branch=${{ vars.GITHUB_BRANCH }}" \
+            -var="github_branch=${{ vars.GIT_BRANCH }}" \
             -var="github_pat=${{ secrets.GH_PAT }}" \
             -var="domain_name=${{ vars.DOMAIN_NAME }}" \
             -var="cluster_name=${{ vars.CLUSTER_NAME }}" \
@@ -290,7 +290,7 @@ jobs:
             -var="harness_delegate_token=${{ secrets.HARNESS_DELEGATE_TOKEN }}" \
             -var="github_username=${{ github.repository_owner }}" \
             -var="github_repo=${{ github.event.repository.name }}" \
-            -var="github_branch=${{ vars.GITHUB_BRANCH }}" \
+            -var="github_branch=${{ vars.GIT_BRANCH }}" \
             -var="github_pat=${{ secrets.GH_PAT }}" \
             -var="domain_name=${{ vars.DOMAIN_NAME }}" \
             -var="cluster_name=${{ vars.CLUSTER_NAME }}" \

@@ -207,7 +207,7 @@ After `terraform apply`, **ExternalDNS automatically creates Route53 records** w
 | `HARNESS_PROJECT_ID` | `HarnessCICDZerotoHero` | Harness → Project name → URL shows identifier |
 | `HARNESS_ORG_ID` | `default` | Harness → Organization identifier (most users: `default`) |
 | `AWS_REGION` | `us-east-1` | AWS region where you want to deploy |
-| `GITHUB_BRANCH` | `master` | Your default Git branch (`master` or `main`) |
+| `GIT_BRANCH` | `master` | Your default Git branch (`master` or `main`) |
 
 > All 7 variables are **required**.
 **Add Secrets (click Secrets tab → + New repository secret):**
