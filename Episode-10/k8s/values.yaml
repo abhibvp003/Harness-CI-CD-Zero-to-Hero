@@ -20,7 +20,7 @@ loadgeneratorImage: ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/loadgenerator:v1
 # Configuration
 namespace: online-boutique
 replicas: 2
-domain: CHANGE-TO-YOUR-DOMAIN.com # Placeholder — ArgoCD overrides this via helm.parameters from Terraform (var.domain_name)
+domain: CHANGE-TO-YOUR-DOMAIN.com # Placeholder — ArgoCD overrides this at sync time via helm.parameters (from Terraform var.domain_name → GitHub Variable DOMAIN_NAME). Never edit this manually.
 
 # Tracing (OpenTelemetry → OTel Collector → Jaeger)
 enableTracing: "1"

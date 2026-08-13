@@ -173,7 +173,7 @@ resource "harness_platform_gitops_applications" "app" {
         path            = var.app_path
         target_revision = "main"
         helm {
-          # ArgoCD injects domain at sync time — no need to edit values.yaml manually
+          # Overrides "domain" in values.yaml at sync time (GitHub Var → Terraform → ArgoCD → Ingress host)
           parameters {
             name  = "domain"
             value = var.domain_name
