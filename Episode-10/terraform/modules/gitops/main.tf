@@ -111,22 +111,14 @@ resource "helm_release" "gitops_agent" {
     })
   ]
 
-  wait       = true
-  timeout    = 900 # 15 min — ArgoCD HA (redis-ha + repo-server + controller) needs time to start
-  depends_on = [harness_platform_gitops_agent.agent]
-}
+  set {
+    name  = "agent.httpTarget"
+    value = "https://app.harness.io/gitops"
+  }
 
-# Set AGENT_HTTP_TARGET in ConfigMap (chart v1.2.8 doesn't pass this from Helm values correctly)
-resource "kubernetes_config_map_v1_data" "agent_http_target" {
-  metadata {
-    name      = "gitops-agent"
-    namespace = "gitops"
-  }
-  data = {
-    AGENT_HTTP_TARGET = "https://app.harness.io/gitops"
-  }
-  force      = true
-  depends_on = [helm_release.gitops_agent]
+  wait       = true
+  timeout    = 900
+  depends_on = [harness_platform_gitops_agent.agent]
 }
 
 # Connects the GitHub repository as a source for GitOps syncs (needs PAT for PR write access)
