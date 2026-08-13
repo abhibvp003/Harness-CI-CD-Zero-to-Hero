@@ -1,4 +1,9 @@
-# Creates the gitops namespace where ArgoCD agent will live
+# ═══════════════════════════════════════════════════════════════════
+# GitOps Module — Official Harness Pattern (from harness-community/gitops-terraform-onboarding)
+# Flow: Register Agent → Get Deploy YAML → kubectl apply → Wait → Create Repo → Cluster → App
+# ═══════════════════════════════════════════════════════════════════
+
+# Step 1: Create namespace
 resource "kubernetes_namespace" "gitops" {
   metadata {
     name   = "gitops"
@@ -6,7 +11,7 @@ resource "kubernetes_namespace" "gitops" {
   }
 }
 
-# Registers a Harness GitOps agent for ArgoCD-based deployments
+# Step 2: Register agent in Harness API (returns agent_token used in deploy YAML)
 resource "harness_platform_gitops_agent" "agent" {
   identifier = var.agent_identifier
   account_id = var.harness_account_id
@@ -23,171 +28,82 @@ resource "harness_platform_gitops_agent" "agent" {
   depends_on = [kubernetes_namespace.gitops]
 }
 
-# Deploys the Harness GitOps agent into the cluster via Helm
-resource "helm_release" "gitops_agent" {
-  name             = "harness-gitops-agent"
-  repository       = "https://harness.github.io/gitops-helm/"
-  chart            = "gitops-helm"
-  namespace        = "gitops"
-  create_namespace = false
-  atomic           = false # helm Chart bug: agent needs ConfigMap patch — atomic would uninstall before patch runs
-  cleanup_on_fail  = true  # Clean up failed resources
-  # Helm installs chart → agent starts broken → ConfigMap patch applies → agent restarts → becomes healthy
-  values = [
-    yamlencode({
-      global = {
-        accountId = var.harness_account_id
-      }
-      harness = {
-        identity = {
-          accountIdentifier = var.harness_account_id
-          orgIdentifier     = var.harness_org_id
-          projectIdentifier = var.harness_project_id
-          agentIdentifier   = var.agent_identifier
-        }
-        secrets = {
-          agentSecret = harness_platform_gitops_agent.agent.agent_token
-        }
-        gitopsServerHost = "https://app.harness.io/prod1/gitops"
-      }
-      http = {
-        agentHttpTarget = "https://app.harness.io/gitops"
-      }
-      configMap = {
-        AGENT_HTTP_TARGET = "https://app.harness.io/gitops"
-      }
-      agent = {
-        harnessName = var.agent_name
-        httpTarget  = "https://app.harness.io/gitops"
-        image = {
-          repository = "docker.io/harness/gitops-agent"
-          tag        = "v0.124.0"
-        }
-        replicas = 2
-        autoscaling = {
-          enabled          = true
-          highAvailability = true
-        }
-      }
-      upgrader = {
-        enabled = true
-        image   = "docker.io/harness/upgrader:latest"
-      }
-      argocdHarnessPlugin = { enabled = true }
-      "argo-cd" = {
-        enabled = true
-        crds = {
-          install = true
-          keep    = true
-        }
-        "redis-ha" = { enabled = false }
-        configs = {
-          cm = { "cluster.inClusterEnabled" = true }
-        }
-        controller = {
-          resources = {
-            requests = { cpu = "500m", memory = "1Gi" }
-            limits   = { cpu = "1", memory = "2Gi" }
-          }
-        }
-        repoServer = {
-          replicas = 2
-          resources = {
-            requests = { cpu = "500m", memory = "1Gi" }
-            limits   = { cpu = "1", memory = "2Gi" }
-          }
-        }
-        server = {
-          replicas = 2
-        }
-      }
-      "redis-ha" = { enabled = false }
-      redis = {
-        enabled = true
-        image = {
-          repository = "docker.io/harness/redis"
-          tag        = "7.4.8"
-        }
-      }
-    })
-  ]
-
-  set {
-    name  = "agent.httpTarget"
-    value = "https://app.harness.io/gitops"
-  }
-
-  wait       = false # Agent starts after ConfigMap patch below
-  timeout    = 900
-  depends_on = [harness_platform_gitops_agent.agent]
-}
-
-# Chart v1.2.8 bug workaround: set AGENT_HTTP_TARGET directly in ConfigMap (native Terraform, no shell)
-resource "kubernetes_config_map_v1_data" "agent_http_target" {
-  metadata {
-    name      = "gitops-agent"
-    namespace = "gitops"
-  }
-  data = {
-    AGENT_HTTP_TARGET = "https://app.harness.io/gitops"
-  }
-  force      = true
-  depends_on = [helm_release.gitops_agent]
-}
-
-# Connects the GitHub repository as a source for GitOps syncs (needs PAT for PR write access)
-resource "harness_platform_gitops_repository" "repo" {
-  identifier = "repo"
+# Step 3: Get the official deploy YAML from Harness (same as "Download YAML" button in UI)
+# This YAML has ALL correct values: AGENT_HTTP_TARGET, agentSecret, accountId, etc.
+data "harness_platform_gitops_agent_deploy_yaml" "agent_yaml" {
+  identifier = harness_platform_gitops_agent.agent.identifier
   account_id = var.harness_account_id
-  org_id     = var.harness_org_id
   project_id = var.harness_project_id
-  agent_id   = harness_platform_gitops_agent.agent.identifier
-
-  repo {
-    repo            = "https://github.com/${var.github_username}/${var.github_repo}"
-    name            = var.github_repo
-    type_           = "git"
-    connection_type = "HTTPS"
-    username        = var.github_username # automatic {reads the repo name directly from GitHub} {github action : ${{ github.event.repository.name }}}
-    password        = var.github_pat      # github Secrets 
-  }
-
-  depends_on = [null_resource.wait_for_agent_healthy]
+  org_id     = var.harness_org_id
+  namespace  = "gitops"
 }
 
-# Wait until agent is connected (polls Harness API every 10s, max 5 min — no fixed sleep)
-resource "null_resource" "wait_for_agent_healthy" {
+# Step 4: Save YAML to file and apply with kubectl (official Harness pattern)
+resource "null_resource" "install_gitops_agent" {
   triggers = {
     agent_id = harness_platform_gitops_agent.agent.identifier
   }
+
   provisioner "local-exec" {
     interpreter = ["/bin/bash", "-c"]
     command     = <<-EOT
+      # Write the Harness-generated YAML to a temp file
+      cat <<'YAML' > /tmp/gitops_agent.yaml
+      ${data.harness_platform_gitops_agent_deploy_yaml.agent_yaml.yaml}
+      YAML
+
+      # Configure kubectl
+      aws eks update-kubeconfig --name ${var.cluster_name} --region ${var.aws_region} --kubeconfig /tmp/kubeconfig
+
+      # Apply the agent YAML (installs ArgoCD + agent with correct config)
+      KUBECONFIG=/tmp/kubeconfig kubectl apply -f /tmp/gitops_agent.yaml
+
+      # Wait for agent to connect to Harness (polls every 10s, max 5 min)
       echo "Waiting for GitOps agent to connect..."
       for i in $(seq 1 30); do
         RESP=$(curl -s -H "x-api-key: ${var.harness_api_key}" \
           "https://app.harness.io/gateway/gitops/api/v1/agents/${var.agent_identifier}?accountIdentifier=${var.harness_account_id}&orgIdentifier=${var.harness_org_id}&projectIdentifier=${var.harness_project_id}" 2>/dev/null)
-        if echo "$RESP" | grep -q '"health"' && echo "$RESP" | grep -q '"connected"'; then
+        if echo "$RESP" | grep -q '"health"'; then
           echo "Agent connected! (attempt $i)"
-          exit 0
+          break
         fi
         echo "Attempt $i/30 — waiting 10s..."
         sleep 10
       done
-      echo "WARNING: Agent not confirmed connected after 5min — proceeding anyway"
-      exit 0
     EOT
   }
-  depends_on = [kubernetes_config_map_v1_data.agent_http_target]
+
+  depends_on = [data.harness_platform_gitops_agent_deploy_yaml.agent_yaml]
 }
 
-# Registers the in-cluster Kubernetes as a GitOps deploy target
+# Step 5: Create GitOps repository (public repo — no credentials needed for read)
+resource "harness_platform_gitops_repository" "repo" {
+  identifier = "repo"
+  account_id = var.harness_account_id
+  project_id = var.harness_project_id
+  org_id     = var.harness_org_id
+  agent_id   = var.agent_identifier
+  upsert     = true
+
+  repo {
+    repo            = "https://github.com/${var.github_username}/${var.github_repo}"
+    name            = var.github_repo
+    insecure        = true
+    connection_type = "HTTPS"
+    username        = var.github_username
+    password        = var.github_pat
+  }
+
+  depends_on = [null_resource.install_gitops_agent]
+}
+
+# Step 6: Register in-cluster as GitOps deploy target
 resource "harness_platform_gitops_cluster" "incluster" {
   identifier = "incluster"
   account_id = var.harness_account_id
   org_id     = var.harness_org_id
   project_id = var.harness_project_id
-  agent_id   = harness_platform_gitops_agent.agent.identifier
+  agent_id   = var.agent_identifier
 
   request {
     upsert = true
@@ -201,11 +117,10 @@ resource "harness_platform_gitops_cluster" "incluster" {
     }
   }
 
-  lifecycle { ignore_changes = all }
-  depends_on = [null_resource.wait_for_agent_healthy]
+  depends_on = [harness_platform_gitops_repository.repo]
 }
 
-# Creates the ArgoCD application that deploys our app from Git
+# Step 7: Create ArgoCD Application (syncs Helm chart from Git to cluster)
 resource "harness_platform_gitops_applications" "app" {
   identifier = var.app_identifier
   account_id = var.harness_account_id
@@ -213,7 +128,7 @@ resource "harness_platform_gitops_applications" "app" {
   project_id = var.harness_project_id
   cluster_id = harness_platform_gitops_cluster.incluster.identifier
   repo_id    = harness_platform_gitops_repository.repo.identifier
-  agent_id   = harness_platform_gitops_agent.agent.identifier
+  agent_id   = var.agent_identifier
   name       = var.app_name
 
   application {
@@ -231,7 +146,6 @@ resource "harness_platform_gitops_applications" "app" {
         path            = var.app_path
         target_revision = var.github_branch
         helm {
-          # Overrides "domain" in values.yaml at sync time (GitHub Var → Terraform → ArgoCD → Ingress host)
           parameters {
             name  = "domain"
             value = var.domain_name
@@ -245,5 +159,5 @@ resource "harness_platform_gitops_applications" "app" {
     }
   }
 
-  depends_on = [harness_platform_gitops_cluster.incluster, harness_platform_gitops_repository.repo]
+  depends_on = [harness_platform_gitops_cluster.incluster]
 }

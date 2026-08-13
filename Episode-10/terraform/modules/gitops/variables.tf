@@ -92,3 +92,13 @@ variable "harness_api_key" {
   type      = string
   sensitive = true
 }
+
+# EKS cluster name (for kubectl auth in agent install)
+variable "cluster_name" {
+  type = string
+}
+
+# AWS region (for kubectl auth in agent install)
+variable "aws_region" {
+  type = string
+}
