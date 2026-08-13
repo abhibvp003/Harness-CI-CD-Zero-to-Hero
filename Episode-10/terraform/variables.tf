@@ -6,15 +6,13 @@
 # AWS
 # ─────────────────────────────────────────
 variable "aws_region" {
-  description = "AWS region"
+  description = "AWS region (set via GitHub Variable: AWS_REGION)"
   type        = string
-  default     = "us-east-1"
 }
 
 variable "cluster_name" {
-  description = "EKS cluster name (created by this Terraform)"
+  description = "EKS cluster name (set via GitHub Variable: CLUSTER_NAME)"
   type        = string
-  default     = "ep10-enterprise-cluster"
 }
 
 variable "cluster_version" {
@@ -56,15 +54,13 @@ variable "harness_delegate_token" {
 }
 
 variable "harness_org_id" {
-  description = "Harness Organization Identifier"
+  description = "Harness Organization Identifier (set via GitHub Variable: HARNESS_ORG_ID)"
   type        = string
-  default     = "default"
 }
 
 variable "harness_project_id" {
-  description = "Harness Project Identifier"
+  description = "Harness Project Identifier (set via GitHub Variable: HARNESS_PROJECT_ID)"
   type        = string
-  default     = "HarnessCICDZerotoHero"
 }
 
 # ─────────────────────────────────────────

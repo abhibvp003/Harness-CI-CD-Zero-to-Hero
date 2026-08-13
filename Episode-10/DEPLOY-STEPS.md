@@ -204,7 +204,11 @@ After `terraform apply`, **ExternalDNS automatically creates Route53 records** w
 | `HARNESS_ACCOUNT_ID` | Your 22-character Account ID | Harness → Account Settings → Overview → Account ID |
 | `DOMAIN_NAME` | `yourdomain.com` | Your Route53 registered domain |
 | `CLUSTER_NAME` | `ep10-enterprise-cluster` | (or any name you prefer) |
+| `HARNESS_PROJECT_ID` | `HarnessCICDZerotoHero` | Harness → Project name → URL shows identifier |
+| `HARNESS_ORG_ID` | `default` | Harness → Organization identifier (most users: `default`) |
+| `AWS_REGION` | `us-east-1` | AWS region where you want to deploy |
 
+> All 6 variables are **required**.
 **Add Secrets (click Secrets tab → + New repository secret):**
 
 | Name | Value | How to Get |

@@ -90,7 +90,10 @@ jobs:
             -var="harness_delegate_token=${{ secrets.HARNESS_DELEGATE_TOKEN }}" \
             -var="github_username=${{ github.repository_owner }}" \
             -var="domain_name=${{ vars.DOMAIN_NAME }}" \
-            -var="cluster_name=${{ vars.CLUSTER_NAME || 'ep10-enterprise-cluster' }}" \
+            -var="cluster_name=${{ vars.CLUSTER_NAME }}" \
+            -var="harness_project_id=${{ vars.HARNESS_PROJECT_ID }}" \
+            -var="harness_org_id=${{ vars.HARNESS_ORG_ID }}" \
+            -var="aws_region=${{ vars.AWS_REGION }}"
 
       - name: Terraform Apply
         if: github.event.inputs.action == 'apply'
@@ -103,7 +106,10 @@ jobs:
             -var="harness_delegate_token=${{ secrets.HARNESS_DELEGATE_TOKEN }}" \
             -var="github_username=${{ github.repository_owner }}" \
             -var="domain_name=${{ vars.DOMAIN_NAME }}" \
-            -var="cluster_name=${{ vars.CLUSTER_NAME || 'ep10-enterprise-cluster' }}" \
+            -var="cluster_name=${{ vars.CLUSTER_NAME }}" \
+            -var="harness_project_id=${{ vars.HARNESS_PROJECT_ID }}" \
+            -var="harness_org_id=${{ vars.HARNESS_ORG_ID }}" \
+            -var="aws_region=${{ vars.AWS_REGION }}"
 
       - name: Debug — Show Error Details
         if: github.event.inputs.action == 'apply' && steps.terraform_apply.outcome == 'failure'
@@ -129,7 +135,10 @@ jobs:
             -var="harness_delegate_token=${{ secrets.HARNESS_DELEGATE_TOKEN }}" \
             -var="github_username=${{ github.repository_owner }}" \
             -var="domain_name=${{ vars.DOMAIN_NAME }}" \
-            -var="cluster_name=${{ vars.CLUSTER_NAME || 'ep10-enterprise-cluster' }}" 2>&1 | tail -100
+            -var="cluster_name=${{ vars.CLUSTER_NAME }}" \
+            -var="harness_project_id=${{ vars.HARNESS_PROJECT_ID }}" \
+            -var="harness_org_id=${{ vars.HARNESS_ORG_ID }}" \
+            -var="aws_region=${{ vars.AWS_REGION }}" 2>&1 | tail -100
           exit 1
 
       - name: Apply Summary
@@ -234,7 +243,10 @@ jobs:
             -var="harness_delegate_token=${{ secrets.HARNESS_DELEGATE_TOKEN }}" \
             -var="github_username=${{ github.repository_owner }}" \
             -var="domain_name=${{ vars.DOMAIN_NAME }}" \
-            -var="cluster_name=${{ vars.CLUSTER_NAME || 'ep10-enterprise-cluster' }}" \
+            -var="cluster_name=${{ vars.CLUSTER_NAME }}" \
+            -var="harness_project_id=${{ vars.HARNESS_PROJECT_ID }}" \
+            -var="harness_org_id=${{ vars.HARNESS_ORG_ID }}" \
+            -var="aws_region=${{ vars.AWS_REGION }}"
 
       - name: Terraform Destroy Retry (if first attempt failed)
         if: github.event.inputs.action == 'destroy' && steps.terraform_destroy.outcome == 'failure'
@@ -266,7 +278,10 @@ jobs:
             -var="harness_delegate_token=${{ secrets.HARNESS_DELEGATE_TOKEN }}" \
             -var="github_username=${{ github.repository_owner }}" \
             -var="domain_name=${{ vars.DOMAIN_NAME }}" \
-            -var="cluster_name=${{ vars.CLUSTER_NAME || 'ep10-enterprise-cluster' }}" \
+            -var="cluster_name=${{ vars.CLUSTER_NAME }}" \
+            -var="harness_project_id=${{ vars.HARNESS_PROJECT_ID }}" \
+            -var="harness_org_id=${{ vars.HARNESS_ORG_ID }}" \
+            -var="aws_region=${{ vars.AWS_REGION }}"
 
       - name: Destroy Summary
         if: github.event.inputs.action == 'destroy'
