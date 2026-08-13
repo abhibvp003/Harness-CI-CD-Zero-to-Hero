@@ -157,7 +157,7 @@ resource "harness_platform_gitops_repository" "repo" {
 
 # Registers the in-cluster Kubernetes to Harness (needs ~60s after ConfigMap patch)
 resource "time_sleep" "wait_for_agent" {
-  create_duration = "90s"
+  create_duration = "180s"
   depends_on      = [kubernetes_config_map_v1_data.agent_http_target]
 }
 
