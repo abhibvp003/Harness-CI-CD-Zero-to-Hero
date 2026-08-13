@@ -137,28 +137,8 @@ resource "harness_platform_gitops_repository" "repo" {
   depends_on = [null_resource.install_gitops_agent]
 }
 
-# Step 6: Register in-cluster as GitOps deploy target
-resource "harness_platform_gitops_cluster" "incluster" {
-  identifier = "incluster"
-  account_id = var.harness_account_id
-  org_id     = var.harness_org_id
-  project_id = var.harness_project_id
-  agent_id   = var.agent_identifier
-
-  request {
-    upsert = true
-    cluster {
-      server = "https://kubernetes.default.svc"
-      name   = "in-cluster"
-      config {
-        tls_client_config { insecure = true }
-        cluster_connection_type = "IN_CLUSTER"
-      }
-    }
-  }
-
-  depends_on = [harness_platform_gitops_repository.repo]
-}
+# Step 6: ArgoCD auto-registers in-cluster when agent installs — no manual cluster resource needed
+# The cluster "incluster" is created automatically by the deploy YAML (kubectl apply)
 
 # Step 7: Create ArgoCD Application (syncs Helm chart from Git to cluster)
 resource "harness_platform_gitops_applications" "app" {
@@ -166,7 +146,7 @@ resource "harness_platform_gitops_applications" "app" {
   account_id = var.harness_account_id
   org_id     = var.harness_org_id
   project_id = var.harness_project_id
-  cluster_id = harness_platform_gitops_cluster.incluster.identifier
+  cluster_id = "incluster"
   repo_id    = harness_platform_gitops_repository.repo.identifier
   agent_id   = var.agent_identifier
   name       = var.app_name
@@ -200,5 +180,5 @@ resource "harness_platform_gitops_applications" "app" {
     }
   }
 
-  depends_on = [harness_platform_gitops_cluster.incluster]
+  depends_on = [harness_platform_gitops_repository.repo]
 }
