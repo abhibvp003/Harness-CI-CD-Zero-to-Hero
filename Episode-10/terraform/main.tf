@@ -131,6 +131,7 @@ module "gitops" {
   github_repo        = var.github_repo
   github_pat         = var.github_pat
   github_branch      = var.github_branch
+  harness_api_key    = var.harness_api_key
   domain_name        = var.domain_name # Injected into ArgoCD Application helm.parameters (overrides values.yaml placeholder)
   agent_identifier   = "ep10gitopsagent"
   agent_name         = "ep10-gitops-agent"

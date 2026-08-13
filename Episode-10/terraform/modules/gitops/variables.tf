@@ -86,3 +86,9 @@ variable "github_branch" {
   description = "Git branch to sync from"
   type        = string
 }
+
+# Harness API key for agent health check polling
+variable "harness_api_key" {
+  type      = string
+  sensitive = true
+}

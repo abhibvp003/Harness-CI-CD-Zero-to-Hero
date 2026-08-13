@@ -152,13 +152,33 @@ resource "harness_platform_gitops_repository" "repo" {
     password        = var.github_pat      # github Secrets 
   }
 
-  depends_on = [time_sleep.wait_for_agent]
+  depends_on = [null_resource.wait_for_agent_healthy]
 }
 
-# Registers the in-cluster Kubernetes to Harness (needs ~60s after ConfigMap patch)
-resource "time_sleep" "wait_for_agent" {
-  create_duration = "180s"
-  depends_on      = [kubernetes_config_map_v1_data.agent_http_target]
+# Wait until agent is connected (polls Harness API every 10s, max 5 min — no fixed sleep)
+resource "null_resource" "wait_for_agent_healthy" {
+  triggers = {
+    agent_id = harness_platform_gitops_agent.agent.identifier
+  }
+  provisioner "local-exec" {
+    interpreter = ["/bin/bash", "-c"]
+    command     = <<-EOT
+      echo "Waiting for GitOps agent to connect..."
+      for i in $(seq 1 30); do
+        RESP=$(curl -s -H "x-api-key: ${var.harness_api_key}" \
+          "https://app.harness.io/gateway/gitops/api/v1/agents/${var.agent_identifier}?accountIdentifier=${var.harness_account_id}&orgIdentifier=${var.harness_org_id}&projectIdentifier=${var.harness_project_id}" 2>/dev/null)
+        if echo "$RESP" | grep -q '"health"' && echo "$RESP" | grep -q '"connected"'; then
+          echo "Agent connected! (attempt $i)"
+          exit 0
+        fi
+        echo "Attempt $i/30 — waiting 10s..."
+        sleep 10
+      done
+      echo "WARNING: Agent not confirmed connected after 5min — proceeding anyway"
+      exit 0
+    EOT
+  }
+  depends_on = [kubernetes_config_map_v1_data.agent_http_target]
 }
 
 # Registers the in-cluster Kubernetes as a GitOps deploy target
@@ -182,7 +202,7 @@ resource "harness_platform_gitops_cluster" "incluster" {
   }
 
   lifecycle { ignore_changes = all }
-  depends_on = [time_sleep.wait_for_agent]
+  depends_on = [null_resource.wait_for_agent_healthy]
 }
 
 # Creates the ArgoCD application that deploys our app from Git
