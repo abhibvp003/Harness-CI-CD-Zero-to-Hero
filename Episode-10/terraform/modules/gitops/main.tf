@@ -39,25 +39,27 @@ data "harness_platform_gitops_agent_deploy_yaml" "agent_yaml" {
   namespace  = "gitops"
 }
 
-# Step 4: Save YAML to file and apply with kubectl (official Harness pattern)
+# Step 4: Save the Harness-generated YAML to a file (too large for inline heredoc)
+resource "local_file" "gitops_agent_yaml" {
+  filename = "${path.module}/gitops_agent.yaml"
+  content  = data.harness_platform_gitops_agent_deploy_yaml.agent_yaml.yaml
+}
+
+# Step 5: Apply the YAML to cluster + wait for agent to connect
 resource "null_resource" "install_gitops_agent" {
   triggers = {
     agent_id = harness_platform_gitops_agent.agent.identifier
+    yaml_sha = sha256(local_file.gitops_agent_yaml.content)
   }
 
   provisioner "local-exec" {
     interpreter = ["/bin/bash", "-c"]
     command     = <<-EOT
-      # Write the Harness-generated YAML to a temp file
-      cat <<'YAML' > /tmp/gitops_agent.yaml
-      ${data.harness_platform_gitops_agent_deploy_yaml.agent_yaml.yaml}
-      YAML
-
       # Configure kubectl
       aws eks update-kubeconfig --name ${var.cluster_name} --region ${var.aws_region} --kubeconfig /tmp/kubeconfig
 
       # Apply the agent YAML (installs ArgoCD + agent with correct config)
-      KUBECONFIG=/tmp/kubeconfig kubectl apply -f /tmp/gitops_agent.yaml
+      KUBECONFIG=/tmp/kubeconfig kubectl apply -f ${local_file.gitops_agent_yaml.filename}
 
       # Wait for agent to connect to Harness (polls every 10s, max 5 min)
       echo "Waiting for GitOps agent to connect..."
@@ -74,7 +76,7 @@ resource "null_resource" "install_gitops_agent" {
     EOT
   }
 
-  depends_on = [data.harness_platform_gitops_agent_deploy_yaml.agent_yaml]
+  depends_on = [local_file.gitops_agent_yaml]
 }
 
 # Step 5: Create GitOps repository (public repo — no credentials needed for read)
