@@ -94,6 +94,8 @@ jobs:
 
       - name: Terraform Apply
         if: github.event.inputs.action == 'apply'
+        id: terraform_apply
+        continue-on-error: true
         run: |
           terraform apply -auto-approve -no-color \
             -var="harness_account_id=${{ vars.HARNESS_ACCOUNT_ID }}" \
@@ -103,8 +105,35 @@ jobs:
             -var="domain_name=${{ vars.DOMAIN_NAME }}" \
             -var="cluster_name=${{ vars.CLUSTER_NAME || 'ep10-enterprise-cluster' }}" \
 
+      - name: Debug — Show Error Details
+        if: github.event.inputs.action == 'apply' && steps.terraform_apply.outcome == 'failure'
+        run: |
+          echo "============================================"
+          echo "  ❌ TERRAFORM APPLY FAILED — DEBUG INFO"
+          echo "============================================"
+          echo ""
+          echo "Exit code: ${{ steps.terraform_apply.outcome }}"
+          echo ""
+          echo "--- Terraform State List (what was created before failure) ---"
+          terraform state list 2>/dev/null || echo "(no state file — failed before any resource created)"
+          echo ""
+          echo "--- Terraform Show (last known state) ---"
+          terraform show -no-color 2>/dev/null | tail -50 || echo "(no state)"
+          echo ""
+          echo "============================================"
+          echo "  RE-RUNNING APPLY WITH FULL DEBUG LOG"
+          echo "============================================"
+          TF_LOG=ERROR terraform apply -auto-approve -no-color \
+            -var="harness_account_id=${{ vars.HARNESS_ACCOUNT_ID }}" \
+            -var="harness_api_key=${{ secrets.HARNESS_API_KEY }}" \
+            -var="harness_delegate_token=${{ secrets.HARNESS_DELEGATE_TOKEN }}" \
+            -var="github_username=${{ github.repository_owner }}" \
+            -var="domain_name=${{ vars.DOMAIN_NAME }}" \
+            -var="cluster_name=${{ vars.CLUSTER_NAME || 'ep10-enterprise-cluster' }}" 2>&1 | tail -100
+          exit 1
+
       - name: Apply Summary
-        if: github.event.inputs.action == 'apply'
+        if: github.event.inputs.action == 'apply' && steps.terraform_apply.outcome == 'success'
         run: |
           CLUSTER=$(terraform output -raw eks_cluster_name)
           BASTION_IP=$(terraform output -raw bastion_public_ip)
