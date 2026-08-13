@@ -20,6 +20,7 @@ resource "helm_release" "kong" {
   namespace        = "kong"
   create_namespace = true
   version          = "2.39.3"
+  skip_crds        = true
 
   values = [
     yamlencode({

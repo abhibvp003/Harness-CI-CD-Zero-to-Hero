@@ -33,29 +33,84 @@ resource "helm_release" "gitops_agent" {
 
   values = [
     yamlencode({
-      global = { accountId = var.harness_account_id }
-      agent = {
-        name      = var.agent_name
+      global = {
         accountId = var.harness_account_id
-        orgId     = var.harness_org_id
-        projectId = var.harness_project_id
       }
-      replicaCount = 2
-      controller   = { replicas = 2 }
-      repoServer = {
-        replicas    = 2
-        autoscaling = { enabled = true, minReplicas = 2, maxReplicas = 5, targetCPUUtilizationPercentage = 70 }
+      harness = {
+        identity = {
+          accountIdentifier = var.harness_account_id
+          orgIdentifier     = var.harness_org_id
+          projectIdentifier = var.harness_project_id
+          agentIdentifier   = var.agent_identifier
+        }
+        secrets = {
+          agentSecret = harness_platform_gitops_agent.agent.agent_token
+        }
+        gitopsServerHost = "https://app.harness.io/prod1/gitops"
       }
-      server = {
-        replicas    = 2
-        autoscaling = { enabled = true, minReplicas = 2, maxReplicas = 4, targetCPUUtilizationPercentage = 70 }
+      agent = {
+        harnessName = var.agent_name
+        image = {
+          repository = "docker.io/harness/gitops-agent"
+          tag        = "v0.124.0"
+        }
+        replicas = 2
+        autoscaling = {
+          enabled          = true
+          highAvailability = true
+        }
       }
-      redis = { enabled = true, replicas = 2 }
+      upgrader = {
+        enabled = true
+        image   = "docker.io/harness/upgrader:latest"
+      }
+      argocdHarnessPlugin = { enabled = true }
+      "argo-cd" = {
+        enabled = true
+        crds = {
+          install = true
+          keep    = true
+        }
+        configs = {
+          cm = { "cluster.inClusterEnabled" = true }
+        }
+        controller = {
+          resources = {
+            requests = { cpu = "500m", memory = "1Gi" }
+            limits   = { cpu = "1", memory = "2Gi" }
+          }
+        }
+        repoServer = {
+          replicas = 2
+          resources = {
+            requests = { cpu = "500m", memory = "1Gi" }
+            limits   = { cpu = "1", memory = "2Gi" }
+          }
+        }
+        server = {
+          replicas = 2
+        }
+      }
+      "redis-ha" = {
+        enabled = true
+        image = {
+          repository = "docker.io/harness/redis"
+          tag        = "7.4.8"
+        }
+        haproxy = {
+          enabled = true
+          image = {
+            repository = "docker.io/harness/haproxy"
+            tag        = "3.4.1-alpine3.24"
+          }
+        }
+      }
+      redis = { enabled = false }
     })
   ]
 
   wait       = true
-  timeout    = 600
+  timeout    = 900
   depends_on = [harness_platform_gitops_agent.agent]
 }
 
@@ -71,8 +126,10 @@ resource "harness_platform_gitops_repository" "repo" {
     repo            = "https://github.com/${var.github_username}/Harness-CI-CD-Zero-to-Hero"
     name            = "Harness-CI-CD-Zero-to-Hero"
     type_           = "git"
-    connection_type = "HTTPS"
+    connection_type = "HTTPS_ANONYMOUS"
   }
+
+  depends_on = [helm_release.gitops_agent]
 }
 
 # Registers the in-cluster Kubernetes as a GitOps deploy target
@@ -94,6 +151,8 @@ resource "harness_platform_gitops_cluster" "incluster" {
       }
     }
   }
+
+  depends_on = [helm_release.gitops_agent]
 }
 
 # Creates the ArgoCD application that deploys our app from Git

@@ -10,18 +10,6 @@ resource "harness_platform_connector_prometheus" "prometheus" {
   delegate_selectors = [var.delegate_name]
 }
 
-# Connector for reading secrets from AWS Secrets Manager
-resource "harness_platform_connector_aws_secret_manager" "aws_sm" {
-  identifier         = "aws_secrets_manager"
-  name               = "aws-secrets-manager"
-  org_id             = var.org_id
-  project_id         = var.project_id
-  region             = var.aws_region
-  secret_name_prefix = "harness/"
-  delegate_selectors = [var.delegate_name]
-  credentials { inherit_from_delegate = true }
-}
-
 # Kubernetes connector that uses the delegate to talk to the cluster
 resource "harness_platform_connector_kubernetes" "k8s" {
   identifier = "k8sdelegate"
@@ -58,6 +46,7 @@ resource "harness_platform_service" "online_boutique" {
                     type: Github
                     spec:
                       connectorRef: account.Github
+                      gitFetchType: Branch
                       repoName: Harness-CI-CD-Zero-to-Hero
                       branch: main
                       paths:
