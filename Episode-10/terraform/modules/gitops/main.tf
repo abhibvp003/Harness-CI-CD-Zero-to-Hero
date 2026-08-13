@@ -95,8 +95,11 @@ resource "helm_release" "gitops_agent" {
           replicas = 2
         }
       }
-      "redis-ha" = { enabled = true }
-      redis      = { enabled = false }
+      "redis-ha" = {
+        enabled = true
+        haproxy = { enabled = true }
+      }
+      redis = { enabled = false }
     })
   ]
 

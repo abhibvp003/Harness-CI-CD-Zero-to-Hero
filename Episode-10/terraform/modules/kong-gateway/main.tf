@@ -21,8 +21,8 @@ resource "helm_release" "kong" {
   create_namespace = true
   version          = "2.39.3"
   skip_crds        = true # Don't install CRDs from chart (use when CRDs already exist from previous install)
-  atomic           = true # If install/upgrade fails → auto rollback to previous working version (no broken state left)
-  timeout          = 600  # Wait up to 600 seconds (10 min) for pods to become Ready before marking as failed
+  wait             = true # Wait for pods to be ready before marking success
+  timeout          = 900  # 15 min — EKS Auto Mode needs time to scale nodes for Kong pods
   values = [
     yamlencode({
       # Ingress Controller
