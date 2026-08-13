@@ -15,8 +15,11 @@ resource "aws_secretsmanager_secret" "efk" {
 }
 
 resource "aws_secretsmanager_secret_version" "efk" {
-  secret_id     = aws_secretsmanager_secret.efk.id
-  secret_string = random_password.efk.result
+  secret_id = aws_secretsmanager_secret.efk.id
+  secret_string = jsonencode({
+    username = "elastic"
+    password = random_password.efk.result
+  })
 }
 
 # Elasticsearch — Helm chart via ArgoCD

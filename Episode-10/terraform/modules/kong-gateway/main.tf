@@ -523,8 +523,11 @@ resource "aws_secretsmanager_secret" "kong_admin" {
 }
 
 resource "aws_secretsmanager_secret_version" "kong_admin" {
-  secret_id     = aws_secretsmanager_secret.kong_admin.id
-  secret_string = random_password.kong_admin.result
+  secret_id = aws_secretsmanager_secret.kong_admin.id
+  secret_string = jsonencode({
+    username = "admin"
+    password = random_password.kong_admin.result
+  })
 }
 
 # Kong Consumer (the admin user)
