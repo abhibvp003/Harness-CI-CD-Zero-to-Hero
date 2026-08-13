@@ -25,8 +25,8 @@ terraform {
       version = "~> 2.25"
     }
     kubectl = {
-      source  = "alekc/kubectl"
-      version = ">= 2.0"
+      source  = "gavinbunney/kubectl"
+      version = "~> 1.14"
     }
     null = {
       source  = "hashicorp/null"
@@ -67,7 +67,7 @@ provider "kubernetes" {
 }
 
 # ═══════════════════════════════════════════════════════════════════
-# Helm Provider (installs charts on EKS)
+# Helm Provider (installs Delegate, Kong, ExternalDNS, ESO charts on EKS)
 # ═══════════════════════════════════════════════════════════════════
 provider "helm" {
   kubernetes {
@@ -83,9 +83,10 @@ provider "helm" {
 }
 
 # ═══════════════════════════════════════════════════════════════════
-# Kubectl Provider (applies manifests WITHOUT plan-time API connection)
+# Kubectl Provider (applies CRDs + ArgoCD Apps — no plan-time API connection)
 # ═══════════════════════════════════════════════════════════════════
 provider "kubectl" {
+  apply_retry_count      = 5
   host                   = module.eks.cluster_endpoint
   cluster_ca_certificate = base64decode(module.eks.cluster_ca_certificate)
   load_config_file       = false
