@@ -5,7 +5,7 @@
 
 # Lookup existing ACM Certificate
 data "aws_acm_certificate" "wildcard" {
-  domain      = "*.${var.domain_name}"
+  domain      = var.domain_name
   statuses    = ["ISSUED"]
   most_recent = true
 }

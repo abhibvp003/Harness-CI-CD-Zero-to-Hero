@@ -85,7 +85,7 @@ variable "delegate_replicas" {
 variable "delegate_image_tag" {
   description = "Harness delegate image tag"
   type        = string
-  default     = "24.04.83502"
+  default     = "26.07.89707"
 }
 
 # ─────────────────────────────────────────

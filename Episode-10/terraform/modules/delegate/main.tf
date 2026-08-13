@@ -13,7 +13,7 @@ resource "helm_release" "delegate" {
       managerEndpoint     = "https://app.harness.io"
       delegateName        = var.delegate_name
       replicas            = var.replicas
-      delegateDockerImage = "harness/delegate:${var.image_tag}"
+      delegateDockerImage = "us-docker.pkg.dev/gar-prod-setup/harness-public/harness/delegate:${var.image_tag}"
       tags                = var.delegate_name
       autoscaling = {
         enabled                        = true
@@ -29,7 +29,7 @@ resource "helm_release" "delegate" {
   ]
 
   wait    = true
-  timeout = 600
+  timeout = 900
 }
 
 # Creates a namespace where Harness CI builds will run

@@ -19,7 +19,7 @@ variable "replicas" {
 
 variable "image_tag" {
   type    = string
-  default = "24.04.83502"
+  default = "26.07.89707"
 }
 
 variable "eks_cluster_name" {
