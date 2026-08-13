@@ -224,6 +224,22 @@ jobs:
 
             aws eks update-kubeconfig --region "${{ env.AWS_REGION_VALUE }}" --name "${CLUSTER_NAME}"
 
+            # Remove validating/mutating webhooks (they block resource deletion after their service is gone)
+            kubectl delete validatingwebhookconfiguration --all --ignore-not-found=true 2>/dev/null || true
+            kubectl delete mutatingwebhookconfiguration --all --ignore-not-found=true 2>/dev/null || true
+
+            # Remove ArgoCD Application finalizers (they block namespace deletion)
+            for app in $(kubectl get applications -n gitops -o name 2>/dev/null); do
+              kubectl patch "$app" -n gitops --type json -p='[{"op":"remove","path":"/metadata/finalizers"}]' 2>/dev/null || true
+            done
+
+            # Remove finalizers from all namespaces (prevents stuck deletion)
+            for ns in $(kubectl get ns --no-headers 2>/dev/null | awk '{print $1}'); do
+              case "$ns" in kube-system|kube-public|kube-node-lease|default) continue;; esac
+              kubectl patch ns "$ns" --type json -p='[{"op":"remove","path":"/metadata/finalizers"}]' 2>/dev/null || true
+              kubectl patch ns "$ns" --type json -p='[{"op":"replace","path":"/spec/finalizers","value":[]}]' 2>/dev/null || true
+            done
+
             # Delete LoadBalancer services (they create AWS LBs outside Terraform)
             kubectl get svc -A -o jsonpath='{range .items[?(@.spec.type=="LoadBalancer")]}{.metadata.namespace}{" "}{.metadata.name}{"\n"}{end}' 2>/dev/null | while read -r NS SVC; do
               [ -z "$NS" ] && continue
@@ -236,14 +252,14 @@ jobs:
               kubectl delete pvc "$PVC" -n "$NS" --ignore-not-found=true --timeout=30s || true
             done
 
-            # Delete non-system namespaces
-            kubectl get ns --no-headers 2>/dev/null | awk '{print $1}' | while read -r NS; do
-              case "$NS" in kube-system|kube-public|kube-node-lease|default) continue;; esac
-              kubectl delete namespace "$NS" --ignore-not-found=true --wait=false --timeout=60s || true
+            # Delete non-system namespaces (now without finalizers, they'll delete instantly)
+            for ns in $(kubectl get ns --no-headers 2>/dev/null | awk '{print $1}'); do
+              case "$ns" in kube-system|kube-public|kube-node-lease|default) continue;; esac
+              kubectl delete namespace "$ns" --ignore-not-found=true --wait=false --timeout=30s || true
             done
 
-            echo "Waiting 120s for AWS resources (LBs, ENIs) to release..."
-            sleep 120
+            echo "Waiting 90s for AWS resources (LBs, ENIs) to release..."
+            sleep 90
           fi
 
           terraform destroy -auto-approve -no-color \
