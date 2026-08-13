@@ -30,8 +30,8 @@ resource "helm_release" "gitops_agent" {
   chart            = "gitops-helm"
   namespace        = "gitops"
   create_namespace = false
-  atomic           = true # If install/upgrade fails → auto rollback to previous working version (no broken state left)
-  cleanup_on_fail  = true # On rollback, delete any new resources that were created during the failed attempt
+  atomic           = false # Chart bug: agent needs ConfigMap patch — atomic would uninstall before patch runs
+  cleanup_on_fail  = true  # Clean up failed resources
   values = [
     yamlencode({
       global = {
@@ -116,9 +116,22 @@ resource "helm_release" "gitops_agent" {
     value = "https://app.harness.io/gitops"
   }
 
-  wait       = true
+  wait       = false # Agent starts after ConfigMap patch below
   timeout    = 900
   depends_on = [harness_platform_gitops_agent.agent]
+}
+
+# Chart v1.2.8 bug workaround: set AGENT_HTTP_TARGET directly in ConfigMap (native Terraform, no shell)
+resource "kubernetes_config_map_v1_data" "agent_http_target" {
+  metadata {
+    name      = "gitops-agent"
+    namespace = "gitops"
+  }
+  data = {
+    AGENT_HTTP_TARGET = "https://app.harness.io/gitops"
+  }
+  force      = true
+  depends_on = [helm_release.gitops_agent]
 }
 
 # Connects the GitHub repository as a source for GitOps syncs (needs PAT for PR write access)
