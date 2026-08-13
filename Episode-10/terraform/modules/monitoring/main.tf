@@ -80,6 +80,14 @@ resource "kubectl_manifest" "argocd_monitoring" {
   })
 }
 
+# Create monitoring namespace (ArgoCD will own it later but we need it now for ConfigMaps)
+resource "kubernetes_namespace" "monitoring" {
+  metadata {
+    name = "monitoring"
+  }
+  lifecycle { ignore_changes = all }
+}
+
 # Grafana dashboard — Online Boutique Application metrics
 resource "kubernetes_config_map" "grafana_dashboard_app" {
   metadata {
@@ -87,6 +95,7 @@ resource "kubernetes_config_map" "grafana_dashboard_app" {
     namespace = "monitoring"
     labels    = { grafana_dashboard = "1" }
   }
+  depends_on = [kubernetes_namespace.monitoring]
   data = {
     "online-boutique.json" = jsonencode({
       title   = "Online Boutique - Application"
@@ -101,7 +110,6 @@ resource "kubernetes_config_map" "grafana_dashboard_app" {
       ]
     })
   }
-  depends_on = [kubectl_manifest.argocd_monitoring]
 }
 
 # Grafana dashboard — Kong Gateway metrics
@@ -111,6 +119,7 @@ resource "kubernetes_config_map" "grafana_dashboard_kong" {
     namespace = "monitoring"
     labels    = { grafana_dashboard = "1" }
   }
+  depends_on = [kubernetes_namespace.monitoring]
   data = {
     "kong-gateway.json" = jsonencode({
       title   = "Kong Gateway"
@@ -125,5 +134,4 @@ resource "kubernetes_config_map" "grafana_dashboard_kong" {
       ]
     })
   }
-  depends_on = [kubectl_manifest.argocd_monitoring]
 }
