@@ -4,8 +4,8 @@
 # ═══════════════════════════════════════════════════════════════════
 
 # Jaeger — Helm chart via ArgoCD (stores + visualizes traces)
-resource "kubernetes_manifest" "argocd_jaeger" {
-  manifest = {
+resource "kubectl_manifest" "argocd_jaeger" {
+  yaml_body = yamlencode({
     apiVersion = "argoproj.io/v1alpha1"
     kind       = "Application"
     metadata   = { name = "jaeger", namespace = "gitops" }
@@ -37,12 +37,12 @@ resource "kubernetes_manifest" "argocd_jaeger" {
       destination = { server = "https://kubernetes.default.svc", namespace = "tracing" }
       syncPolicy  = { automated = { prune = true, selfHeal = true }, syncOptions = ["CreateNamespace=true"] }
     }
-  }
+  })
 }
 
 # OTel Collector — raw manifests from Git (custom pipeline config)
-resource "kubernetes_manifest" "argocd_otel" {
-  manifest = {
+resource "kubectl_manifest" "argocd_otel" {
+  yaml_body = yamlencode({
     apiVersion = "argoproj.io/v1alpha1"
     kind       = "Application"
     metadata   = { name = "otel-collector", namespace = "gitops" }
@@ -56,5 +56,5 @@ resource "kubernetes_manifest" "argocd_otel" {
       destination = { server = "https://kubernetes.default.svc", namespace = "tracing" }
       syncPolicy  = { automated = { prune = true, selfHeal = true }, syncOptions = ["CreateNamespace=true"] }
     }
-  }
+  })
 }

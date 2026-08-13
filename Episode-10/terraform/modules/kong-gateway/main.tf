@@ -106,8 +106,8 @@ resource "helm_release" "kong" {
 # ═══════════════════════════════════════════════════════════════════
 
 # Plugin 1: Rate Limiting — 100 requests/minute per IP (DDoS protection)
-resource "kubernetes_manifest" "kong_rate_limit" {
-  manifest = {
+resource "kubectl_manifest" "kong_rate_limit" {
+  yaml_body = yamlencode({
     apiVersion = "configuration.konghq.com/v1"
     kind       = "KongClusterPlugin"
     metadata = {
@@ -121,15 +121,15 @@ resource "kubernetes_manifest" "kong_rate_limit" {
       policy              = "local"
       fault_tolerant      = true
       hide_client_headers = false
-      header_name         = "X-RateLimit-Remaining" # Shows remaining requests in response header
+      header_name         = "X-RateLimit-Remaining"
     }
-  }
+  })
   depends_on = [helm_release.kong]
 }
 
 # Plugin 2: CORS — Allow cross-origin requests (frontend → backend APIs)
-resource "kubernetes_manifest" "kong_cors" {
-  manifest = {
+resource "kubectl_manifest" "kong_cors" {
+  yaml_body = yamlencode({
     apiVersion = "configuration.konghq.com/v1"
     kind       = "KongClusterPlugin"
     metadata = {
@@ -146,13 +146,13 @@ resource "kubernetes_manifest" "kong_cors" {
       max_age         = 3600
       credentials     = true
     }
-  }
+  })
   depends_on = [helm_release.kong]
 }
 
-# Plugin 3: Request Logging — {All API requests logged to stdout (Fluentd → EFK)}
-resource "kubernetes_manifest" "kong_logging" {
-  manifest = {
+# Plugin 3: Request Logging — All API requests logged to stdout (Fluentd → EFK)
+resource "kubectl_manifest" "kong_logging" {
+  yaml_body = yamlencode({
     apiVersion = "configuration.konghq.com/v1"
     kind       = "KongClusterPlugin"
     metadata = {
@@ -165,13 +165,13 @@ resource "kubernetes_manifest" "kong_logging" {
       path   = "/dev/stdout"
       reopen = true
     }
-  }
+  })
   depends_on = [helm_release.kong]
 }
 
-# Plugin 4: Prometheus Metrics — {Per-route latency, errors, bandwidth}
-resource "kubernetes_manifest" "kong_prometheus" {
-  manifest = {
+# Plugin 4: Prometheus Metrics — Per-route latency, errors, bandwidth
+resource "kubectl_manifest" "kong_prometheus" {
+  yaml_body = yamlencode({
     apiVersion = "configuration.konghq.com/v1"
     kind       = "KongClusterPlugin"
     metadata = {
@@ -187,13 +187,13 @@ resource "kubernetes_manifest" "kong_prometheus" {
       bandwidth_metrics       = true
       upstream_health_metrics = true
     }
-  }
+  })
   depends_on = [helm_release.kong]
 }
 
-# Plugin 5: Request Size Limiting — Prevent large payload attacks {10MB max}
-resource "kubernetes_manifest" "kong_request_size" {
-  manifest = {
+# Plugin 5: Request Size Limiting — Prevent large payload attacks (10MB max)
+resource "kubectl_manifest" "kong_request_size" {
+  yaml_body = yamlencode({
     apiVersion = "configuration.konghq.com/v1"
     kind       = "KongClusterPlugin"
     metadata = {
@@ -203,16 +203,16 @@ resource "kubernetes_manifest" "kong_request_size" {
     }
     plugin = "request-size-limiting"
     config = {
-      allowed_payload_size = 10 # MB
+      allowed_payload_size = 10
       size_unit            = "megabytes"
     }
-  }
+  })
   depends_on = [helm_release.kong]
 }
 
-# Plugin 6: Response Transformer — Add security headers to all responses {HSTS, X-Frame, XSS}
-resource "kubernetes_manifest" "kong_security_headers" {
-  manifest = {
+# Plugin 6: Response Transformer — Add security headers to all responses (HSTS, X-Frame, XSS)
+resource "kubectl_manifest" "kong_security_headers" {
+  yaml_body = yamlencode({
     apiVersion = "configuration.konghq.com/v1"
     kind       = "KongClusterPlugin"
     metadata = {
@@ -231,13 +231,13 @@ resource "kubernetes_manifest" "kong_security_headers" {
         ]
       }
     }
-  }
+  })
   depends_on = [helm_release.kong]
 }
 
-# Plugin 7: IP Restriction — {Block known bad IPs} ( security requirement)
-resource "kubernetes_manifest" "kong_ip_restriction" {
-  manifest = {
+# Plugin 7: IP Restriction — Block known bad IPs (security requirement)
+resource "kubectl_manifest" "kong_ip_restriction" {
+  yaml_body = yamlencode({
     apiVersion = "configuration.konghq.com/v1"
     kind       = "KongClusterPlugin"
     metadata = {
@@ -247,18 +247,15 @@ resource "kubernetes_manifest" "kong_ip_restriction" {
     }
     plugin = "ip-restriction"
     config = {
-      # Deny known malicious IPs (add your blocklist here)
       deny = []
-      # Or allow only specific IPs (whitelist mode — uncomment for admin routes)
-      # allow = ["10.0.0.0/8", "172.16.0.0/12"]
     }
-  }
+  })
   depends_on = [helm_release.kong]
 }
 
 # Plugin 8: Bot Detection — Block common bots and scrapers
-resource "kubernetes_manifest" "kong_bot_detection" {
-  manifest = {
+resource "kubectl_manifest" "kong_bot_detection" {
+  yaml_body = yamlencode({
     apiVersion = "configuration.konghq.com/v1"
     kind       = "KongClusterPlugin"
     metadata = {
@@ -268,37 +265,15 @@ resource "kubernetes_manifest" "kong_bot_detection" {
     }
     plugin = "bot-detection"
     config = {
-      deny = [] # Kong has built-in bot patterns — blocks known bad user-agents
+      deny = []
     }
-  }
+  })
   depends_on = [helm_release.kong]
 }
 
-# Plugin 9: Request Termination — Maintenance mode (enable when needed)
-# Uncomment to put entire API in {maintenance mode}
-# resource "kubernetes_manifest" "kong_maintenance" {
-#   manifest = {
-#     apiVersion = "configuration.konghq.com/v1"
-#     kind       = "KongClusterPlugin"
-#     metadata = {
-#       name = "global-maintenance"
-#       annotations = { "kubernetes.io/ingress.class" = "kong" }
-#       labels      = { global = "true" }
-#     }
-#     plugin = "request-termination"
-#     config = {
-#       status_code = 503
-#       message     = "Service is under maintenance. Please try again later."
-#       content_type = "application/json"
-#       body         = "{\"error\": \"Service Unavailable\", \"message\": \"Scheduled maintenance in progress\"}"
-#     }
-#   }
-#   depends_on = [helm_release.kong]
-# }
-
-# Plugin 10: Correlation ID — Track requests across microservices (	X-Request-ID header for distributed tracing)
-resource "kubernetes_manifest" "kong_correlation_id" {
-  manifest = {
+# Plugin 10: Correlation ID — Track requests across microservices (X-Request-ID header for distributed tracing)
+resource "kubectl_manifest" "kong_correlation_id" {
+  yaml_body = yamlencode({
     apiVersion = "configuration.konghq.com/v1"
     kind       = "KongClusterPlugin"
     metadata = {
@@ -310,15 +285,15 @@ resource "kubernetes_manifest" "kong_correlation_id" {
     config = {
       header_name     = "X-Request-ID"
       generator       = "uuid#counter"
-      echo_downstream = true # {Return X-Request-ID in response for debugging}
+      echo_downstream = true
     }
-  }
+  })
   depends_on = [helm_release.kong]
 }
 
-# Plugin 11: Response Rate Limiting — Protect against response flooding {Limit notification endpoints}
-resource "kubernetes_manifest" "kong_response_rate_limit" {
-  manifest = {
+# Plugin 11: Response Rate Limiting — Protect against response flooding
+resource "kubectl_manifest" "kong_response_rate_limit" {
+  yaml_body = yamlencode({
     apiVersion = "configuration.konghq.com/v1"
     kind       = "KongClusterPlugin"
     metadata = {
@@ -329,17 +304,17 @@ resource "kubernetes_manifest" "kong_response_rate_limit" {
     plugin = "response-ratelimiting"
     config = {
       limits = {
-        sms_notifications = { minute = 10 } # Limit notification-heavy endpoints
+        sms_notifications = { minute = 10 }
       }
       header_name = "X-Kong-Limit"
     }
-  }
+  })
   depends_on = [helm_release.kong]
 }
 
-# Plugin 12: Proxy Caching — {Cache GET responses 30s (reduce backend load)}
-resource "kubernetes_manifest" "kong_proxy_cache" {
-  manifest = {
+# Plugin 12: Proxy Caching — Cache GET responses 30s (reduce backend load)
+resource "kubectl_manifest" "kong_proxy_cache" {
+  yaml_body = yamlencode({
     apiVersion = "configuration.konghq.com/v1"
     kind       = "KongClusterPlugin"
     metadata = {
@@ -352,29 +327,24 @@ resource "kubernetes_manifest" "kong_proxy_cache" {
       response_code  = [200]
       request_method = ["GET"]
       content_type   = ["application/json"]
-      cache_ttl      = 30       # Cache for 30 seconds
-      strategy       = "memory" # In-memory cache (fast, no Redis needed)
+      cache_ttl      = 30
+      strategy       = "memory"
       memory = {
         dictionary_name = "kong_db_cache"
       }
     }
-  }
+  })
   depends_on = [helm_release.kong]
 }
 
-
-
-# Plugin 13: Key Auth — {API Key authentication} (for external API consumers)
-# Consumers must pass ?apikey=xxx or header X-API-Key to access protected routes
-resource "kubernetes_manifest" "kong_key_auth" {
-  manifest = {
+# Plugin 13: Key Auth — API Key authentication (for external API consumers)
+resource "kubectl_manifest" "kong_key_auth" {
+  yaml_body = yamlencode({
     apiVersion = "configuration.konghq.com/v1"
     kind       = "KongClusterPlugin"
     metadata = {
       name        = "global-key-auth"
       annotations = { "kubernetes.io/ingress.class" = "kong" }
-      # NOT global — apply per-route using annotations on specific Ingress
-      # labels = { global = "true" }
     }
     plugin = "key-auth"
     config = {
@@ -384,14 +354,13 @@ resource "kubernetes_manifest" "kong_key_auth" {
       key_in_body      = false
       hide_credentials = true
     }
-  }
+  })
   depends_on = [helm_release.kong]
 }
 
-# Plugin 14: ACL (Access Control List) — { Group-based access to routes }
-# Combine with key-auth: consumer has API key + belongs to group "internal" or "external"
-resource "kubernetes_manifest" "kong_acl" {
-  manifest = {
+# Plugin 14: ACL (Access Control List) — Group-based access to routes
+resource "kubectl_manifest" "kong_acl" {
+  yaml_body = yamlencode({
     apiVersion = "configuration.konghq.com/v1"
     kind       = "KongClusterPlugin"
     metadata = {
@@ -400,16 +369,16 @@ resource "kubernetes_manifest" "kong_acl" {
     }
     plugin = "acl"
     config = {
-      allow              = ["internal", "admin", "partner"] # Only these groups can access
+      allow              = ["internal", "admin", "partner"]
       hide_groups_header = true
     }
-  }
+  })
   depends_on = [helm_release.kong]
 }
 
-# Plugin 15: TCP Log — Send request logs to external logging service {Send logs to Fluentd TCP}
-resource "kubernetes_manifest" "kong_tcp_log" {
-  manifest = {
+# Plugin 15: TCP Log — Send request logs to external logging service (Fluentd TCP)
+resource "kubectl_manifest" "kong_tcp_log" {
+  yaml_body = yamlencode({
     apiVersion = "configuration.konghq.com/v1"
     kind       = "KongClusterPlugin"
     metadata = {
@@ -423,13 +392,13 @@ resource "kubernetes_manifest" "kong_tcp_log" {
       port = 24224
       tls  = false
     }
-  }
+  })
   depends_on = [helm_release.kong]
 }
 
 # Plugin 16: Request Transformer — Add/Remove/Rename headers before forwarding to upstream
-resource "kubernetes_manifest" "kong_request_transformer" {
-  manifest = {
+resource "kubectl_manifest" "kong_request_transformer" {
+  yaml_body = yamlencode({
     apiVersion = "configuration.konghq.com/v1"
     kind       = "KongClusterPlugin"
     metadata = {
@@ -441,22 +410,21 @@ resource "kubernetes_manifest" "kong_request_transformer" {
     config = {
       add = {
         headers = [
-          "X-Gateway:kong",          # Identify traffic came through Kong
-          "X-Environment:production" # Tag environment in every request
+          "X-Gateway:kong",
+          "X-Environment:production"
         ]
       }
       remove = {
-        headers = ["X-Powered-By"] # Remove server technology fingerprint
+        headers = ["X-Powered-By"]
       }
     }
-  }
+  })
   depends_on = [helm_release.kong]
 }
 
 # Plugin 17: Retry/Circuit Breaker (via upstream config — healthchecks)
-# Kong auto-retries failed upstream requests and removes unhealthy upstreams {Retry logic}
-resource "kubernetes_manifest" "kong_upstream_timeout" {
-  manifest = {
+resource "kubectl_manifest" "kong_upstream_timeout" {
+  yaml_body = yamlencode({
     apiVersion = "configuration.konghq.com/v1"
     kind       = "KongClusterPlugin"
     metadata = {
@@ -470,13 +438,13 @@ resource "kubernetes_manifest" "kong_upstream_timeout" {
         "kong.service.request.set_header('X-Kong-Retry-Count', '3')"
       ]
     }
-  }
+  })
   depends_on = [helm_release.kong]
 }
 
-# Plugin 18: Zipkin — Distributed tracing (sends trace data to Jaeger/Zipkin) {Distributed tracing → OTel/Jaeger}
-resource "kubernetes_manifest" "kong_zipkin" {
-  manifest = {
+# Plugin 18: Zipkin — Distributed tracing (sends trace data to Jaeger/Zipkin)
+resource "kubectl_manifest" "kong_zipkin" {
+  yaml_body = yamlencode({
     apiVersion = "configuration.konghq.com/v1"
     kind       = "KongClusterPlugin"
     metadata = {
@@ -487,7 +455,7 @@ resource "kubernetes_manifest" "kong_zipkin" {
     plugin = "zipkin"
     config = {
       http_endpoint       = "http://otel-collector.tracing.svc.cluster.local:9411/api/v2/spans"
-      sample_ratio        = 1 # 100% sampling (reduce in high-traffic prod)
+      sample_ratio        = 1
       include_credential  = true
       traceid_byte_count  = 16
       header_type         = "preserve"
@@ -498,20 +466,18 @@ resource "kubernetes_manifest" "kong_zipkin" {
         { name = "kong.service", value = "online-boutique" }
       ]
     }
-  }
+  })
   depends_on = [helm_release.kong]
 }
 
-# Plugin 19: HTTP Log — Send structured JSON logs to HTTP endpoint (webhook/SIEM) --> {Structured logs → Elasticsearch}
-resource "kubernetes_manifest" "kong_http_log" {
-  manifest = {
+# Plugin 19: HTTP Log — Send structured JSON logs to HTTP endpoint (webhook/SIEM)
+resource "kubectl_manifest" "kong_http_log" {
+  yaml_body = yamlencode({
     apiVersion = "configuration.konghq.com/v1"
     kind       = "KongClusterPlugin"
     metadata = {
       name        = "global-http-log"
       annotations = { "kubernetes.io/ingress.class" = "kong" }
-      # NOT global by default — enable per route for audit-critical endpoints
-      # labels = { global = "true" }
     }
     plugin = "http-log"
     config = {
@@ -523,24 +489,22 @@ resource "kubernetes_manifest" "kong_http_log" {
       flush_timeout = 2
       retry_count   = 3
     }
-  }
+  })
   depends_on = [helm_release.kong]
 }
 
 # Plugin 20: gRPC Gateway — Convert REST to gRPC (frontend HTTP → backend gRPC)
-# Enables REST clients to call gRPC microservices through Kong
-resource "kubernetes_manifest" "kong_grpc_gateway" {
-  manifest = {
+resource "kubectl_manifest" "kong_grpc_gateway" {
+  yaml_body = yamlencode({
     apiVersion = "configuration.konghq.com/v1"
     kind       = "KongClusterPlugin"
     metadata = {
       name        = "global-grpc-gateway"
       annotations = { "kubernetes.io/ingress.class" = "kong" }
-      # NOT global — apply to specific gRPC routes only
     }
     plugin = "grpc-gateway"
-    config = {} # Proto files specified per-route via annotations
-  }
+    config = {}
+  })
   depends_on = [helm_release.kong]
 }
 
@@ -564,8 +528,8 @@ resource "aws_secretsmanager_secret_version" "kong_admin" {
 }
 
 # Kong Consumer (the admin user)
-resource "kubernetes_manifest" "kong_admin_consumer" {
-  manifest = {
+resource "kubectl_manifest" "kong_admin_consumer" {
+  yaml_body = yamlencode({
     apiVersion = "configuration.konghq.com/v1"
     kind       = "KongConsumer"
     metadata = {
@@ -574,7 +538,7 @@ resource "kubernetes_manifest" "kong_admin_consumer" {
       annotations = { "kubernetes.io/ingress.class" = "kong" }
     }
     username = "admin"
-  }
+  })
   depends_on = [helm_release.kong]
 }
 
@@ -594,12 +558,12 @@ resource "kubernetes_secret" "kong_admin_credentials" {
     password     = random_password.kong_admin.result
   }
 
-  depends_on = [kubernetes_manifest.kong_admin_consumer]
+  depends_on = [kubectl_manifest.kong_admin_consumer]
 }
 
 # Basic Auth plugin — applied ONLY to Kong Manager route (not global)
-resource "kubernetes_manifest" "kong_manager_auth" {
-  manifest = {
+resource "kubectl_manifest" "kong_manager_auth" {
+  yaml_body = yamlencode({
     apiVersion = "configuration.konghq.com/v1"
     kind       = "KongPlugin"
     metadata = {
@@ -610,7 +574,7 @@ resource "kubernetes_manifest" "kong_manager_auth" {
     config = {
       hide_credentials = true
     }
-  }
+  })
   depends_on = [helm_release.kong]
 }
 
@@ -639,8 +603,8 @@ resource "aws_secretsmanager_secret_version" "jwt_secret" {
 }
 
 # JWT Plugin (apply to specific routes via annotation: konghq.com/plugins: jwt-auth)
-resource "kubernetes_manifest" "kong_jwt_auth" {
-  manifest = {
+resource "kubectl_manifest" "kong_jwt_auth" {
+  yaml_body = yamlencode({
     apiVersion = "configuration.konghq.com/v1"
     kind       = "KongPlugin"
     metadata = {
@@ -649,26 +613,21 @@ resource "kubernetes_manifest" "kong_jwt_auth" {
     }
     plugin = "jwt"
     config = {
-      # Where to find the JWT token in the request
-      header_names    = ["Authorization"]
-      uri_param_names = ["jwt"]
-      cookie_names    = []
-      # Claims to validate
-      claims_to_verify = ["exp"] # Verify token not expired
-      # Key claim — identifies which consumer owns the token
-      key_claim_name = "iss"
-      # Secret is base64 encoded
+      header_names     = ["Authorization"]
+      uri_param_names  = ["jwt"]
+      cookie_names     = []
+      claims_to_verify = ["exp"]
+      key_claim_name   = "iss"
       secret_is_base64 = false
-      # Forward decoded claims to upstream service as headers
       run_on_preflight = true
     }
-  }
+  })
   depends_on = [helm_release.kong]
 }
 
 # JWT Consumer — represents your application/service that issues tokens
-resource "kubernetes_manifest" "kong_jwt_consumer" {
-  manifest = {
+resource "kubectl_manifest" "kong_jwt_consumer" {
+  yaml_body = yamlencode({
     apiVersion = "configuration.konghq.com/v1"
     kind       = "KongConsumer"
     metadata = {
@@ -677,7 +636,7 @@ resource "kubernetes_manifest" "kong_jwt_consumer" {
       annotations = { "kubernetes.io/ingress.class" = "kong" }
     }
     username = "online-boutique-app"
-  }
+  })
   depends_on = [helm_release.kong]
 }
 
@@ -693,10 +652,10 @@ resource "kubernetes_secret" "kong_jwt_credential" {
 
   data = {
     kongCredType = "jwt"
-    key          = "online-boutique-issuer" # iss claim value in JWT
+    key          = "online-boutique-issuer"
     algorithm    = "HS256"
-    secret       = random_password.jwt_secret.result # Auto-generated, stored in AWS SM
+    secret       = random_password.jwt_secret.result
   }
 
-  depends_on = [kubernetes_manifest.kong_jwt_consumer]
+  depends_on = [kubectl_manifest.kong_jwt_consumer]
 }

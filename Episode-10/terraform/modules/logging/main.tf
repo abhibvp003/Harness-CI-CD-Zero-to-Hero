@@ -20,8 +20,8 @@ resource "aws_secretsmanager_secret_version" "efk" {
 }
 
 # Elasticsearch — Helm chart via ArgoCD
-resource "kubernetes_manifest" "argocd_elasticsearch" {
-  manifest = {
+resource "kubectl_manifest" "argocd_elasticsearch" {
+  yaml_body = yamlencode({
     apiVersion = "argoproj.io/v1alpha1"
     kind       = "Application"
     metadata   = { name = "elasticsearch", namespace = "gitops" }
@@ -56,12 +56,12 @@ resource "kubernetes_manifest" "argocd_elasticsearch" {
       destination = { server = "https://kubernetes.default.svc", namespace = "logging" }
       syncPolicy  = { automated = { prune = true, selfHeal = true }, syncOptions = ["CreateNamespace=true"] }
     }
-  }
+  })
 }
 
 # Kibana — Helm chart via ArgoCD (with Kong Ingress)
-resource "kubernetes_manifest" "argocd_kibana" {
-  manifest = {
+resource "kubectl_manifest" "argocd_kibana" {
+  yaml_body = yamlencode({
     apiVersion = "argoproj.io/v1alpha1"
     kind       = "Application"
     metadata   = { name = "kibana", namespace = "gitops" }
@@ -89,12 +89,12 @@ resource "kubernetes_manifest" "argocd_kibana" {
       destination = { server = "https://kubernetes.default.svc", namespace = "logging" }
       syncPolicy  = { automated = { prune = true, selfHeal = true }, syncOptions = ["CreateNamespace=true"] }
     }
-  }
+  })
 }
 
 # Fluentd — Helm chart via ArgoCD (DaemonSet, collects all pod logs)
-resource "kubernetes_manifest" "argocd_fluentd" {
-  manifest = {
+resource "kubectl_manifest" "argocd_fluentd" {
+  yaml_body = yamlencode({
     apiVersion = "argoproj.io/v1alpha1"
     kind       = "Application"
     metadata   = { name = "fluentd", namespace = "gitops" }
@@ -126,5 +126,5 @@ resource "kubernetes_manifest" "argocd_fluentd" {
       destination = { server = "https://kubernetes.default.svc", namespace = "logging" }
       syncPolicy  = { automated = { prune = true, selfHeal = true }, syncOptions = ["CreateNamespace=true"] }
     }
-  }
+  })
 }

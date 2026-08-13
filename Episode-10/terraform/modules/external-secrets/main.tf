@@ -16,8 +16,8 @@ resource "helm_release" "external_secrets" {
 }
 
 # ClusterSecretStore that connects to AWS Secrets Manager
-resource "kubernetes_manifest" "cluster_secret_store" {
-  manifest = {
+resource "kubectl_manifest" "cluster_secret_store" {
+  yaml_body = yamlencode({
     apiVersion = "external-secrets.io/v1beta1"
     kind       = "ClusterSecretStore"
     metadata   = { name = "aws-secrets-manager" }
@@ -34,7 +34,7 @@ resource "kubernetes_manifest" "cluster_secret_store" {
         }
       }
     }
-  }
+  })
   depends_on = [helm_release.external_secrets]
 }
 

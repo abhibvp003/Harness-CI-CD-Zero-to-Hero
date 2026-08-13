@@ -20,8 +20,8 @@ resource "aws_secretsmanager_secret_version" "grafana" {
 }
 
 # Prometheus + Grafana via ArgoCD (Helm chart)
-resource "kubernetes_manifest" "argocd_monitoring" {
-  manifest = {
+resource "kubectl_manifest" "argocd_monitoring" {
+  yaml_body = yamlencode({
     apiVersion = "argoproj.io/v1alpha1"
     kind       = "Application"
     metadata   = { name = "monitoring", namespace = "gitops" }
@@ -74,7 +74,7 @@ resource "kubernetes_manifest" "argocd_monitoring" {
       destination = { server = "https://kubernetes.default.svc", namespace = "monitoring" }
       syncPolicy  = { automated = { prune = true, selfHeal = true }, syncOptions = ["CreateNamespace=true", "ServerSideApply=true"] }
     }
-  }
+  })
 }
 
 # Grafana dashboard — Online Boutique Application metrics
@@ -98,7 +98,7 @@ resource "kubernetes_config_map" "grafana_dashboard_app" {
       ]
     })
   }
-  depends_on = [kubernetes_manifest.argocd_monitoring]
+  depends_on = [kubectl_manifest.argocd_monitoring]
 }
 
 # Grafana dashboard — Kong Gateway metrics
@@ -122,5 +122,5 @@ resource "kubernetes_config_map" "grafana_dashboard_kong" {
       ]
     })
   }
-  depends_on = [kubernetes_manifest.argocd_monitoring]
+  depends_on = [kubectl_manifest.argocd_monitoring]
 }
