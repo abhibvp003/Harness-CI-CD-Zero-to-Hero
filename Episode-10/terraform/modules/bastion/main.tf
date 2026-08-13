@@ -1,3 +1,17 @@
+# Latest Amazon Linux 2023 AMI (auto-resolves per region — no hardcoded AMI ID)
+data "aws_ami" "amazon_linux" {
+  most_recent = true
+  owners      = ["amazon"]
+  filter {
+    name   = "name"
+    values = ["al2023-ami-*-x86_64"]
+  }
+  filter {
+    name   = "state"
+    values = ["available"]
+  }
+}
+
 # IAM role that lets the bastion EC2 instance call AWS services
 resource "aws_iam_role" "bastion" {
   name = "${var.cluster_name}-bastion-role"
@@ -47,13 +61,16 @@ resource "aws_security_group" "bastion" {
 
 # The bastion EC2 instance used to access the private EKS cluster
 resource "aws_instance" "bastion" {
-  ami                         = "ami-02b64aa047cb5edf5"
+  ami                         = data.aws_ami.amazon_linux.id
   instance_type               = var.instance_type
   subnet_id                   = var.subnet_id
   vpc_security_group_ids      = [aws_security_group.bastion.id]
   iam_instance_profile        = aws_iam_instance_profile.bastion.name
   user_data_replace_on_change = false
-  user_data                   = file("${path.module}/tools.sh")
+  user_data = templatefile("${path.module}/tools.sh", {
+    cluster_name = var.eks_cluster_name
+    aws_region   = var.aws_region
+  })
 
   root_block_device {
     volume_size = 30

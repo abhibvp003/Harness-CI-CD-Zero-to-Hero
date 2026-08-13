@@ -93,17 +93,17 @@ helm repo update || true
 # ─────────────────────────────────────────────────────────────────
 # Configure kubectl for EKS
 # ─────────────────────────────────────────────────────────────────
-su - ec2-user -c "aws eks update-kubeconfig --name ep10-enterprise-cluster --region us-east-1" || true
+su - ec2-user -c "aws eks update-kubeconfig --name ${cluster_name} --region ${aws_region}" || true
 
 echo "=========================================="
 echo "  ✅ BASTION SETUP COMPLETE!"
 echo "=========================================="
 echo ""
 echo "  Connect via SSM:"
-echo "    aws ssm start-session --target INSTANCE_ID --region us-east-1"
+echo "    aws ssm start-session --target INSTANCE_ID --region ${aws_region}"
 echo ""
 echo "  Connect to EKS:"
-echo "    aws eks update-kubeconfig --name ep10-enterprise-cluster --region us-east-1"
+echo "    aws eks update-kubeconfig --name ${cluster_name} --region ${aws_region}"
 echo "    kubectl get nodes"
 echo ""
 echo "  SonarQube: http://BASTION-IP:9000 (admin/admin)"

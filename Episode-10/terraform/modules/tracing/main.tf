@@ -49,7 +49,7 @@ resource "kubectl_manifest" "argocd_otel" {
     spec = {
       project = "default"
       source = {
-        repoURL        = "https://github.com/${var.github_username}/Harness-CI-CD-Zero-to-Hero"
+        repoURL        = "https://github.com/${var.github_username}/${var.github_repo}"
         path           = "Episode-10/k8s/tracing"
         targetRevision = "main"
       }

@@ -60,6 +60,7 @@ module "bastion" {
   subnet_id        = module.vpc.public_subnet_ids[1]
   vpc_id           = module.vpc.vpc_id
   eks_cluster_name = module.eks.cluster_name
+  aws_region       = var.aws_region
   tags             = local.common_tags
 }
 
@@ -174,5 +175,6 @@ module "tracing" {
   source          = "./modules/tracing"
   domain_name     = var.domain_name
   github_username = var.github_username
+  github_repo     = var.github_repo
   depends_on      = [module.gitops]
 }
