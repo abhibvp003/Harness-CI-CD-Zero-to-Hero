@@ -75,6 +75,7 @@ resource "helm_release" "gitops_agent" {
           install = true
           keep    = true
         }
+        "redis-ha" = { enabled = false }
         configs = {
           cm = { "cluster.inClusterEnabled" = true }
         }
@@ -95,11 +96,14 @@ resource "helm_release" "gitops_agent" {
           replicas = 2
         }
       }
-      "redis-ha" = {
+      "redis-ha" = { enabled = false }
+      redis = {
         enabled = true
-        haproxy = { enabled = true }
+        image = {
+          repository = "docker.io/harness/redis"
+          tag        = "7.4.8"
+        }
       }
-      redis = { enabled = false }
     })
   ]
 
