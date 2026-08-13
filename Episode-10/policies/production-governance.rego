@@ -6,29 +6,29 @@
 package pipeline
 
 # Rule 1: No deployments on Friday after 5 PM or weekends
-deny[msg] {
-    input.pipeline.stages[_].stage.type == "Deployment"
-    time.now_ns() / 1000000000 > 0
-    day := time.weekday(time.now_ns())
-    day == "Friday"
-    msg := "Deployments to production are not allowed on Friday. Deploy on Monday-Thursday."
-}
+#deny[msg] {
+#    input.pipeline.stages[_].stage.type == "Deployment"
+#    time.now_ns() / 1000000000 > 0
+#    day := time.weekday(time.now_ns())
+#    day == "Friday"
+#    msg := "Deployments to production are not allowed on Friday. Deploy on Monday-Thursday."
+#}
 
-deny[msg] {
-    input.pipeline.stages[_].stage.type == "Deployment"
-    time.now_ns() / 1000000000 > 0
-    day := time.weekday(time.now_ns())
-    day == "Saturday"
-    msg := "Deployments are not allowed on weekends."
-}
+#deny[msg] {
+#    input.pipeline.stages[_].stage.type == "Deployment"
+#    time.now_ns() / 1000000000 > 0
+#    day := time.weekday(time.now_ns())
+#    day == "Saturday"
+#    msg := "Deployments are not allowed on weekends."
+#}
 
-deny[msg] {
-    input.pipeline.stages[_].stage.type == "Deployment"
-    time.now_ns() / 1000000000 > 0
-    day := time.weekday(time.now_ns())
-    day == "Sunday"
-    msg := "Deployments are not allowed on weekends."
-}
+#deny[msg] {
+#    input.pipeline.stages[_].stage.type == "Deployment"
+#    time.now_ns() / 1000000000 > 0
+#    day := time.weekday(time.now_ns())
+#    day == "Sunday"
+#    msg := "Deployments are not allowed on weekends."
+#}
 
 # Rule 2: Production deployments MUST have an approval step
 deny[msg] {

@@ -120,7 +120,7 @@ resource "harness_platform_policy" "production_governance" {
   name       = "Production Governance"
   org_id     = var.org_id
   project_id = var.project_id
-  rego       = file("${path.module}/../../policies/production-governance.rego")
+  rego       = var.opa_policy_rego
 }
 
 # Policy set that runs the governance check on pipeline execution

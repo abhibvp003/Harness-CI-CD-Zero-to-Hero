@@ -216,7 +216,6 @@ After `terraform apply`, **ExternalDNS automatically creates Route53 records** w
 
 > **Already should exist** (from Episode 3): `AWS_ROLE_ARN`, `S3_BUCKET_NAME`. If missing, see [kubernetes/README.md — Step 5](../kubernetes/README.md#step-5-add-github-variables).
 
-> **MNC Pattern:** No `terraform.tfvars` file. All variables passed via GitHub Actions `-var` flags. Secrets never touch disk — they're decrypted only at runtime.
 
 ---
 

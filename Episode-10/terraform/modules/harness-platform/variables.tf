@@ -21,3 +21,8 @@ variable "domain_name" {
 variable "github_username" {
   type = string
 }
+
+variable "opa_policy_rego" {
+  description = "OPA policy rego content"
+  type        = string
+}

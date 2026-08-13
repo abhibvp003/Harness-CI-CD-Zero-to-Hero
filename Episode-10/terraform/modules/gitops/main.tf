@@ -122,9 +122,10 @@ resource "harness_platform_gitops_applications" "app" {
         target_revision = "main"
         helm {
           # MNC Pattern: ArgoCD injects domain at sync time — no need to edit values.yaml manually
-          parameters = [
-            { name = "domain", value = var.domain_name }
-          ]
+          parameters {
+            name  = "domain"
+            value = var.domain_name
+          }
         }
       }
       destination {

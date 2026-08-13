@@ -147,6 +147,7 @@ module "harness_platform" {
   aws_region      = var.aws_region
   domain_name     = var.domain_name
   github_username = var.github_username
+  opa_policy_rego = file("${path.module}/../policies/production-governance.rego")
   depends_on      = [module.delegate]
 }
 
