@@ -73,6 +73,18 @@ resource "null_resource" "install_gitops_agent" {
         echo "Attempt $i/30 — waiting 10s..."
         sleep 10
       done
+
+      # Wait for ArgoCD app-controller to be ready (polls pod status, max 5 min)
+      echo "Waiting for ArgoCD app-controller to be ready..."
+      for i in $(seq 1 30); do
+        READY=$(KUBECONFIG=/tmp/kubeconfig kubectl get pods -n gitops -l app.kubernetes.io/name=argocd-application-controller -o jsonpath='{.items[0].status.conditions[?(@.type=="Ready")].status}' 2>/dev/null)
+        if [ "$READY" = "True" ]; then
+          echo "ArgoCD app-controller ready! (attempt $i)"
+          break
+        fi
+        echo "Attempt $i/30 — app-controller not ready yet, waiting 10s..."
+        sleep 10
+      done
     EOT
   }
 
