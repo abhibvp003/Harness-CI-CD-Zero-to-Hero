@@ -48,6 +48,9 @@ resource "helm_release" "gitops_agent" {
         }
         gitopsServerHost = "https://app.harness.io/prod1/gitops"
       }
+      http = {
+        agentHttpTarget = "https://app.harness.io/gitops"
+      }
       agent = {
         harnessName = var.agent_name
         image = {
@@ -91,8 +94,8 @@ resource "helm_release" "gitops_agent" {
           replicas = 2
         }
       }
-      "redis-ha" = { enabled = false }
-      redis      = { enabled = true }
+      "redis-ha" = { enabled = true }
+      redis      = { enabled = false }
     })
   ]
 
