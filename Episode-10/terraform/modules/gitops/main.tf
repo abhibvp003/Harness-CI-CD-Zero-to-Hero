@@ -116,6 +116,18 @@ resource "helm_release" "gitops_agent" {
   depends_on = [harness_platform_gitops_agent.agent]
 }
 
+# Patch ConfigMap — chart v1.2.8 doesn't map configMap.AGENT_HTTP_TARGET correctly, so we set it directly
+resource "null_resource" "patch_agent_configmap" {
+  provisioner "local-exec" {
+    command = <<-EOT
+      aws eks update-kubeconfig --name ${var.cluster_name} --region ${var.aws_region} --kubeconfig /tmp/kubeconfig
+      KUBECONFIG=/tmp/kubeconfig kubectl patch configmap gitops-agent -n gitops --type merge -p '{"data":{"AGENT_HTTP_TARGET":"https://app.harness.io/gitops"}}'
+      KUBECONFIG=/tmp/kubeconfig kubectl rollout restart deployment gitops-agent -n gitops
+    EOT
+  }
+  depends_on = [helm_release.gitops_agent]
+}
+
 # Connects the GitHub repository as a source for GitOps syncs (needs PAT for PR write access)
 resource "harness_platform_gitops_repository" "repo" {
   identifier = "repo"

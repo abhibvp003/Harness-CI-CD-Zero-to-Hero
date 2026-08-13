@@ -249,8 +249,8 @@ resource "kubectl_manifest" "kong_ip_restriction" {
     }
     plugin = "ip-restriction"
     config = {
-      deny = ["192.0.2.0/24"] # RFC 5737 TEST-NET (placeholder — add real IPs to block)
-    }
+      deny = ["192.0.2.0/24"] # fake IP range # RFC 5737 TEST-NET — blocks no real traffic
+    }                         #  the security team would update it with attacker IPs when they detect abuse
   })
   depends_on = [helm_release.kong]
 }
