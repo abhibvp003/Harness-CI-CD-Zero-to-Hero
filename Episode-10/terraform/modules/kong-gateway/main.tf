@@ -22,6 +22,7 @@ resource "helm_release" "kong" {
   version          = "2.39.3"
   skip_crds        = true
   replace          = true
+  timeout          = 600
 
   values = [
     yamlencode({
