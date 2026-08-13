@@ -1,0 +1,82 @@
+# ═══════════════════════════════════════════════════════════════════
+# Jaeger 3.1.1 (v2) — Helm values for distributed tracing
+# Unified architecture built on OTel Collector framework
+# Uses Badger storage (in-memory + disk) — no external DB needed
+# Exposed via Kong Ingress at jaeger.<domain>
+# ═══════════════════════════════════════════════════════════════════
+
+# Jaeger v2 unified deployment (single binary)
+jaeger:
+  enabled: true
+  replicas: 1
+  ingress:
+    enabled: true
+    ingressClassName: kong
+    annotations:
+      konghq.com/strip-path: "false"
+    hosts:
+      - "jaeger.${DOMAIN_NAME}"
+
+# Jaeger v2 config — OTLP receiver on 4317/4318, Badger storage
+userconfig:
+  service:
+    extensions:
+      - jaeger_storage
+      - jaeger_query
+      - healthcheckv2
+    pipelines:
+      traces:
+        receivers:
+          - otlp
+        exporters:
+          - jaeger_storage_exporter
+    telemetry:
+      metrics:
+        level: detailed
+        readers:
+          - pull:
+              exporter:
+                prometheus:
+                  host: 0.0.0.0
+                  port: 8888
+  extensions:
+    healthcheckv2:
+      use_v2: true
+      http:
+        endpoint: 0.0.0.0:13133
+    jaeger_query:
+      storage:
+        traces: primary_store
+    jaeger_storage:
+      backends:
+        primary_store:
+          badger:
+            directories:
+              keys: /badger/key
+              values: /badger/data
+            maintenance_interval: 5m
+            span_store_ttl: 72h
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+  exporters:
+    jaeger_storage_exporter:
+      trace_storage: primary_store
+
+# Disable unnecessary components (Badger = no external storage)
+provisionDataStore:
+  cassandra: false
+storage:
+  type: badger
+spark:
+  enabled: false
+esIndexCleaner:
+  enabled: false
+esRollover:
+  enabled: false
+esLookback:
+  enabled: false

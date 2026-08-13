@@ -106,19 +106,21 @@ module "kong_gateway" {
 
 # ── ExternalDNS (Auto-creates Route53 records from Ingress) ──
 module "external_dns" {
-  source      = "./modules/external-dns"
-  domain_name = var.domain_name
-  aws_region  = var.aws_region
-  depends_on  = [module.kong_gateway]
+  source       = "./modules/external-dns"
+  domain_name  = var.domain_name
+  aws_region   = var.aws_region
+  cluster_name = var.cluster_name
+  depends_on   = [module.kong_gateway]
 }
 
 # ── External Secrets Operator ──
 module "external_secrets" {
-  source      = "./modules/external-secrets"
-  aws_region  = var.aws_region
-  secret_name = "online-boutique/app-secrets"
-  tags        = local.common_tags
-  depends_on  = [module.eks]
+  source       = "./modules/external-secrets"
+  aws_region   = var.aws_region
+  cluster_name = var.cluster_name
+  secret_name  = "online-boutique/app-secrets"
+  tags         = local.common_tags
+  depends_on   = [module.eks]
 }
 
 # ── GitOps Agent ──
@@ -162,9 +164,12 @@ module "harness_platform" {
 
 # ── Monitoring (Prometheus + Grafana) ──
 module "monitoring" {
-  source      = "./modules/monitoring"
-  domain_name = var.domain_name
-  depends_on  = [module.gitops, module.external_secrets]
+  source          = "./modules/monitoring"
+  domain_name     = var.domain_name
+  github_username = var.github_username
+  github_repo     = var.github_repo
+  github_branch   = var.github_branch
+  depends_on      = [module.gitops, module.external_secrets]
 }
 
 # ── Logging (EFK — Elasticsearch + Fluentd + Kibana) ──
@@ -172,6 +177,8 @@ module "logging" {
   source          = "./modules/logging"
   domain_name     = var.domain_name
   github_username = var.github_username
+  github_repo     = var.github_repo
+  github_branch   = var.github_branch
   depends_on      = [module.gitops, module.external_secrets]
 }
 

@@ -1,6 +1,5 @@
 # ═══════════════════════════════════════════════════════════════════
-# Logging Module — EFK Stack (Elasticsearch + Fluentd + Kibana) via Helm
-# All via ArgoCD for GitOps self-healing and drift detection
+# Logging Module — EFK Stack via ArgoCD (Helm + Git values)
 # ═══════════════════════════════════════════════════════════════════
 
 # Auto-generate EFK password and store in AWS SM
@@ -22,7 +21,7 @@ resource "aws_secretsmanager_secret_version" "efk" {
   })
 }
 
-# Elasticsearch — Helm chart via ArgoCD
+# Elasticsearch — helm.elastic.co + values from Git
 resource "kubectl_manifest" "argocd_elasticsearch" {
   yaml_body = yamlencode({
     apiVersion = "argoproj.io/v1alpha1"
@@ -30,102 +29,95 @@ resource "kubectl_manifest" "argocd_elasticsearch" {
     metadata   = { name = "elasticsearch", namespace = "gitops" }
     spec = {
       project = "online-boutique"
-      source = {
-        repoURL        = "https://helm.elastic.co"
-        chart          = "elasticsearch"
-        targetRevision = "8.5.1"
-        helm = {
-          valuesObject = {
-            replicas           = 1
-            minimumMasterNodes = 1
-            resources = {
-              requests = { cpu = "500m", memory = "1Gi" }
-              limits   = { cpu = "1", memory = "2Gi" }
-            }
-            volumeClaimTemplate = {
-              resources        = { requests = { storage = "10Gi" } }
-              storageClassName = "auto-ebs-sc"
-            }
-            esConfig = {
-              "elasticsearch.yml" = "xpack.security.enabled: true"
-            }
-            secret = {
-              enabled  = true
-              password = random_password.efk.result
-            }
+      sources = [
+        {
+          repoURL        = "https://github.com/${var.github_username}/${var.github_repo}"
+          targetRevision = var.github_branch
+          ref            = "values"
+        },
+        {
+          repoURL        = "https://helm.elastic.co"
+          chart          = "elasticsearch"
+          targetRevision = "8.5.1"
+          helm = {
+            valueFiles = ["$values/Episode-10/k8s/logging/elasticsearch-values.yaml"]
+            parameters = [
+              { name = "secret.password", value = random_password.efk.result },
+              { name = "extraEnvs[0].value", value = random_password.efk.result },
+            ]
           }
         }
-      }
+      ]
       destination = { server = "https://kubernetes.default.svc", namespace = "logging" }
       syncPolicy  = { automated = { prune = true, selfHeal = true }, syncOptions = ["CreateNamespace=true"] }
     }
   })
 }
 
-# Kibana — Helm chart via ArgoCD (with Kong Ingress)
+# Kibana — helm.elastic.co + values from Git
 resource "kubectl_manifest" "argocd_kibana" {
+  depends_on = [kubectl_manifest.argocd_elasticsearch]
   yaml_body = yamlencode({
     apiVersion = "argoproj.io/v1alpha1"
     kind       = "Application"
     metadata   = { name = "kibana", namespace = "gitops" }
     spec = {
       project = "online-boutique"
-      source = {
-        repoURL        = "https://helm.elastic.co"
-        chart          = "kibana"
-        targetRevision = "8.5.1"
-        helm = {
-          valuesObject = {
-            elasticsearchHosts = "http://elasticsearch-master:9200"
-            resources = {
-              requests = { cpu = "200m", memory = "512Mi" }
-              limits   = { cpu = "500m", memory = "1Gi" }
-            }
-            ingress = {
-              enabled   = true
-              className = "kong"
-              hosts     = [{ host = "kibana.${var.domain_name}", paths = [{ path = "/" }] }]
-            }
+      sources = [
+        {
+          repoURL        = "https://github.com/${var.github_username}/${var.github_repo}"
+          targetRevision = var.github_branch
+          ref            = "values"
+        },
+        {
+          repoURL        = "https://helm.elastic.co"
+          chart          = "kibana"
+          targetRevision = "8.5.1"
+          helm = {
+            valueFiles = ["$values/Episode-10/k8s/logging/kibana-values.yaml"]
+            parameters = [
+              { name = "extraEnvs[1].value", value = random_password.efk.result },
+              { name = "ingress.hosts[0].host", value = "kibana.${var.domain_name}" },
+            ]
           }
         }
-      }
+      ]
       destination = { server = "https://kubernetes.default.svc", namespace = "logging" }
-      syncPolicy  = { automated = { prune = true, selfHeal = true }, syncOptions = ["CreateNamespace=true"] }
+      syncPolicy = {
+        automated   = { prune = true, selfHeal = true }
+        syncOptions = ["CreateNamespace=true", "Replace=true"]
+      }
     }
   })
 }
 
-# Fluentd — Helm chart via ArgoCD (DaemonSet, collects all pod logs)
+# Fluentd — fluent.github.io + values from Git
 resource "kubectl_manifest" "argocd_fluentd" {
+  depends_on = [kubectl_manifest.argocd_elasticsearch]
   yaml_body = yamlencode({
     apiVersion = "argoproj.io/v1alpha1"
     kind       = "Application"
     metadata   = { name = "fluentd", namespace = "gitops" }
     spec = {
       project = "online-boutique"
-      source = {
-        repoURL        = "https://fluent.github.io/helm-charts"
-        chart          = "fluentd"
-        targetRevision = "0.5.2"
-        helm = {
-          valuesObject = {
-            kind = "DaemonSet"
-            fileConfigs = {
-              "output.conf" = <<-EOF
-                <match **>
-                  @type elasticsearch
-                  host elasticsearch-master.logging.svc.cluster.local
-                  port 9200
-                  user elastic
-                  password ${random_password.efk.result}
-                  logstash_format true
-                  logstash_prefix k8s-logs
-                </match>
-              EOF
-            }
+      sources = [
+        {
+          repoURL        = "https://github.com/${var.github_username}/${var.github_repo}"
+          targetRevision = var.github_branch
+          ref            = "values"
+        },
+        {
+          repoURL        = "https://fluent.github.io/helm-charts"
+          chart          = "fluentd"
+          targetRevision = "0.5.2"
+          helm = {
+            valueFiles = ["$values/Episode-10/k8s/logging/fluentd-values.yaml"]
+            parameters = [
+              { name = "env[3].value", value = random_password.efk.result },
+            ]
           }
         }
-      }
+      ]
       destination = { server = "https://kubernetes.default.svc", namespace = "logging" }
       syncPolicy  = { automated = { prune = true, selfHeal = true }, syncOptions = ["CreateNamespace=true"] }
     }

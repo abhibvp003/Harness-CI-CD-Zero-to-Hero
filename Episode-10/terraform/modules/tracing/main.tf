@@ -1,9 +1,8 @@
 # ═══════════════════════════════════════════════════════════════════
-# Tracing Module — Jaeger (Helm) + OTel Collector (Git manifests)
-# Shows service-to-service request flow with timing per hop
+# Tracing Module — Jaeger + OTel Collector via ArgoCD (Helm + Git values)
 # ═══════════════════════════════════════════════════════════════════
 
-# Jaeger — Helm chart via ArgoCD (stores + visualizes traces)
+# Jaeger — jaegertracing.github.io + values from Git
 resource "kubectl_manifest" "argocd_jaeger" {
   yaml_body = yamlencode({
     apiVersion = "argoproj.io/v1alpha1"
@@ -11,36 +10,31 @@ resource "kubectl_manifest" "argocd_jaeger" {
     metadata   = { name = "jaeger", namespace = "gitops" }
     spec = {
       project = "online-boutique"
-      source = {
-        repoURL        = "https://jaegertracing.github.io/helm-charts"
-        chart          = "jaeger"
-        targetRevision = "3.1.1"
-        helm = {
-          valuesObject = {
-            provisionDataStore = { cassandra = false }
-            allInOne = {
-              enabled = true
-              tag     = "1.58"
-              ingress = {
-                enabled          = true
-                ingressClassName = "kong"
-                annotations      = { "konghq.com/strip-path" = "false" }
-                hosts            = ["jaeger.${var.domain_name}"]
-              }
-            }
-            storage   = { type = "badger" }
-            collector = { enabled = false }
-            query     = { enabled = false }
+      sources = [
+        {
+          repoURL        = "https://github.com/${var.github_username}/${var.github_repo}"
+          targetRevision = var.github_branch
+          ref            = "values"
+        },
+        {
+          repoURL        = "https://jaegertracing.github.io/helm-charts"
+          chart          = "jaeger"
+          targetRevision = "3.1.1"
+          helm = {
+            valueFiles = ["$values/Episode-10/k8s/tracing-helm/jaeger-values.yaml"]
+            parameters = [
+              { name = "jaeger.ingress.hosts[0]", value = "jaeger.${var.domain_name}" },
+            ]
           }
         }
-      }
+      ]
       destination = { server = "https://kubernetes.default.svc", namespace = "tracing" }
       syncPolicy  = { automated = { prune = true, selfHeal = true }, syncOptions = ["CreateNamespace=true"] }
     }
   })
 }
 
-# OTel Collector — raw manifests from Git (custom pipeline config)
+# OTel Collector — open-telemetry.github.io + values from Git
 resource "kubectl_manifest" "argocd_otel" {
   yaml_body = yamlencode({
     apiVersion = "argoproj.io/v1alpha1"
@@ -48,11 +42,21 @@ resource "kubectl_manifest" "argocd_otel" {
     metadata   = { name = "otel-collector", namespace = "gitops" }
     spec = {
       project = "online-boutique"
-      source = {
-        repoURL        = "https://github.com/${var.github_username}/${var.github_repo}"
-        path           = "Episode-10/k8s/tracing"
-        targetRevision = var.github_branch
-      }
+      sources = [
+        {
+          repoURL        = "https://github.com/${var.github_username}/${var.github_repo}"
+          targetRevision = var.github_branch
+          ref            = "values"
+        },
+        {
+          repoURL        = "https://open-telemetry.github.io/opentelemetry-helm-charts"
+          chart          = "opentelemetry-collector"
+          targetRevision = "0.97.1"
+          helm = {
+            valueFiles = ["$values/Episode-10/k8s/tracing-helm/otel-collector-values.yaml"]
+          }
+        }
+      ]
       destination = { server = "https://kubernetes.default.svc", namespace = "tracing" }
       syncPolicy  = { automated = { prune = true, selfHeal = true }, syncOptions = ["CreateNamespace=true"] }
     }

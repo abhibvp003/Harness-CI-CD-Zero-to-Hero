@@ -5,6 +5,60 @@
 # Only manages records it creates (ownership via TXT records)
 # ═══════════════════════════════════════════════════════════════════
 
+# ─────────────────────────────────────────
+# IAM Role for External DNS (EKS Pod Identity)
+# EKS Auto Mode blocks IMDS access — pods need Pod Identity for AWS creds
+# ─────────────────────────────────────────
+resource "aws_iam_role" "external_dns" {
+  name = "external-dns-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Principal = {
+        Service = "pods.eks.amazonaws.com"
+      }
+      Action = ["sts:AssumeRole", "sts:TagSession"]
+    }]
+  })
+}
+
+# Route53 permissions — External DNS needs to list zones and upsert records
+resource "aws_iam_role_policy" "external_dns_route53" {
+  name = "external-dns-route53"
+  role = aws_iam_role.external_dns.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["route53:ChangeResourceRecordSets"]
+        Resource = ["arn:aws:route53:::hostedzone/*"]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "route53:ListHostedZones",
+          "route53:ListResourceRecordSets",
+          "route53:ListTagsForResource",
+        ]
+        Resource = ["*"]
+      }
+    ]
+  })
+}
+
+# EKS Pod Identity Association — binds IAM role to the external-dns service account
+resource "aws_eks_pod_identity_association" "external_dns" {
+  cluster_name    = var.cluster_name
+  namespace       = "external-dns"
+  service_account = "external-dns"
+  role_arn        = aws_iam_role.external_dns.arn
+}
+
+# ─────────────────────────────────────────
+# External DNS Helm Release
+# ─────────────────────────────────────────
 resource "helm_release" "external_dns" {
   name             = "external-dns"
   repository       = "https://kubernetes-sigs.github.io/external-dns/"
@@ -21,30 +75,28 @@ resource "helm_release" "external_dns" {
       # Only manage records for your domain (don't touch other hosted zones)
       domainFilters = [var.domain_name]
 
-      # Hosted Zone ID (optional — speeds up lookup if you have multiple zones)
       # txtOwnerId — unique ID to identify records created by THIS instance
       txtOwnerId = "ep10-external-dns"
 
       # Policy: sync = create + delete records when Ingress changes
-      # upsert-only = only create/update, never delete (safer but leaves orphans)
       policy = "sync"
 
-      # Source: watch Ingress resources for hostnames
-      sources = ["ingress"]
+      # Source: watch both Ingress and Service (LoadBalancer) resources
+      sources = ["ingress", "service"]
 
       # AWS region
       env = [
         { name = "AWS_DEFAULT_REGION", value = var.aws_region }
       ]
 
-      # Service account (uses EKS node IAM role — no access keys)
+      # Service account — must match Pod Identity association name
       serviceAccount = {
         create = true
         name   = "external-dns"
       }
 
-      # Log level
-      logLevel = "info"
+      # Log level (debug helps troubleshoot — change to info once working)
+      logLevel = "debug"
 
       # Interval to check for changes (30 seconds)
       interval = "30s"
@@ -52,6 +104,13 @@ resource "helm_release" "external_dns" {
       # Registry type (TXT records for ownership tracking)
       registry  = "txt"
       txtPrefix = "_externaldns."
+
+      # Extra args for Kong IngressClass compatibility
+      extraArgs = [
+        "--ingress-class=kong"
+      ]
     })
   ]
+
+  depends_on = [aws_eks_pod_identity_association.external_dns]
 }

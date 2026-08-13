@@ -3,6 +3,12 @@ variable "aws_region" {
   type = string
 }
 
+# EKS cluster name (required for Pod Identity Association)
+variable "cluster_name" {
+  description = "EKS cluster name for Pod Identity binding"
+  type        = string
+}
+
 # Name of the secret in AWS Secrets Manager
 variable "secret_name" {
   type    = string

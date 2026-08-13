@@ -1,4 +1,58 @@
-# Installs External Secrets Operator via Helm to sync secrets into K8s
+# ═══════════════════════════════════════════════════════════════════
+# External Secrets Operator — Syncs AWS Secrets Manager → K8s Secrets
+# EKS Pod Identity grants SecretsManager access (no IMDS in Auto Mode)
+# ═══════════════════════════════════════════════════════════════════
+
+# ─────────────────────────────────────────
+# IAM Role for External Secrets (EKS Pod Identity)
+# EKS Auto Mode blocks IMDS — pods need Pod Identity for AWS creds
+# ─────────────────────────────────────────
+resource "aws_iam_role" "external_secrets" {
+  name = "external-secrets-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Principal = {
+        Service = "pods.eks.amazonaws.com"
+      }
+      Action = ["sts:AssumeRole", "sts:TagSession"]
+    }]
+  })
+}
+
+# SecretsManager permissions — read/write secrets for the operator
+resource "aws_iam_role_policy" "external_secrets_sm" {
+  name = "external-secrets-sm"
+  role = aws_iam_role.external_secrets.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:DescribeSecret",
+          "secretsmanager:ListSecrets",
+          "secretsmanager:GetResourcePolicy",
+        ]
+        Resource = ["*"]
+      }
+    ]
+  })
+}
+
+# EKS Pod Identity Association — binds IAM role to external-secrets SA
+resource "aws_eks_pod_identity_association" "external_secrets" {
+  cluster_name    = var.cluster_name
+  namespace       = "external-secrets"
+  service_account = "external-secrets"
+  role_arn        = aws_iam_role.external_secrets.arn
+}
+
+# ─────────────────────────────────────────
+# External Secrets Operator Helm Release
+# ─────────────────────────────────────────
 resource "helm_release" "external_secrets" {
   name             = "external-secrets"
   repository       = "https://charts.external-secrets.io"
@@ -13,9 +67,12 @@ resource "helm_release" "external_secrets" {
       serviceAccount = { create = true, name = "external-secrets" }
     })
   ]
+
+  depends_on = [aws_eks_pod_identity_association.external_secrets]
 }
 
 # ClusterSecretStore that connects to AWS Secrets Manager
+# Uses Pod Identity (no explicit auth needed — EKS injects creds automatically)
 resource "kubectl_manifest" "cluster_secret_store" {
   yaml_body = yamlencode({
     apiVersion = "external-secrets.io/v1beta1"
@@ -26,11 +83,6 @@ resource "kubectl_manifest" "cluster_secret_store" {
         aws = {
           service = "SecretsManager"
           region  = var.aws_region
-          auth = {
-            jwt = {
-              serviceAccountRef = { name = "external-secrets", namespace = "external-secrets" }
-            }
-          }
         }
       }
     }

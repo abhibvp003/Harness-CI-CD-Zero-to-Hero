@@ -9,3 +9,9 @@ variable "aws_region" {
   description = "AWS region"
   type        = string
 }
+
+# EKS cluster name (required for Pod Identity Association)
+variable "cluster_name" {
+  description = "EKS cluster name for Pod Identity binding"
+  type        = string
+}

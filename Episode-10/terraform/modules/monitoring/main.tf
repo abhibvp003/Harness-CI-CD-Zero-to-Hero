@@ -1,6 +1,5 @@
 # ═══════════════════════════════════════════════════════════════════
-# Monitoring Module — Prometheus + Grafana (kube-prometheus-stack Helm)
-# Includes: auto-loaded dashboards for Online Boutique + Kong Gateway
+# Monitoring Module — Prometheus + Grafana via ArgoCD (Helm + Git values)
 # ═══════════════════════════════════════════════════════════════════
 
 # Auto-generate Grafana password and store in AWS SM
@@ -22,7 +21,7 @@ resource "aws_secretsmanager_secret_version" "grafana" {
   })
 }
 
-# Prometheus + Grafana via ArgoCD (Helm chart)
+# kube-prometheus-stack — prometheus-community.github.io + values from Git
 resource "kubectl_manifest" "argocd_monitoring" {
   yaml_body = yamlencode({
     apiVersion = "argoproj.io/v1alpha1"
@@ -30,61 +29,33 @@ resource "kubectl_manifest" "argocd_monitoring" {
     metadata   = { name = "monitoring", namespace = "gitops" }
     spec = {
       project = "online-boutique"
-      source = {
-        repoURL        = "https://prometheus-community.github.io/helm-charts"
-        chart          = "kube-prometheus-stack"
-        targetRevision = "62.3.0"
-        helm = {
-          valuesObject = {
-            grafana = {
-              enabled       = true
-              adminPassword = random_password.grafana.result
-              service       = { type = "ClusterIP" }
-              ingress = {
-                enabled          = true
-                ingressClassName = "kong"
-                annotations      = { "konghq.com/strip-path" = "false" }
-                hosts            = ["grafana.${var.domain_name}"]
-              }
-              sidecar = {
-                dashboards = {
-                  enabled         = true
-                  label           = "grafana_dashboard"
-                  labelValue      = "1"
-                  searchNamespace = "ALL"
-                }
-              }
-            }
-            prometheus = {
-              prometheusSpec = {
-                retention                               = "15d"
-                serviceMonitorSelectorNilUsesHelmValues = false
-                podMonitorSelectorNilUsesHelmValues     = false
-                storageSpec = {
-                  volumeClaimTemplate = {
-                    spec = {
-                      storageClassName = "auto-ebs-sc"
-                      resources        = { requests = { storage = "50Gi" } }
-                    }
-                  }
-                }
-              }
-            }
-            alertmanager = { enabled = true }
+      sources = [
+        {
+          repoURL        = "https://github.com/${var.github_username}/${var.github_repo}"
+          targetRevision = var.github_branch
+          ref            = "values"
+        },
+        {
+          repoURL        = "https://prometheus-community.github.io/helm-charts"
+          chart          = "kube-prometheus-stack"
+          targetRevision = "62.3.0"
+          helm = {
+            valueFiles = ["$values/Episode-10/k8s/monitoring/kube-prometheus-stack-values.yaml"]
+            parameters = [
+              { name = "grafana.adminPassword", value = random_password.grafana.result },
+              { name = "grafana.ingress.hosts[0]", value = "grafana.${var.domain_name}" },
+            ]
           }
         }
-      }
+      ]
       destination = { server = "https://kubernetes.default.svc", namespace = "monitoring" }
       syncPolicy  = { automated = { prune = true, selfHeal = true }, syncOptions = ["CreateNamespace=true", "ServerSideApply=true"] }
     }
   })
 }
 
-# Create monitoring namespace (ArgoCD will own it later but we need it now for ConfigMaps)
 resource "kubernetes_namespace" "monitoring" {
-  metadata {
-    name = "monitoring"
-  }
+  metadata { name = "monitoring" }
   lifecycle { ignore_changes = all }
 }
 

@@ -1,0 +1,46 @@
+# ═══════════════════════════════════════════════════════════════════
+# kube-prometheus-stack 62.3.0 — Helm values for full observability
+# Includes: Prometheus (metrics) + Grafana (dashboards) + Alertmanager
+# Grafana exposed via Kong Ingress at grafana.<domain>
+# ═══════════════════════════════════════════════════════════════════
+
+grafana:
+  enabled: true
+  # Admin password (injected by Terraform via helm.parameters)
+  adminPassword: "${GRAFANA_PASSWORD}"
+  service:
+    type: ClusterIP
+  # Kong Ingress — accessible at grafana.<domain>
+  ingress:
+    enabled: true
+    ingressClassName: kong
+    annotations:
+      konghq.com/strip-path: "false"
+    hosts:
+      - "grafana.${DOMAIN_NAME}"
+  # Sidecar auto-loads ConfigMaps with label grafana_dashboard=1
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      labelValue: "1"
+      searchNamespace: ALL
+
+prometheus:
+  prometheusSpec:
+    # Retain metrics for 15 days
+    retention: "15d"
+    # Discover all ServiceMonitors/PodMonitors regardless of labels
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    # Persistent storage on EBS gp3
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: "auto-ebs-sc"
+          resources:
+            requests:
+              storage: "50Gi"
+
+alertmanager:
+  enabled: true
