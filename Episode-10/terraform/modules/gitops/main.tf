@@ -135,32 +135,6 @@ resource "kubernetes_config_map_v1_data" "agent_http_target" {
   depends_on = [helm_release.gitops_agent]
 }
 
-# Restart agent deployment to pick up patched ConfigMap (triggers rolling restart — no downtime)
-resource "kubectl_manifest" "restart_gitops_agent" {
-  yaml_body = yamlencode({
-    apiVersion = "apps/v1"
-    kind       = "Deployment"
-    metadata = {
-      name      = "gitops-agent"
-      namespace = "gitops"
-      annotations = {
-        "kubectl.kubernetes.io/restartedAt" = timestamp()
-      }
-    }
-    spec = {
-      template = {
-        metadata = {
-          annotations = {
-            "kubectl.kubernetes.io/restartedAt" = timestamp()
-          }
-        }
-      }
-    }
-  })
-  force_new  = true
-  depends_on = [kubernetes_config_map_v1_data.agent_http_target]
-}
-
 # Connects the GitHub repository as a source for GitOps syncs (needs PAT for PR write access)
 resource "harness_platform_gitops_repository" "repo" {
   identifier = "repo"
@@ -178,7 +152,13 @@ resource "harness_platform_gitops_repository" "repo" {
     password        = var.github_pat      # github Secrets 
   }
 
-  depends_on = [helm_release.gitops_agent]
+  depends_on = [time_sleep.wait_for_agent]
+}
+
+# Registers the in-cluster Kubernetes to Harness (needs ~60s after ConfigMap patch)
+resource "time_sleep" "wait_for_agent" {
+  create_duration = "90s"
+  depends_on      = [kubernetes_config_map_v1_data.agent_http_target]
 }
 
 # Registers the in-cluster Kubernetes as a GitOps deploy target
@@ -201,7 +181,8 @@ resource "harness_platform_gitops_cluster" "incluster" {
     }
   }
 
-  depends_on = [helm_release.gitops_agent]
+  lifecycle { ignore_changes = all }
+  depends_on = [time_sleep.wait_for_agent]
 }
 
 # Creates the ArgoCD application that deploys our app from Git
