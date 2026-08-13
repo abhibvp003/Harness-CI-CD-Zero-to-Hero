@@ -171,7 +171,7 @@ resource "harness_platform_gitops_applications" "app" {
       source {
         repo_url        = "https://github.com/${var.github_username}/${var.github_repo}"
         path            = var.app_path
-        target_revision = "main"
+        target_revision = var.github_branch
         helm {
           # Overrides "domain" in values.yaml at sync time (GitHub Var → Terraform → ArgoCD → Ingress host)
           parameters {

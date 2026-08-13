@@ -48,7 +48,7 @@ resource "harness_platform_service" "online_boutique" {
                       connectorRef: account.Github
                       gitFetchType: Branch
                       repoName: ${var.github_repo}
-                      branch: main
+                      branch: ${var.github_branch}
                       paths:
                         - Episode-10/k8s/values.yaml
           artifacts:

@@ -51,7 +51,7 @@ resource "kubectl_manifest" "argocd_otel" {
       source = {
         repoURL        = "https://github.com/${var.github_username}/${var.github_repo}"
         path           = "Episode-10/k8s/tracing"
-        targetRevision = "main"
+        targetRevision = var.github_branch
       }
       destination = { server = "https://kubernetes.default.svc", namespace = "tracing" }
       syncPolicy  = { automated = { prune = true, selfHeal = true }, syncOptions = ["CreateNamespace=true"] }

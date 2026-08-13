@@ -66,3 +66,8 @@ variable "github_pat" {
   type        = string
   sensitive   = true
 }
+
+variable "github_branch" {
+  description = "Git branch to sync from"
+  type        = string
+}
