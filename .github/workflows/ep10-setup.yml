@@ -214,12 +214,11 @@ jobs:
         continue-on-error: true
         run: |
           # Pre-destroy: Clean Kubernetes resources first (LoadBalancers create AWS resources outside Terraform)
-          CLUSTER="${{ env.TF_WORKING_DIR }}"
           CLUSTER_NAME=$(terraform output -raw eks_cluster_name 2>/dev/null || echo "ep10-enterprise-cluster")
 
           if aws eks describe-cluster --name "${CLUSTER_NAME}" --region "${{ env.AWS_REGION_VALUE }}" >/dev/null 2>&1; then
-            echo "Cleaning Kubernetes resources before destroy..."
-            curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+            echo "EKS cluster found. Cleaning Kubernetes resources before destroy..."
+            curl -sLO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
             chmod +x kubectl && sudo mv kubectl /usr/local/bin/
 
             aws eks update-kubeconfig --region "${{ env.AWS_REGION_VALUE }}" --name "${CLUSTER_NAME}"
@@ -260,6 +259,16 @@ jobs:
 
             echo "Waiting 90s for AWS resources (LBs, ENIs) to release..."
             sleep 90
+          else
+            echo "EKS cluster already deleted. Removing K8s resources from Terraform state..."
+            # Cluster is gone — remove all kubernetes/helm/kubectl resources from state
+            # so Terraform doesn't try to connect to a dead cluster
+            terraform state list 2>/dev/null | grep -E '^(kubernetes_|module\..+\.kubernetes_|module\..+\.helm_|module\..+\.kubectl_)' | while read -r resource; do
+              echo "  Removing from state: $resource"
+              terraform state rm "$resource" 2>/dev/null || true
+            done
+            # Also remove the storage class
+            terraform state rm "kubernetes_storage_class.ebs" 2>/dev/null || true
           fi
 
           terraform destroy -auto-approve -no-color \
@@ -279,9 +288,23 @@ jobs:
       - name: Terraform Destroy Retry (if first attempt failed)
         if: github.event.inputs.action == 'destroy' && steps.terraform_destroy.outcome == 'failure'
         run: |
-          echo "First destroy attempt failed. Cleaning orphaned ENIs..."
+          echo "First destroy attempt failed. Cleaning up..."
+
+          # If cluster is gone, remove all K8s resources from state
+          CLUSTER_NAME=$(terraform output -raw eks_cluster_name 2>/dev/null || echo "ep10-enterprise-cluster")
+          if ! aws eks describe-cluster --name "${CLUSTER_NAME}" --region "${{ env.AWS_REGION_VALUE }}" >/dev/null 2>&1; then
+            echo "EKS cluster gone. Removing K8s resources from state..."
+            terraform state list 2>/dev/null | grep -E '^(kubernetes_|module\..+\.kubernetes_|module\..+\.helm_|module\..+\.kubectl_)' | while read -r resource; do
+              echo "  Removing: $resource"
+              terraform state rm "$resource" 2>/dev/null || true
+            done
+            terraform state rm "kubernetes_storage_class.ebs" 2>/dev/null || true
+          fi
+
+          # Clean orphaned ENIs and security groups
           VPC_ID="$(terraform output -raw vpc_id 2>/dev/null || true)"
           if [ -n "$VPC_ID" ]; then
+            echo "Cleaning orphaned ENIs in VPC ${VPC_ID}..."
             aws ec2 describe-network-interfaces --region "${{ env.AWS_REGION_VALUE }}" \
               --filters "Name=vpc-id,Values=${VPC_ID}" "Name=status,Values=available" \
               --query 'NetworkInterfaces[].NetworkInterfaceId' --output text 2>/dev/null | \
@@ -290,6 +313,7 @@ jobs:
                 aws ec2 delete-network-interface --region "${{ env.AWS_REGION_VALUE }}" --network-interface-id "$eni" || true
               done
 
+            echo "Cleaning orphaned security groups..."
             aws ec2 describe-security-groups --region "${{ env.AWS_REGION_VALUE }}" \
               --filters "Name=vpc-id,Values=${VPC_ID}" \
               --query "SecurityGroups[?GroupName!='default'].GroupId" --output text 2>/dev/null | \
