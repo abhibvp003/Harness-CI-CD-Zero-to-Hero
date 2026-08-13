@@ -86,13 +86,3 @@ variable "github_branch" {
   description = "Git branch to sync from"
   type        = string
 }
-
-# EKS cluster name for kubectl auth
-variable "cluster_name" {
-  type = string
-}
-
-# AWS region for kubectl auth
-variable "aws_region" {
-  type = string
-}

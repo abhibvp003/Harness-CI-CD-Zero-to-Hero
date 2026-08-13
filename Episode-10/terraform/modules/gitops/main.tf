@@ -116,15 +116,16 @@ resource "helm_release" "gitops_agent" {
   depends_on = [harness_platform_gitops_agent.agent]
 }
 
-# Patch ConfigMap — chart v1.2.8 doesn't map configMap.AGENT_HTTP_TARGET correctly, so we set it directly
-resource "null_resource" "patch_agent_configmap" {
-  provisioner "local-exec" {
-    command = <<-EOT
-      aws eks update-kubeconfig --name ${var.cluster_name} --region ${var.aws_region} --kubeconfig /tmp/kubeconfig
-      KUBECONFIG=/tmp/kubeconfig kubectl patch configmap gitops-agent -n gitops --type merge -p '{"data":{"AGENT_HTTP_TARGET":"https://app.harness.io/gitops"}}'
-      KUBECONFIG=/tmp/kubeconfig kubectl rollout restart deployment gitops-agent -n gitops
-    EOT
+# Set AGENT_HTTP_TARGET in ConfigMap (chart v1.2.8 doesn't pass this from Helm values correctly)
+resource "kubernetes_config_map_v1_data" "agent_http_target" {
+  metadata {
+    name      = "gitops-agent"
+    namespace = "gitops"
   }
+  data = {
+    AGENT_HTTP_TARGET = "https://app.harness.io/gitops"
+  }
+  force      = true
   depends_on = [helm_release.gitops_agent]
 }
 
