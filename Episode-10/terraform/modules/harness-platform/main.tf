@@ -155,6 +155,19 @@ resource "harness_platform_monitored_service" "online_boutique" {
           query                   = "sum(rate(http_requests_total{namespace=\"online-boutique\",status=~\"5..\"}[5m])) / sum(rate(http_requests_total{namespace=\"online-boutique\"}[5m])) * 100"
           serviceInstanceField    = "pod"
           isManualQuery           = true
+          analysis = {
+            deploymentVerification = {
+              enabled                  = true
+              serviceInstanceFieldName = "pod"
+            }
+            liveMonitoring = {
+              enabled = true
+            }
+            riskProfile = {
+              riskCategory   = "Errors"
+              thresholdTypes = ["ACT_WHEN_HIGHER"]
+            }
+          }
         }]
       })
     }

@@ -21,13 +21,14 @@ resource "helm_release" "kong" {
   create_namespace = true
   version          = "2.39.3"
   skip_crds        = true
+  replace          = true
 
   values = [
     yamlencode({
       # Ingress Controller
       ingressController = {
         enabled      = true
-        installCRDs  = true
+        installCRDs  = false
         ingressClass = "kong"
       }
 

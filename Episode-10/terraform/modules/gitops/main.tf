@@ -91,21 +91,8 @@ resource "helm_release" "gitops_agent" {
           replicas = 2
         }
       }
-      "redis-ha" = {
-        enabled = true
-        image = {
-          repository = "docker.io/harness/redis"
-          tag        = "7.4.8"
-        }
-        haproxy = {
-          enabled = true
-          image = {
-            repository = "docker.io/harness/haproxy"
-            tag        = "3.4.1-alpine3.24"
-          }
-        }
-      }
-      redis = { enabled = false }
+      "redis-ha" = { enabled = false }
+      redis      = { enabled = true }
     })
   ]
 
