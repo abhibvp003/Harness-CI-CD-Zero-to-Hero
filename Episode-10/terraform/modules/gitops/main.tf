@@ -116,7 +116,32 @@ resource "null_resource" "install_gitops_agent" {
   depends_on = [local_file.gitops_agent_yaml]
 }
 
-# Step 5: Create GitOps repository (public repo — no credentials needed for read)
+# Step 5a: Create ArgoCD AppProject (defines what apps can deploy where)
+resource "kubectl_manifest" "argocd_default_project" {
+  yaml_body = yamlencode({
+    apiVersion = "argoproj.io/v1alpha1"
+    kind       = "AppProject"
+    metadata = {
+      name      = "online-boutique"
+      namespace = "gitops"
+    }
+    spec = {
+      description = "Online Boutique enterprise project"
+      sourceRepos = ["*"]
+      destinations = [{
+        namespace = "*"
+        server    = "*"
+      }]
+      clusterResourceWhitelist = [{
+        group = "*"
+        kind  = "*"
+      }]
+    }
+  })
+  depends_on = [null_resource.install_gitops_agent]
+}
+
+# Step 5b: Create GitOps repository
 resource "harness_platform_gitops_repository" "repo" {
   identifier = "repo"
   account_id = var.harness_account_id

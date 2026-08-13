@@ -29,7 +29,7 @@ resource "kubectl_manifest" "argocd_monitoring" {
     kind       = "Application"
     metadata   = { name = "monitoring", namespace = "gitops" }
     spec = {
-      project = "default"
+      project = "online-boutique"
       source = {
         repoURL        = "https://prometheus-community.github.io/helm-charts"
         chart          = "kube-prometheus-stack"

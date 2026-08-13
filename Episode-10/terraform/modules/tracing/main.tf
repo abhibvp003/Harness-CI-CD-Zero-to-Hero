@@ -10,7 +10,7 @@ resource "kubectl_manifest" "argocd_jaeger" {
     kind       = "Application"
     metadata   = { name = "jaeger", namespace = "gitops" }
     spec = {
-      project = "default"
+      project = "online-boutique"
       source = {
         repoURL        = "https://jaegertracing.github.io/helm-charts"
         chart          = "jaeger"
@@ -47,7 +47,7 @@ resource "kubectl_manifest" "argocd_otel" {
     kind       = "Application"
     metadata   = { name = "otel-collector", namespace = "gitops" }
     spec = {
-      project = "default"
+      project = "online-boutique"
       source = {
         repoURL        = "https://github.com/${var.github_username}/${var.github_repo}"
         path           = "Episode-10/k8s/tracing"

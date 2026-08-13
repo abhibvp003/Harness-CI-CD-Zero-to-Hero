@@ -29,7 +29,7 @@ resource "kubectl_manifest" "argocd_elasticsearch" {
     kind       = "Application"
     metadata   = { name = "elasticsearch", namespace = "gitops" }
     spec = {
-      project = "default"
+      project = "online-boutique"
       source = {
         repoURL        = "https://helm.elastic.co"
         chart          = "elasticsearch"
@@ -69,7 +69,7 @@ resource "kubectl_manifest" "argocd_kibana" {
     kind       = "Application"
     metadata   = { name = "kibana", namespace = "gitops" }
     spec = {
-      project = "default"
+      project = "online-boutique"
       source = {
         repoURL        = "https://helm.elastic.co"
         chart          = "kibana"
@@ -102,7 +102,7 @@ resource "kubectl_manifest" "argocd_fluentd" {
     kind       = "Application"
     metadata   = { name = "fluentd", namespace = "gitops" }
     spec = {
-      project = "default"
+      project = "online-boutique"
       source = {
         repoURL        = "https://fluent.github.io/helm-charts"
         chart          = "fluentd"
