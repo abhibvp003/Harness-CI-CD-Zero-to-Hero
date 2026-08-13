@@ -52,8 +52,12 @@ resource "helm_release" "gitops_agent" {
       http = {
         agentHttpTarget = "https://app.harness.io/gitops"
       }
+      configMap = {
+        AGENT_HTTP_TARGET = "https://app.harness.io/gitops"
+      }
       agent = {
         harnessName = var.agent_name
+        httpTarget  = "https://app.harness.io/gitops"
         image = {
           repository = "docker.io/harness/gitops-agent"
           tag        = "v0.124.0"
