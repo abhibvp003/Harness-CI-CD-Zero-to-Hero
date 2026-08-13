@@ -30,7 +30,8 @@ resource "helm_release" "gitops_agent" {
   chart            = "gitops-helm"
   namespace        = "gitops"
   create_namespace = false
-  replace          = true
+  atomic           = true
+  cleanup_on_fail  = true
 
   values = [
     yamlencode({
