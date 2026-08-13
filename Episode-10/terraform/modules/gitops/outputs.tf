@@ -3,7 +3,7 @@ output "agent_identifier" {
 }
 
 output "cluster_identifier" {
-  value = "incluster"
+  value = var.cluster_identifier
 }
 
 output "repo_identifier" {

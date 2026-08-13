@@ -102,3 +102,9 @@ variable "cluster_name" {
 variable "aws_region" {
   type = string
 }
+
+# ArgoCD cluster identifier (auto-registered by deploy YAML as "incluster")
+variable "cluster_identifier" {
+  type    = string
+  default = "incluster"
+}

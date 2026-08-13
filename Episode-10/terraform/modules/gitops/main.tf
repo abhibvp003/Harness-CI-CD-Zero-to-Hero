@@ -146,7 +146,7 @@ resource "harness_platform_gitops_applications" "app" {
   account_id = var.harness_account_id
   org_id     = var.harness_org_id
   project_id = var.harness_project_id
-  cluster_id = "incluster"
+  cluster_id = var.cluster_identifier
   repo_id    = harness_platform_gitops_repository.repo.identifier
   agent_id   = var.agent_identifier
   name       = var.app_name
