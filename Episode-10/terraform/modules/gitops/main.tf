@@ -85,6 +85,31 @@ resource "null_resource" "install_gitops_agent" {
         echo "Attempt $i/30 — app-controller not ready yet, waiting 10s..."
         sleep 10
       done
+
+      # Wait for Redis HA to be fully ready (all replicas synced — prevents NOREPLICAS error)
+      echo "Waiting for Redis HA to be ready..."
+      for i in $(seq 1 30); do
+        REDIS_READY=$(KUBECONFIG=/tmp/kubeconfig kubectl get pods -n gitops -l app.kubernetes.io/name=argocd-redis-ha -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}' 2>/dev/null | grep -c "True")
+        REDIS_TOTAL=$(KUBECONFIG=/tmp/kubeconfig kubectl get pods -n gitops -l app.kubernetes.io/name=argocd-redis-ha -o name 2>/dev/null | wc -l)
+        if [ "$REDIS_READY" -ge 2 ] 2>/dev/null && [ "$REDIS_TOTAL" -ge 2 ] 2>/dev/null; then
+          echo "Redis HA ready! ($REDIS_READY/$REDIS_TOTAL pods)"
+          break
+        fi
+        echo "Attempt $i/30 — Redis HA not ready ($REDIS_READY/$REDIS_TOTAL), waiting 10s..."
+        sleep 10
+      done
+
+      # Final check: verify agent is responding via Harness API (confirms full readiness)
+      echo "Final verification — checking agent responds..."
+      for i in $(seq 1 6); do
+        RESP=$(curl -s -H "x-api-key: ${var.harness_api_key}" \
+          "https://app.harness.io/gateway/gitops/api/v1/agents/${var.agent_identifier}?accountIdentifier=${var.harness_account_id}&orgIdentifier=${var.harness_org_id}&projectIdentifier=${var.harness_project_id}" 2>/dev/null)
+        if echo "$RESP" | grep -q '"connected"'; then
+          echo "Agent fully operational!"
+          break
+        fi
+        sleep 10
+      done
     EOT
   }
 
