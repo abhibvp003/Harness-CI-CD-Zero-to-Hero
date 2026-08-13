@@ -215,9 +215,10 @@ jobs:
         run: |
           # Pre-destroy: Clean Kubernetes resources first (LoadBalancers create AWS resources outside Terraform)
           CLUSTER_NAME=$(terraform output -raw eks_cluster_name 2>/dev/null || echo "ep10-enterprise-cluster")
+          CLUSTER_STATUS=$(aws eks describe-cluster --name "${CLUSTER_NAME}" --region "${{ env.AWS_REGION_VALUE }}" --query 'cluster.status' --output text 2>/dev/null || echo "NOT_FOUND")
 
-          if aws eks describe-cluster --name "${CLUSTER_NAME}" --region "${{ env.AWS_REGION_VALUE }}" >/dev/null 2>&1; then
-            echo "EKS cluster found. Cleaning Kubernetes resources before destroy..."
+          if [ "$CLUSTER_STATUS" == "ACTIVE" ]; then
+            echo "EKS cluster ACTIVE. Cleaning Kubernetes resources before destroy..."
             curl -sLO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
             chmod +x kubectl && sudo mv kubectl /usr/local/bin/
 
@@ -260,7 +261,7 @@ jobs:
             echo "Waiting 90s for AWS resources (LBs, ENIs) to release..."
             sleep 90
           else
-            echo "EKS cluster already deleted. Removing K8s resources from Terraform state..."
+            echo "EKS cluster not ACTIVE (status: ${CLUSTER_STATUS}). Removing K8s resources from Terraform state..."
             # Cluster is gone — remove all kubernetes/helm/kubectl resources from state
             # so Terraform doesn't try to connect to a dead cluster
             terraform state list 2>/dev/null | grep -E '^(kubernetes_|module\..+\.kubernetes_|module\..+\.helm_|module\..+\.kubectl_)' | while read -r resource; do
