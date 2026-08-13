@@ -317,15 +317,61 @@ jobs:
       - name: Destroy Summary
         if: github.event.inputs.action == 'destroy'
         run: |
+          DESTROY_STATUS="${{ steps.terraform_destroy.outcome }}"
           {
-            echo "## 🗑️ Episode 10 — Everything Destroyed"
+            echo "## 🗑️ Episode 10 — Destroy Summary"
             echo ""
-            echo "All resources deleted:"
-            echo "- EKS Cluster"
-            echo "- VPC + Subnets + NAT Gateway"
-            echo "- K8s Delegate"
-            echo "- Prometheus + Grafana"
-            echo "- All Harness services, environments, connectors"
+            echo "### Status: ${DESTROY_STATUS}"
             echo ""
-            echo "**Your AWS bill is now \$0.**"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          # Check what's still in Terraform state (pending resources)
+          REMAINING=$(terraform state list 2>/dev/null || echo "")
+          REMAINING_COUNT=$(echo "$REMAINING" | grep -c '.' 2>/dev/null || echo "0")
+
+          # Check AWS resources
+          EKS_EXISTS=$(aws eks describe-cluster --name "${{ vars.CLUSTER_NAME }}" --region "${{ env.AWS_REGION_VALUE }}" 2>/dev/null && echo "YES" || echo "NO")
+          VPC_ID=$(terraform output -raw vpc_id 2>/dev/null || echo "")
+          VPC_EXISTS="NO"
+          if [ -n "$VPC_ID" ]; then
+            VPC_EXISTS=$(aws ec2 describe-vpcs --vpc-ids "$VPC_ID" --region "${{ env.AWS_REGION_VALUE }}" 2>/dev/null && echo "YES" || echo "NO")
+          fi
+
+          # Check Secrets Manager
+          SM_SECRETS=$(aws secretsmanager list-secrets --region "${{ env.AWS_REGION_VALUE }}" --filters Key=name,Values=online-boutique --query 'SecretList[].Name' --output text 2>/dev/null || echo "none")
+
+          {
+            echo "### 🔍 Debug Info (copy this if destroy failed)"
+            echo ""
+            echo "| Check | Result |"
+            echo "|---|---|"
+            echo "| Terraform State Resources Remaining | ${REMAINING_COUNT} |"
+            echo "| EKS Cluster Still Exists | ${EKS_EXISTS} |"
+            echo "| VPC Still Exists | ${VPC_EXISTS} (${VPC_ID}) |"
+            echo "| Secrets Manager Secrets | ${SM_SECRETS} |"
+            echo ""
+            if [ "$REMAINING_COUNT" -gt 0 ] && [ "$REMAINING_COUNT" -lt 30 ]; then
+              echo "### 📋 Resources Still in State"
+              echo "\`\`\`"
+              echo "$REMAINING"
+              echo "\`\`\`"
+              echo ""
+            fi
+            if [ "$DESTROY_STATUS" == "success" ]; then
+              echo "### ✅ All Destroyed Successfully"
+              echo ""
+              echo "| Deleted | Resources |"
+              echo "|---|---|"
+              echo "| Infrastructure | EKS, VPC, NAT GW, Subnets, RDS, Bastion, ECR (11 repos) |"
+              echo "| Kubernetes | Kong NLB, Delegate, ArgoCD, Prometheus, Grafana, EFK, Jaeger, OTel |"
+              echo "| Harness | Services, Environments, Connectors, GitOps Agent, OPA Policy |"
+              echo "| AWS Secrets | Grafana password, EFK password, Kong admin, JWT secret, RDS creds |"
+              echo "| IAM | Pod Identity roles, Node role, Cluster role, KMS key |"
+              echo ""
+              echo "**Your AWS bill is now \$0.**"
+            else
+              echo "### ❌ Destroy Failed — Remaining Resources Need Manual Cleanup"
+              echo ""
+              echo "**Paste this entire summary to Kiro for automated fix.**"
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
