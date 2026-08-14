@@ -100,6 +100,22 @@ resource "harness_platform_gitops_applications" "elasticsearch" {
             value = "auto-ebs-sc"
           }
           parameters {
+            name  = "resources.requests.cpu"
+            value = "250m"
+          }
+          parameters {
+            name  = "resources.requests.memory"
+            value = "512Mi"
+          }
+          parameters {
+            name  = "resources.limits.cpu"
+            value = "500m"
+          }
+          parameters {
+            name  = "resources.limits.memory"
+            value = "1Gi"
+          }
+          parameters {
             name  = "extraEnvs[0].name"
             value = "ELASTIC_PASSWORD"
           }
