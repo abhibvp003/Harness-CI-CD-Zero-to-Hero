@@ -322,6 +322,10 @@ jobs:
           # Delete orphaned CloudWatch log group (EKS auto-creates it, survives cluster deletion)
           aws logs delete-log-group --log-group-name "/aws/eks/${CLUSTER_NAME}/cluster" --region "${{ env.AWS_REGION_VALUE }}" 2>/dev/null || true
 
+          # Count resources before destroy (real data)
+          RESOURCES_BEFORE=$(terraform state list 2>/dev/null | grep -c '.' || echo "0")
+          echo "RESOURCES_BEFORE=${RESOURCES_BEFORE}" >> "$GITHUB_ENV"
+
           terraform destroy -auto-approve -no-color \
             -var="harness_account_id=${{ vars.HARNESS_ACCOUNT_ID }}" \
             -var="harness_api_key=${{ secrets.HARNESS_API_KEY }}" \
@@ -400,10 +404,10 @@ jobs:
           REMAINING=$(terraform state list 2>/dev/null | grep -c '.' || echo "0")
 
           # Check every AWS resource category
-          EKS=$(aws eks describe-cluster --name "$CLUSTER_NAME" --region "$REGION" 2>/dev/null && echo "❌ EXISTS" || echo "✅ Deleted")
+          EKS=$(aws eks describe-cluster --name "$CLUSTER_NAME" --region "$REGION" >/dev/null 2>&1 && echo "❌ EXISTS" || echo "✅ Deleted")
           VPC_ID=$(terraform output -raw vpc_id 2>/dev/null || echo "")
           VPC="✅ Deleted"
-          [ -n "$VPC_ID" ] && VPC=$(aws ec2 describe-vpcs --vpc-ids "$VPC_ID" --region "$REGION" 2>/dev/null && echo "❌ EXISTS" || echo "✅ Deleted")
+          [ -n "$VPC_ID" ] && VPC=$(aws ec2 describe-vpcs --vpc-ids "$VPC_ID" --region "$REGION" >/dev/null 2>&1 && echo "❌ EXISTS" || echo "✅ Deleted")
           RDS=$(aws rds describe-db-instances --region "$REGION" --query "DBInstances[?contains(DBInstanceIdentifier,'${CLUSTER_NAME}')].DBInstanceIdentifier" --output text 2>/dev/null)
           [ -z "$RDS" ] && RDS="✅ Deleted" || RDS="❌ EXISTS"
           BASTION=$(aws ec2 describe-instances --region "$REGION" --filters "Name=tag:Name,Values=*bastion*" "Name=instance-state-name,Values=running,pending" --query "Reservations[].Instances[].InstanceId" --output text 2>/dev/null)
@@ -420,10 +424,10 @@ jobs:
           [ -z "$NAT" ] && NAT="✅ Deleted" || NAT="❌ EXISTS ($NAT)"
           KMS=$(aws kms list-aliases --region "$REGION" --query "Aliases[?AliasName=='alias/${CLUSTER_NAME}-eks'].AliasName" --output text 2>/dev/null)
           [ -z "$KMS" ] && KMS="✅ Deleted" || KMS="❌ EXISTS"
-          ROLE_NODE=$(aws iam get-role --role-name "${CLUSTER_NAME}-node-role" 2>/dev/null && echo "❌ EXISTS" || echo "✅ Deleted")
-          ROLE_CLUSTER=$(aws iam get-role --role-name "${CLUSTER_NAME}-cluster-role" 2>/dev/null && echo "❌ EXISTS" || echo "✅ Deleted")
-          ROLE_DNS=$(aws iam get-role --role-name "external-dns-role" 2>/dev/null && echo "❌ EXISTS" || echo "✅ Deleted")
-          ROLE_ESO=$(aws iam get-role --role-name "external-secrets-role" 2>/dev/null && echo "❌ EXISTS" || echo "✅ Deleted")
+          ROLE_NODE=$(aws iam get-role --role-name "${CLUSTER_NAME}-node-role" >/dev/null 2>&1 && echo "❌ EXISTS" || echo "✅ Deleted")
+          ROLE_CLUSTER=$(aws iam get-role --role-name "${CLUSTER_NAME}-cluster-role" >/dev/null 2>&1 && echo "❌ EXISTS" || echo "✅ Deleted")
+          ROLE_DNS=$(aws iam get-role --role-name "external-dns-role" >/dev/null 2>&1 && echo "❌ EXISTS" || echo "✅ Deleted")
+          ROLE_ESO=$(aws iam get-role --role-name "external-secrets-role" >/dev/null 2>&1 && echo "❌ EXISTS" || echo "✅ Deleted")
           LB=$(aws elbv2 describe-load-balancers --region "$REGION" --query "LoadBalancers[?contains(LoadBalancerName,'${CLUSTER_NAME}') || contains(LoadBalancerName,'kong')].LoadBalancerName" --output text 2>/dev/null)
           [ -z "$LB" ] && LB="✅ Deleted" || LB="❌ EXISTS ($LB)"
 
@@ -437,7 +441,7 @@ jobs:
             echo ""
             echo "| Metric | Count |"
             echo "|---|---|"
-            echo "| Resources Created (apply) | 90+ |"
+            echo "| Resources Destroyed | ${RESOURCES_BEFORE:-unknown} |"
             echo "| Terraform State Remaining | ${REMAINING} |"
             echo "| AWS Checks Passed | ${PASSED}/${TOTAL_CHECKS} |"
             echo "| AWS Resources Still Exist | ${FAILED} |"
@@ -461,7 +465,7 @@ jobs:
             echo "| IAM External Secrets Role | ${ROLE_ESO} |"
             echo ""
             if [ "$FAILED" -eq 0 ] && [ "$REMAINING" -eq 0 ]; then
-              echo "### ✅ CLEAN DESTROY — All 90+ resources deleted. AWS bill = \$0"
+              echo "### ✅ CLEAN DESTROY — All resources deleted. AWS bill = \$0"
             else
               echo "### ⚠️ ${FAILED} resource(s) still exist in AWS"
               echo ""
