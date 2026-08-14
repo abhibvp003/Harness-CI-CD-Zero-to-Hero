@@ -322,6 +322,32 @@ jobs:
           # Delete orphaned CloudWatch log group (EKS auto-creates it, survives cluster deletion)
           aws logs delete-log-group --log-group-name "/aws/eks/${CLUSTER_NAME}/cluster" --region "${{ env.AWS_REGION_VALUE }}" 2>/dev/null || true
 
+          # Delete orphaned Route53 records created by External DNS (only records with _externaldns ownership)
+          DOMAIN="${{ vars.DOMAIN_NAME }}"
+          if [ -n "$DOMAIN" ]; then
+            ZONE_ID=$(aws route53 list-hosted-zones-by-name --dns-name "$DOMAIN" --query "HostedZones[0].Id" --output text 2>/dev/null | sed 's|/hostedzone/||')
+            if [ -n "$ZONE_ID" ] && [ "$ZONE_ID" != "None" ]; then
+              echo "Cleaning External DNS records for ${DOMAIN}..."
+              # Only delete records that have _externaldns TXT ownership prefix (External DNS created these)
+              aws route53 list-resource-record-sets --hosted-zone-id "$ZONE_ID" --query "ResourceRecordSets[?starts_with(Name,'_externaldns.')].Name" --output text 2>/dev/null | tr '\t' '\n' | while read -r TXT_NAME; do
+                [ -z "$TXT_NAME" ] && continue
+                # Get the actual record name (strip _externaldns. prefix)
+                REAL_NAME=$(echo "$TXT_NAME" | sed 's/^_externaldns\.//')
+                # Delete both the A/CNAME record and the TXT ownership record
+                for TYPE in A CNAME TXT; do
+                  RECORD=$(aws route53 list-resource-record-sets --hosted-zone-id "$ZONE_ID" --query "ResourceRecordSets[?Name=='${REAL_NAME}' && Type=='${TYPE}'].[{Name:Name,Type:Type,TTL:TTL,ResourceRecords:ResourceRecords,AliasTarget:AliasTarget}]" --output json 2>/dev/null | jq -c '.[0]' 2>/dev/null)
+                  [ "$RECORD" = "null" ] || [ -z "$RECORD" ] && continue
+                  echo "  Deleting: ${REAL_NAME} (${TYPE})"
+                  aws route53 change-resource-record-sets --hosted-zone-id "$ZONE_ID" --change-batch "{\"Changes\":[{\"Action\":\"DELETE\",\"ResourceRecordSet\":${RECORD}}]}" 2>/dev/null || true
+                done
+                # Delete the _externaldns TXT record itself
+                TXT_RECORD=$(aws route53 list-resource-record-sets --hosted-zone-id "$ZONE_ID" --query "ResourceRecordSets[?Name=='${TXT_NAME}' && Type=='TXT'].[{Name:Name,Type:Type,TTL:TTL,ResourceRecords:ResourceRecords}]" --output json 2>/dev/null | jq -c '.[0]' 2>/dev/null)
+                [ "$TXT_RECORD" != "null" ] && [ -n "$TXT_RECORD" ] && \
+                  aws route53 change-resource-record-sets --hosted-zone-id "$ZONE_ID" --change-batch "{\"Changes\":[{\"Action\":\"DELETE\",\"ResourceRecordSet\":${TXT_RECORD}}]}" 2>/dev/null || true
+              done
+            fi
+          fi
+
           # Count resources before destroy (real data)
           RESOURCES_BEFORE=$(terraform state list 2>/dev/null | grep -c '.' || echo "0")
           echo "RESOURCES_BEFORE=${RESOURCES_BEFORE}" >> "$GITHUB_ENV"
