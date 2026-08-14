@@ -148,5 +148,3 @@ resource "aws_eks_cluster" "main" {
   tags = merge(var.tags, { Name = var.cluster_name })
 }
 
-# CloudWatch log group — EKS auto-creates this when enabled_cluster_log_types is set
-# NOT managed by Terraform (prevents "already exists" errors on re-apply)
