@@ -21,8 +21,8 @@ resource "helm_release" "kong" {
   create_namespace = true
   version          = "2.39.3"
   skip_crds        = false # Helm installs CRDs from crds/ directory on fresh deploy
-  wait             = true  # Wait for pods to be ready before marking success
-  timeout          = 900
+  wait             = true
+  timeout          = 1200 # 20 min — EKS Auto Mode provisions nodes from zero on fresh deploy
   values = [
     yamlencode({
       # Ingress Controller
