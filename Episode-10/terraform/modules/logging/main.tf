@@ -68,7 +68,7 @@ resource "harness_platform_gitops_applications" "elasticsearch" {
   application {
     metadata {
       name   = "elasticsearch"
-      labels = { "harness.io/envRef" = "production" }
+      labels = {}
     }
     spec {
       sync_policy {
@@ -149,7 +149,7 @@ resource "harness_platform_gitops_applications" "kibana" {
   application {
     metadata {
       name   = "kibana"
-      labels = { "harness.io/envRef" = "production" }
+      labels = {}
     }
     spec {
       sync_policy {
@@ -210,7 +210,7 @@ resource "harness_platform_gitops_applications" "fluentd" {
   application {
     metadata {
       name   = "fluentd"
-      labels = { "harness.io/envRef" = "production" }
+      labels = {}
     }
     spec {
       sync_policy {

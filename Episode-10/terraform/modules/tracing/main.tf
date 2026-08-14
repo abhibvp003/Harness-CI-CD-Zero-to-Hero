@@ -50,7 +50,7 @@ resource "harness_platform_gitops_applications" "jaeger" {
   application {
     metadata {
       name   = "jaeger"
-      labels = { "harness.io/envRef" = "production" }
+      labels = {}
     }
     spec {
       sync_policy {
@@ -127,7 +127,7 @@ resource "harness_platform_gitops_applications" "otel_collector" {
   application {
     metadata {
       name   = "otel-collector"
-      labels = { "harness.io/envRef" = "production" }
+      labels = {}
     }
     spec {
       sync_policy {

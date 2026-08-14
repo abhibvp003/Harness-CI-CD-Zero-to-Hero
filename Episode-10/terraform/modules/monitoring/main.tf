@@ -53,7 +53,7 @@ resource "harness_platform_gitops_applications" "monitoring" {
   application {
     metadata {
       name   = "monitoring"
-      labels = { "harness.io/envRef" = "production" }
+      labels = {}
     }
     spec {
       sync_policy {
