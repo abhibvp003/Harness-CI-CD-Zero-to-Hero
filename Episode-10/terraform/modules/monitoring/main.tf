@@ -56,7 +56,13 @@ resource "harness_platform_gitops_applications" "monitoring" {
       labels = { "harness.io/envRef" = "production" }
     }
     spec {
-      sync_policy { sync_options = ["CreateNamespace=true", "ServerSideApply=true"] }
+      sync_policy {
+        automated {
+          prune     = true
+          self_heal = true
+        }
+        sync_options = ["CreateNamespace=true", "ServerSideApply=true"]
+      }
       source {
         repo_url        = "https://prometheus-community.github.io/helm-charts"
         chart           = "kube-prometheus-stack"

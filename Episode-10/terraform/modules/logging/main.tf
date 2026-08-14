@@ -71,7 +71,13 @@ resource "harness_platform_gitops_applications" "elasticsearch" {
       labels = { "harness.io/envRef" = "production" }
     }
     spec {
-      sync_policy { sync_options = ["CreateNamespace=true"] }
+      sync_policy {
+        automated {
+          prune     = true
+          self_heal = true
+        }
+        sync_options = ["CreateNamespace=true"]
+      }
       source {
         repo_url        = "https://helm.elastic.co"
         chart           = "elasticsearch"
@@ -130,7 +136,13 @@ resource "harness_platform_gitops_applications" "kibana" {
       labels = { "harness.io/envRef" = "production" }
     }
     spec {
-      sync_policy { sync_options = ["CreateNamespace=true"] }
+      sync_policy {
+        automated {
+          prune     = true
+          self_heal = true
+        }
+        sync_options = ["CreateNamespace=true"]
+      }
       source {
         repo_url        = "https://helm.elastic.co"
         chart           = "kibana"
@@ -185,7 +197,13 @@ resource "harness_platform_gitops_applications" "fluentd" {
       labels = { "harness.io/envRef" = "production" }
     }
     spec {
-      sync_policy { sync_options = ["CreateNamespace=true"] }
+      sync_policy {
+        automated {
+          prune     = true
+          self_heal = true
+        }
+        sync_options = ["CreateNamespace=true"]
+      }
       source {
         repo_url        = "https://fluent.github.io/helm-charts"
         chart           = "fluentd"

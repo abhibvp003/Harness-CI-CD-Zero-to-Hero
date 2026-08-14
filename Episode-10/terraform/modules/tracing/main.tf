@@ -53,7 +53,13 @@ resource "harness_platform_gitops_applications" "jaeger" {
       labels = { "harness.io/envRef" = "production" }
     }
     spec {
-      sync_policy { sync_options = ["CreateNamespace=true"] }
+      sync_policy {
+        automated {
+          prune     = true
+          self_heal = true
+        }
+        sync_options = ["CreateNamespace=true"]
+      }
       source {
         repo_url        = "https://jaegertracing.github.io/helm-charts"
         chart           = "jaeger"
@@ -124,7 +130,13 @@ resource "harness_platform_gitops_applications" "otel_collector" {
       labels = { "harness.io/envRef" = "production" }
     }
     spec {
-      sync_policy { sync_options = ["CreateNamespace=true"] }
+      sync_policy {
+        automated {
+          prune     = true
+          self_heal = true
+        }
+        sync_options = ["CreateNamespace=true"]
+      }
       source {
         repo_url        = "https://open-telemetry.github.io/opentelemetry-helm-charts"
         chart           = "opentelemetry-collector"
