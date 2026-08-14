@@ -431,10 +431,14 @@ jobs:
           LB=$(aws elbv2 describe-load-balancers --region "$REGION" --query "LoadBalancers[?contains(LoadBalancerName,'${CLUSTER_NAME}') || contains(LoadBalancerName,'kong')].LoadBalancerName" --output text 2>/dev/null)
           [ -z "$LB" ] && LB="✅ Deleted" || LB="❌ EXISTS ($LB)"
 
-          # Count how many checks passed
-          TOTAL_CHECKS=15
-          PASSED=$(echo "$EKS $VPC $RDS $BASTION $CW_LOG $SECRETS $NAT $KMS $ROLE_NODE $ROLE_CLUSTER $ROLE_DNS $ROLE_ESO $LB" | grep -o "✅" | wc -l || echo "0")
-          FAILED=$((TOTAL_CHECKS - PASSED))
+          # Count checks — simple reliable counting
+          PASSED=0
+          TOTAL=0
+          for check in "$EKS" "$VPC" "$RDS" "$BASTION" "$NAT" "$LB" "$CW_LOG" "$SECRETS" "$KMS" "$ROLE_NODE" "$ROLE_CLUSTER" "$ROLE_DNS" "$ROLE_ESO"; do
+            TOTAL=$((TOTAL + 1))
+            case "$check" in *Deleted*) PASSED=$((PASSED + 1)) ;; esac
+          done
+          FAILED=$((TOTAL - PASSED))
 
           {
             echo "## 🗑️ Episode 10 — Destroy Verification Report"
@@ -443,7 +447,7 @@ jobs:
             echo "|---|---|"
             echo "| Resources Destroyed | ${RESOURCES_BEFORE:-unknown} |"
             echo "| Terraform State Remaining | ${REMAINING} |"
-            echo "| AWS Checks Passed | ${PASSED}/${TOTAL_CHECKS} |"
+            echo "| AWS Checks Passed | ${PASSED}/${TOTAL} |"
             echo "| AWS Resources Still Exist | ${FAILED} |"
             echo ""
             echo "### AWS Resource Status (End-to-End Check)"
@@ -465,9 +469,24 @@ jobs:
             echo "| IAM External Secrets Role | ${ROLE_ESO} |"
             echo ""
             if [ "$FAILED" -eq 0 ] && [ "$REMAINING" -eq 0 ]; then
-              echo "### ✅ CLEAN DESTROY — All resources deleted. AWS bill = \$0"
+              echo "### ✅ CLEAN DESTROY — All ${RESOURCES_BEFORE:-0} resources deleted. AWS bill = \$0"
             else
-              echo "### ⚠️ ${FAILED} resource(s) still exist in AWS"
+              echo "### ⚠️ ${FAILED} resource(s) still exist — manual cleanup commands:"
               echo ""
+              echo "\`\`\`bash"
+              case "$EKS" in *EXISTS*) echo "aws eks delete-cluster --name ${CLUSTER_NAME} --region ${REGION}" ;; esac
+              case "$VPC" in *EXISTS*) echo "# VPC ${VPC_ID} still exists — delete ENIs/SGs first" ;; esac
+              case "$RDS" in *EXISTS*) echo "aws rds delete-db-instance --db-instance-identifier ${CLUSTER_NAME}-postgres --skip-final-snapshot --region ${REGION}" ;; esac
+              case "$BASTION" in *EXISTS*) echo "# Bastion EC2 still running — terminate from console" ;; esac
+              case "$NAT" in *EXISTS*) echo "# NAT Gateway still exists — will be deleted with VPC" ;; esac
+              case "$LB" in *EXISTS*) echo "# Load Balancer still exists — delete from EC2 > Load Balancers" ;; esac
+              case "$CW_LOG" in *EXISTS*) echo "aws logs delete-log-group --log-group-name /aws/eks/${CLUSTER_NAME}/cluster --region ${REGION}" ;; esac
+              case "$SECRETS" in *EXISTS*) echo "# Secrets Manager secrets still exist — delete from console" ;; esac
+              case "$KMS" in *EXISTS*) echo "# KMS key — auto-deletes in 7 days" ;; esac
+              case "$ROLE_NODE" in *EXISTS*) echo "aws iam delete-role --role-name ${CLUSTER_NAME}-node-role" ;; esac
+              case "$ROLE_CLUSTER" in *EXISTS*) echo "aws iam delete-role --role-name ${CLUSTER_NAME}-cluster-role" ;; esac
+              case "$ROLE_DNS" in *EXISTS*) echo "aws iam delete-role --role-name external-dns-role" ;; esac
+              case "$ROLE_ESO" in *EXISTS*) echo "aws iam delete-role --role-name external-secrets-role" ;; esac
+              echo "\`\`\`"
             fi
           } >> "$GITHUB_STEP_SUMMARY"
