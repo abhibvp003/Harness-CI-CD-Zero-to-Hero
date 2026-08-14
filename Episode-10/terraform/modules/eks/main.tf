@@ -148,9 +148,5 @@ resource "aws_eks_cluster" "main" {
   tags = merge(var.tags, { Name = var.cluster_name })
 }
 
-# CloudWatch log group to store EKS control plane logs
-resource "aws_cloudwatch_log_group" "eks" {
-  name              = "/aws/eks/${var.cluster_name}/cluster"
-  retention_in_days = 7
-  tags              = var.tags
-}
+# CloudWatch log group — EKS auto-creates this when enabled_cluster_log_types is set
+# NOT managed by Terraform (prevents "already exists" errors on re-apply)
