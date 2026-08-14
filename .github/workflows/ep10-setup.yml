@@ -435,6 +435,5 @@ jobs:
             else
               echo "### ⚠️ ${FAILED} resource(s) still exist in AWS"
               echo ""
-              echo "**Copy this table and paste to Kiro for automated cleanup.**"
             fi
           } >> "$GITHUB_STEP_SUMMARY"
