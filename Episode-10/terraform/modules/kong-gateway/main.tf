@@ -21,10 +21,11 @@ resource "helm_release" "kong" {
   create_namespace = true
   version          = "2.39.3"
   skip_crds        = false # Helm installs CRDs from crds/ directory on fresh deploy
-  wait             = true
+  wait             = true  # Wait for pods to be ready before marking success
   timeout          = 900
   values = [
     yamlencode({
+      # Ingress Controller
       ingressController = {
         enabled      = true
         installCRDs  = false # CRDs managed by Helm crds/ directory, not by ingress controller
