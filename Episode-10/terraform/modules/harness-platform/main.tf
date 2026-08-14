@@ -134,6 +134,7 @@ resource "harness_platform_monitored_service" "online_boutique" {
   identifier = "online_boutique_production"
   org_id     = var.org_id
   project_id = var.project_id
+  depends_on = [harness_platform_service.online_boutique, harness_platform_environment.production]
 
   request {
     name            = "online-boutique-production"

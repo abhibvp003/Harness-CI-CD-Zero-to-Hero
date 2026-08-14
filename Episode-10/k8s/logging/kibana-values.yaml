@@ -1,13 +1,10 @@
 # ═══════════════════════════════════════════════════════════════════
-# Kibana 8.5.1 — Helm values for log visualization
-# Connects to Elasticsearch via HTTP (SSL disabled) with X-Pack credentials
-# Exposed via Kong Ingress at kibana.<domain>
+# Kibana 7.17 — Helm values for log visualization
+# Connects to ES 7.x via HTTP with basic auth (no SSL required)
 # ═══════════════════════════════════════════════════════════════════
 
-# Elasticsearch connection — HTTP (not HTTPS since we disabled ES HTTP SSL)
 elasticsearchHosts: "http://elasticsearch-master:9200"
 
-# Resource limits
 resources:
   requests:
     cpu: "200m"
@@ -16,16 +13,14 @@ resources:
     cpu: "500m"
     memory: "1Gi"
 
-# Credentials for X-Pack auth (injected by Terraform via helm.parameters)
+# Basic auth credentials for ES
 extraEnvs:
   - name: ELASTICSEARCH_USERNAME
     value: "elastic"
   - name: ELASTICSEARCH_PASSWORD
     value: "${ELASTIC_PASSWORD}"
-  - name: SERVER_BASEPATH
-    value: ""
 
-# Kong Ingress — accessible at kibana.<domain>
+# Kong Ingress
 ingress:
   enabled: true
   className: "kong"
@@ -33,8 +28,3 @@ ingress:
     - host: "kibana.${DOMAIN_NAME}"
       paths:
         - path: /
-
-# Readiness probe tuning — give Kibana time to connect to ES
-readinessProbe:
-  initialDelaySeconds: 30
-  timeoutSeconds: 10

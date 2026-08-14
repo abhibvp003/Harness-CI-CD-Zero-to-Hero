@@ -38,11 +38,10 @@ resource "kubectl_manifest" "argocd_elasticsearch" {
         {
           repoURL        = "https://helm.elastic.co"
           chart          = "elasticsearch"
-          targetRevision = "8.5.1"
+          targetRevision = "7.17.3"
           helm = {
             valueFiles = ["$values/Episode-10/k8s/logging/elasticsearch-values.yaml"]
             parameters = [
-              { name = "secret.password", value = random_password.efk.result },
               { name = "extraEnvs[0].value", value = random_password.efk.result },
             ]
           }
@@ -72,7 +71,7 @@ resource "kubectl_manifest" "argocd_kibana" {
         {
           repoURL        = "https://helm.elastic.co"
           chart          = "kibana"
-          targetRevision = "8.5.1"
+          targetRevision = "7.17.3"
           helm = {
             valueFiles = ["$values/Episode-10/k8s/logging/kibana-values.yaml"]
             parameters = [

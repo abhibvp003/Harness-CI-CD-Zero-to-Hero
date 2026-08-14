@@ -1,14 +1,11 @@
 # ═══════════════════════════════════════════════════════════════════
-# Elasticsearch 8.5.1 — Helm values for EFK logging stack
-# X-Pack security enabled (user/password auth) — HTTP SSL disabled for internal access
-# Managed by ArgoCD — any drift auto-reverts within 30s
+# Elasticsearch 7.17 — Helm values for EFK logging stack
+# Uses basic auth (user/password) without mandatory HTTPS
 # ═══════════════════════════════════════════════════════════════════
 
-# Single replica for demo (production: 3+ for HA)
 replicas: 1
 minimumMasterNodes: 1
 
-# Resource limits — sized for EKS Auto Mode t3.medium nodes
 resources:
   requests:
     cpu: "500m"
@@ -17,26 +14,19 @@ resources:
     cpu: "1"
     memory: "2Gi"
 
-# Persistent storage on EBS gp3 (auto-ebs-sc provisioned by EKS)
 volumeClaimTemplate:
   resources:
     requests:
       storage: "10Gi"
   storageClassName: "auto-ebs-sc"
 
-# X-Pack security config — password auth enabled, SSL disabled for internal cluster traffic
+# X-Pack security — password auth enabled, no SSL required in 7.x
 esConfig:
   elasticsearch.yml: |
     xpack.security.enabled: true
-    xpack.security.http.ssl.enabled: false
     xpack.security.transport.ssl.enabled: false
 
-# Bootstrap password for elastic user (injected by Terraform via helm.parameters)
-secret:
-  enabled: true
-  password: "${ELASTIC_PASSWORD}"
-
-# Extra env vars — ELASTIC_PASSWORD used by bootstrap initContainer
+# Bootstrap password for elastic user
 extraEnvs:
   - name: ELASTIC_PASSWORD
     value: "${ELASTIC_PASSWORD}"

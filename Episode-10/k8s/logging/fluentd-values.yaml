@@ -1,18 +1,11 @@
 # ═══════════════════════════════════════════════════════════════════
 # Fluentd 0.5.2 — Helm values for log collection (DaemonSet)
-# Uses fluentd-kubernetes-daemonset image with ES8 plugin pre-installed
-# Collects all pod logs → ships to Elasticsearch with buffering
+# Connects to ES 7.x via HTTP with basic auth
 # ═══════════════════════════════════════════════════════════════════
 
-# DaemonSet mode — runs on every node, collects all pod logs
 kind: DaemonSet
 
-# Image with Elasticsearch 8 output plugin pre-installed
-image:
-  repository: fluent/fluentd-kubernetes-daemonset
-  tag: v1.16-debian-elasticsearch8-1
-
-# Env vars for ES connection (referenced in output.conf via Ruby interpolation)
+# Env vars for ES connection
 env:
   - name: FLUENT_ELASTICSEARCH_HOST
     value: "elasticsearch-master.logging.svc.cluster.local"
@@ -24,10 +17,8 @@ env:
     value: "${ELASTIC_PASSWORD}"
   - name: FLUENT_ELASTICSEARCH_SCHEME
     value: "http"
-  - name: FLUENT_ELASTICSEARCH_SSL_VERIFY
-    value: "false"
 
-# Fluentd output config — send all collected logs to Elasticsearch
+# Output config — send all logs to Elasticsearch 7.x
 fileConfigs:
   output.conf: |
     <match **>
@@ -37,13 +28,13 @@ fileConfigs:
       user "#{ENV['FLUENT_ELASTICSEARCH_USER']}"
       password "#{ENV['FLUENT_ELASTICSEARCH_PASSWORD']}"
       scheme "#{ENV['FLUENT_ELASTICSEARCH_SCHEME']}"
-      ssl_verify false
       logstash_format true
       logstash_prefix k8s-logs
       reconnect_on_error true
       reload_on_failure true
       reload_connections false
       request_timeout 15s
+      suppress_type_name true
       <buffer>
         @type file
         path /var/log/fluentd-buffers/kubernetes.system.buffer
