@@ -15,10 +15,8 @@ resource "harness_platform_gitops_repository" "jaeger" {
     repo            = "https://jaegertracing.github.io/helm-charts"
     name            = "jaeger"
     type_           = "helm"
-    username        = ""
-    password        = ""
     insecure        = true
-    connection_type = "HTTPS"
+    connection_type = "HTTPS_ANONYMOUS"
   }
 }
 
@@ -33,10 +31,8 @@ resource "harness_platform_gitops_repository" "otel" {
     repo            = "https://open-telemetry.github.io/opentelemetry-helm-charts"
     name            = "opentelemetry"
     type_           = "helm"
-    username        = ""
-    password        = ""
     insecure        = true
-    connection_type = "HTTPS"
+    connection_type = "HTTPS_ANONYMOUS"
   }
 }
 
