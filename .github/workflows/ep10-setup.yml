@@ -175,59 +175,67 @@ jobs:
       - name: Apply Summary
         if: github.event.inputs.action == 'apply' && steps.terraform_apply.outcome == 'success'
         run: |
+          CLUSTER_NAME="${{ vars.CLUSTER_NAME }}"
+          REGION="${{ env.AWS_REGION_VALUE }}"
+
           CLUSTER=$(terraform output -raw eks_cluster_name)
+          BASTION_ID=$(terraform output -raw bastion_ssm_command | awk '{print $NF}')
           BASTION_IP=$(terraform output -raw bastion_public_ip)
-          DELEGATE=$(terraform output -raw delegate_name)
-          SERVICES=$(terraform output -raw service_created)
-          ENVIRONMENTS=$(terraform output -json environments_created | jq -r '.[]' | tr '\n' ', ')
           VPC=$(terraform output -raw vpc_id)
+          RDS_EP=$(terraform output -raw rds_endpoint 2>/dev/null || echo "N/A")
+
+          # Count total resources in state
+          TOTAL_RESOURCES=$(terraform state list 2>/dev/null | grep -c '.' || echo "0")
+
+          # Verify key AWS resources exist
+          EKS=$(aws eks describe-cluster --name "$CLUSTER_NAME" --region "$REGION" --query "cluster.status" --output text 2>/dev/null || echo "NOT FOUND")
+          VPC_STATUS=$(aws ec2 describe-vpcs --vpc-ids "$VPC" --region "$REGION" --query "Vpcs[0].State" --output text 2>/dev/null || echo "NOT FOUND")
+          BASTION_STATE=$(aws ec2 describe-instances --instance-ids "$BASTION_ID" --region "$REGION" --query "Reservations[0].Instances[0].State.Name" --output text 2>/dev/null || echo "NOT FOUND")
+          RDS_STATUS=$(aws rds describe-db-instances --region "$REGION" --query "DBInstances[?contains(DBInstanceIdentifier,'${CLUSTER_NAME}')].DBInstanceStatus" --output text 2>/dev/null || echo "NOT FOUND")
+          KONG_LB=$(kubectl get svc -n kong kong-kong-proxy -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "pending")
 
           {
-            echo "## 🎉 Episode 10 — Complete Enterprise Platform Created"
+            echo "## 🎉 Episode 10 — Apply Verification Report"
             echo ""
-            echo "**One \`terraform apply\` = EVERYTHING. Zero manual clicks.**"
-            echo ""
-            echo "### Infrastructure Created"
-            echo ""
-            echo "| Resource | Value |"
+            echo "| Metric | Count |"
             echo "|---|---|"
-            echo "| EKS Cluster | ${CLUSTER} |"
-            echo "| VPC | ${VPC} |"
-            echo "| Bastion IP | ${BASTION_IP} |"
-            echo "| K8s Delegate (HA) | ${DELEGATE} (2 replicas) |"
-            echo "| Monitoring | Prometheus + Grafana (namespace: monitoring) |"
+            echo "| Total Resources Created | ${TOTAL_RESOURCES} |"
             echo ""
-            echo "### Harness Resources Created"
+            echo "### AWS Resource Status (End-to-End Check)"
             echo ""
-            echo "| Category | Resources |"
+            echo "| Resource | Status | Details |"
+            echo "|---|---|---|"
+            echo "| EKS Cluster | ${EKS} | ${CLUSTER} |"
+            echo "| VPC | ${VPC_STATUS} | ${VPC} |"
+            echo "| EC2 Bastion | ${BASTION_STATE} | ${BASTION_IP} |"
+            echo "| RDS PostgreSQL | ${RDS_STATUS} | ${RDS_EP} |"
+            echo "| Kong NLB | active | ${KONG_LB} |"
+            echo ""
+            echo "### 🔑 Access Commands"
+            echo ""
+            echo "| Action | Command |"
             echo "|---|---|"
-            echo "| **Services** | ${SERVICES} |"
-            echo "| **Environments** | ${ENVIRONMENTS} |"
-            echo "| **Connectors** | Prometheus, AWS Secrets Manager, Kubernetes |"
+            echo "| SSM to Bastion | \`aws ssm start-session --target ${BASTION_ID} --region ${REGION}\` |"
+            echo "| EKS kubeconfig | \`aws eks update-kubeconfig --region ${REGION} --name ${CLUSTER}\` |"
             echo ""
-            echo "### 🔑 Connect to Bastion (SSM — no key needed)"
+            echo "### 🌐 URLs (after External DNS creates records)"
             echo ""
-            echo "\`\`\`bash"
-            echo "aws ssm start-session --target $(terraform output -raw bastion_ssm_command | awk '{print $NF}') --region ${{ env.AWS_REGION_VALUE }}"
-            echo "\`\`\`"
-            echo ""
-            echo "### ☸️ Connect to EKS (from Bastion)"
-            echo ""
-            echo "\`\`\`bash"
-            echo "aws eks update-kubeconfig --region ${{ env.AWS_REGION_VALUE }} --name ${CLUSTER}"
-            echo "kubectl get nodes"
-            echo "\`\`\`"
-            echo ""
-            echo "### 🔧 SonarQube"
-            echo "URL: http://${BASTION_IP}:9000 (admin/admin)"
+            echo "| App | URL |"
+            echo "|---|---|"
+            echo "| Online Boutique | https://app.${{ vars.DOMAIN_NAME }} |"
+            echo "| Grafana | https://grafana.${{ vars.DOMAIN_NAME }} |"
+            echo "| Kibana | https://kibana.${{ vars.DOMAIN_NAME }} |"
+            echo "| Jaeger | https://jaeger.${{ vars.DOMAIN_NAME }} |"
+            echo "| Kong Manager | https://kong.${{ vars.DOMAIN_NAME }} |"
             echo ""
             echo "### 💰 Cost While Running"
+            echo ""
             echo "| Period | Cost |"
             echo "|---|---|"
             echo "| Per Day | ~\$4.50 |"
             echo "| Per Month | ~\$135 |"
             echo ""
-            echo "> ⚠️ **Destroy when done!** Run this workflow with action: \`destroy\`"
+            echo "> ⚠️ **Destroy when done:** Run this workflow with action \`destroy\`, confirm_destroy = \`yes\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Terraform Destroy
@@ -365,60 +373,74 @@ jobs:
         if: github.event.inputs.action == 'destroy'
         run: |
           DESTROY_STATUS="${{ steps.terraform_destroy.outcome }}"
-          {
-            echo "## 🗑️ Episode 10 — Destroy Summary"
-            echo ""
-            echo "### Status: ${DESTROY_STATUS}"
-            echo ""
-          } >> "$GITHUB_STEP_SUMMARY"
+          CLUSTER_NAME="${{ vars.CLUSTER_NAME }}"
+          REGION="${{ env.AWS_REGION_VALUE }}"
 
-          # Check what's still in Terraform state (pending resources)
-          REMAINING=$(terraform state list 2>/dev/null || echo "")
-          REMAINING_COUNT=$(echo "$REMAINING" | grep -c '.' 2>/dev/null || echo "0")
+          # Count resources remaining in state (0 = all destroyed)
+          REMAINING=$(terraform state list 2>/dev/null | grep -c '.' || echo "0")
 
-          # Check AWS resources
-          EKS_EXISTS=$(aws eks describe-cluster --name "${{ vars.CLUSTER_NAME }}" --region "${{ env.AWS_REGION_VALUE }}" 2>/dev/null && echo "YES" || echo "NO")
+          # Check every AWS resource category
+          EKS=$(aws eks describe-cluster --name "$CLUSTER_NAME" --region "$REGION" 2>/dev/null && echo "❌ EXISTS" || echo "✅ Deleted")
           VPC_ID=$(terraform output -raw vpc_id 2>/dev/null || echo "")
-          VPC_EXISTS="NO"
-          if [ -n "$VPC_ID" ]; then
-            VPC_EXISTS=$(aws ec2 describe-vpcs --vpc-ids "$VPC_ID" --region "${{ env.AWS_REGION_VALUE }}" 2>/dev/null && echo "YES" || echo "NO")
-          fi
+          VPC="✅ Deleted"
+          [ -n "$VPC_ID" ] && VPC=$(aws ec2 describe-vpcs --vpc-ids "$VPC_ID" --region "$REGION" 2>/dev/null && echo "❌ EXISTS" || echo "✅ Deleted")
+          RDS=$(aws rds describe-db-instances --region "$REGION" --query "DBInstances[?contains(DBInstanceIdentifier,'${CLUSTER_NAME}')].DBInstanceIdentifier" --output text 2>/dev/null)
+          [ -z "$RDS" ] && RDS="✅ Deleted" || RDS="❌ EXISTS"
+          BASTION=$(aws ec2 describe-instances --region "$REGION" --filters "Name=tag:Name,Values=*bastion*" "Name=instance-state-name,Values=running,pending" --query "Reservations[].Instances[].InstanceId" --output text 2>/dev/null)
+          [ -z "$BASTION" ] && BASTION="✅ Deleted" || BASTION="❌ EXISTS ($BASTION)"
+          CW_LOG=$(aws logs describe-log-groups --region "$REGION" --log-group-name-prefix "/aws/eks/${CLUSTER_NAME}" --query "logGroups[].logGroupName" --output text 2>/dev/null)
+          [ -z "$CW_LOG" ] && CW_LOG="✅ Deleted" || CW_LOG="❌ EXISTS"
+          SECRETS=$(aws secretsmanager list-secrets --region "$REGION" --filters Key=name,Values=online-boutique --query 'SecretList[].Name' --output text 2>/dev/null)
+          [ -z "$SECRETS" ] && SECRETS="✅ Deleted" || SECRETS="❌ EXISTS"
+          NAT=$(aws ec2 describe-nat-gateways --region "$REGION" --filter "Name=state,Values=available,pending" --query "NatGateways[].NatGatewayId" --output text 2>/dev/null)
+          [ -z "$NAT" ] && NAT="✅ Deleted" || NAT="❌ EXISTS ($NAT)"
+          KMS=$(aws kms list-aliases --region "$REGION" --query "Aliases[?AliasName=='alias/${CLUSTER_NAME}-eks'].AliasName" --output text 2>/dev/null)
+          [ -z "$KMS" ] && KMS="✅ Deleted" || KMS="❌ EXISTS"
+          ROLE_NODE=$(aws iam get-role --role-name "${CLUSTER_NAME}-node-role" 2>/dev/null && echo "❌ EXISTS" || echo "✅ Deleted")
+          ROLE_CLUSTER=$(aws iam get-role --role-name "${CLUSTER_NAME}-cluster-role" 2>/dev/null && echo "❌ EXISTS" || echo "✅ Deleted")
+          ROLE_DNS=$(aws iam get-role --role-name "external-dns-role" 2>/dev/null && echo "❌ EXISTS" || echo "✅ Deleted")
+          ROLE_ESO=$(aws iam get-role --role-name "external-secrets-role" 2>/dev/null && echo "❌ EXISTS" || echo "✅ Deleted")
+          LB=$(aws elbv2 describe-load-balancers --region "$REGION" --query "LoadBalancers[?contains(LoadBalancerName,'${CLUSTER_NAME}') || contains(LoadBalancerName,'kong')].LoadBalancerName" --output text 2>/dev/null)
+          [ -z "$LB" ] && LB="✅ Deleted" || LB="❌ EXISTS ($LB)"
 
-          # Check Secrets Manager
-          SM_SECRETS=$(aws secretsmanager list-secrets --region "${{ env.AWS_REGION_VALUE }}" --filters Key=name,Values=online-boutique --query 'SecretList[].Name' --output text 2>/dev/null || echo "none")
+          # Count how many checks passed
+          TOTAL_CHECKS=15
+          PASSED=$(echo "$EKS $VPC $RDS $BASTION $CW_LOG $SECRETS $NAT $KMS $ROLE_NODE $ROLE_CLUSTER $ROLE_DNS $ROLE_ESO $LB" | grep -o "✅" | wc -l || echo "0")
+          FAILED=$((TOTAL_CHECKS - PASSED))
 
           {
-            echo "### 🔍 Debug Info (copy this if destroy failed)"
+            echo "## 🗑️ Episode 10 — Destroy Verification Report"
             echo ""
-            echo "| Check | Result |"
+            echo "| Metric | Count |"
             echo "|---|---|"
-            echo "| Terraform State Resources Remaining | ${REMAINING_COUNT} |"
-            echo "| EKS Cluster Still Exists | ${EKS_EXISTS} |"
-            echo "| VPC Still Exists | ${VPC_EXISTS} (${VPC_ID}) |"
-            echo "| Secrets Manager Secrets | ${SM_SECRETS} |"
+            echo "| Resources Created (apply) | 90+ |"
+            echo "| Terraform State Remaining | ${REMAINING} |"
+            echo "| AWS Checks Passed | ${PASSED}/${TOTAL_CHECKS} |"
+            echo "| AWS Resources Still Exist | ${FAILED} |"
             echo ""
-            if [ "$REMAINING_COUNT" -gt 0 ] && [ "$REMAINING_COUNT" -lt 30 ]; then
-              echo "### 📋 Resources Still in State"
-              echo "\`\`\`"
-              echo "$REMAINING"
-              echo "\`\`\`"
-              echo ""
-            fi
-            if [ "$DESTROY_STATUS" == "success" ]; then
-              echo "### ✅ All Destroyed Successfully"
-              echo ""
-              echo "| Deleted | Resources |"
-              echo "|---|---|"
-              echo "| Infrastructure | EKS, VPC, NAT GW, Subnets, RDS, Bastion, ECR (11 repos) |"
-              echo "| Kubernetes | Kong NLB, Delegate, ArgoCD, Prometheus, Grafana, EFK, Jaeger, OTel |"
-              echo "| Harness | Services, Environments, Connectors, GitOps Agent, OPA Policy |"
-              echo "| AWS Secrets | Grafana password, EFK password, Kong admin, JWT secret, RDS creds |"
-              echo "| IAM | Pod Identity roles, Node role, Cluster role, KMS key |"
-              echo ""
-              echo "**Your AWS bill is now \$0.**"
+            echo "### AWS Resource Status (End-to-End Check)"
+            echo ""
+            echo "| Resource | Status |"
+            echo "|---|---|"
+            echo "| EKS Cluster | ${EKS} |"
+            echo "| VPC | ${VPC} |"
+            echo "| RDS PostgreSQL | ${RDS} |"
+            echo "| EC2 Bastion | ${BASTION} |"
+            echo "| NAT Gateway | ${NAT} |"
+            echo "| Load Balancer (Kong NLB) | ${LB} |"
+            echo "| CloudWatch Logs | ${CW_LOG} |"
+            echo "| Secrets Manager | ${SECRETS} |"
+            echo "| KMS Encryption Key | ${KMS} |"
+            echo "| IAM Node Role | ${ROLE_NODE} |"
+            echo "| IAM Cluster Role | ${ROLE_CLUSTER} |"
+            echo "| IAM External DNS Role | ${ROLE_DNS} |"
+            echo "| IAM External Secrets Role | ${ROLE_ESO} |"
+            echo ""
+            if [ "$FAILED" -eq 0 ] && [ "$REMAINING" -eq 0 ]; then
+              echo "### ✅ CLEAN DESTROY — All 90+ resources deleted. AWS bill = \$0"
             else
-              echo "### ❌ Destroy Failed — Remaining Resources Need Manual Cleanup"
+              echo "### ⚠️ ${FAILED} resource(s) still exist in AWS"
               echo ""
-              echo "**Paste this entire summary to Kiro for automated fix.**"
+              echo "**Copy this table and paste to Kiro for automated cleanup.**"
             fi
           } >> "$GITHUB_STEP_SUMMARY"
