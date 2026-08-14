@@ -160,9 +160,10 @@ jobs:
           REGION="${{ env.AWS_REGION_VALUE }}"
 
           CLUSTER=$(terraform output -raw eks_cluster_name)
-          BASTION_ID=$(terraform output -raw bastion_ssm_command | awk '{print $NF}')
+          BASTION_ID=$(terraform output -raw bastion_ssm_command | grep -oP 'i-[a-f0-9]+')
           BASTION_IP=$(terraform output -raw bastion_public_ip)
           VPC=$(terraform output -raw vpc_id)
+          DOMAIN_NAME="${{ vars.DOMAIN_NAME }}"
           RDS_EP=$(terraform output -raw rds_endpoint 2>/dev/null || echo "N/A")
 
           # Count total resources in state
@@ -198,6 +199,31 @@ jobs:
             echo "|---|---|"
             echo "| SSM to Bastion | \`aws ssm start-session --target ${BASTION_ID} --region ${REGION}\` |"
             echo "| EKS kubeconfig | \`aws eks update-kubeconfig --region ${REGION} --name ${CLUSTER}\` |"
+            echo ""
+            echo "### 🔍 Verification (run on EC2 bastion after SSM)"
+            echo ""
+            echo "\`\`\`bash"
+            echo "# Connect to EKS"
+            echo "aws eks update-kubeconfig --region ${REGION} --name ${CLUSTER}"
+            echo ""
+            echo "# Check ArgoCD applications"
+            echo "kubectl get applications -n gitops"
+            echo ""
+            echo "# Check all pods"
+            echo "kubectl get pods -n gitops"
+            echo "kubectl get pods -n monitoring"
+            echo "kubectl get pods -n logging"
+            echo "kubectl get pods -n tracing"
+            echo "kubectl get pods -n kong"
+            echo ""
+            echo "# Check Kong NLB external IP"
+            echo "kubectl get svc -n kong kong-kong-proxy"
+            echo ""
+            echo "# Check DNS"
+            echo "nslookup grafana.${DOMAIN_NAME}"
+            echo "nslookup kibana.${DOMAIN_NAME}"
+            echo "nslookup jaeger.${DOMAIN_NAME}"
+            echo "\`\`\`"
             echo ""
             echo "### 🌐 URLs (after External DNS creates records)"
             echo ""
