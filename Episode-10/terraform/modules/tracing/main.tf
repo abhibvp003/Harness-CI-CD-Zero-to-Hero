@@ -1,6 +1,40 @@
 # ═══════════════════════════════════════════════════════════════════
 # Tracing Module — Jaeger + OTel Collector via ArgoCD (Helm)
+# Self-contained: registers its own Helm repos + creates Harness apps
 # ═══════════════════════════════════════════════════════════════════
+
+# Register Helm repos in Harness GitOps
+resource "harness_platform_gitops_repository" "jaeger" {
+  identifier = "helm_jaeger"
+  account_id = var.harness_account_id
+  project_id = var.harness_project_id
+  org_id     = var.harness_org_id
+  agent_id   = var.gitops_agent_id
+  upsert     = true
+  repo {
+    repo            = "https://jaegertracing.github.io/helm-charts"
+    name            = "jaeger"
+    type_           = "helm"
+    insecure        = true
+    connection_type = "HTTPS"
+  }
+}
+
+resource "harness_platform_gitops_repository" "otel" {
+  identifier = "helm_otel"
+  account_id = var.harness_account_id
+  project_id = var.harness_project_id
+  org_id     = var.harness_org_id
+  agent_id   = var.gitops_agent_id
+  upsert     = true
+  repo {
+    repo            = "https://open-telemetry.github.io/opentelemetry-helm-charts"
+    name            = "opentelemetry"
+    type_           = "helm"
+    insecure        = true
+    connection_type = "HTTPS"
+  }
+}
 
 # Jaeger — Harness GitOps Application
 resource "harness_platform_gitops_applications" "jaeger" {
@@ -9,7 +43,7 @@ resource "harness_platform_gitops_applications" "jaeger" {
   org_id     = var.harness_org_id
   project_id = var.harness_project_id
   cluster_id = var.gitops_cluster_id
-  repo_id    = var.gitops_repo_id
+  repo_id    = harness_platform_gitops_repository.jaeger.identifier
   agent_id   = var.gitops_agent_id
   name       = "jaeger"
 
@@ -69,6 +103,8 @@ resource "harness_platform_gitops_applications" "jaeger" {
       }
     }
   }
+
+  depends_on = [harness_platform_gitops_repository.jaeger]
 }
 
 # OTel Collector — Harness GitOps Application
@@ -78,7 +114,7 @@ resource "harness_platform_gitops_applications" "otel_collector" {
   org_id     = var.harness_org_id
   project_id = var.harness_project_id
   cluster_id = var.gitops_cluster_id
-  repo_id    = var.gitops_repo_id
+  repo_id    = harness_platform_gitops_repository.otel.identifier
   agent_id   = var.gitops_agent_id
   name       = "otel-collector"
 
@@ -114,4 +150,6 @@ resource "harness_platform_gitops_applications" "otel_collector" {
       }
     }
   }
+
+  depends_on = [harness_platform_gitops_repository.otel]
 }

@@ -1,8 +1,8 @@
 # ═══════════════════════════════════════════════════════════════════
 # Logging Module — EFK Stack via ArgoCD (Helm)
+# Self-contained: registers its own Helm repos + creates Harness apps
 # ═══════════════════════════════════════════════════════════════════
 
-# Auto-generate EFK password and store in AWS SM
 resource "random_password" "efk" {
   length  = 16
   special = false
@@ -21,6 +21,39 @@ resource "aws_secretsmanager_secret_version" "efk" {
   })
 }
 
+# Register Helm repos in Harness GitOps
+resource "harness_platform_gitops_repository" "elastic" {
+  identifier = "helm_elastic"
+  account_id = var.harness_account_id
+  project_id = var.harness_project_id
+  org_id     = var.harness_org_id
+  agent_id   = var.gitops_agent_id
+  upsert     = true
+  repo {
+    repo            = "https://helm.elastic.co"
+    name            = "elastic"
+    type_           = "helm"
+    insecure        = true
+    connection_type = "HTTPS"
+  }
+}
+
+resource "harness_platform_gitops_repository" "fluent" {
+  identifier = "helm_fluent"
+  account_id = var.harness_account_id
+  project_id = var.harness_project_id
+  org_id     = var.harness_org_id
+  agent_id   = var.gitops_agent_id
+  upsert     = true
+  repo {
+    repo            = "https://fluent.github.io/helm-charts"
+    name            = "fluent"
+    type_           = "helm"
+    insecure        = true
+    connection_type = "HTTPS"
+  }
+}
+
 # Elasticsearch — Harness GitOps Application
 resource "harness_platform_gitops_applications" "elasticsearch" {
   identifier = "elasticsearch"
@@ -28,7 +61,7 @@ resource "harness_platform_gitops_applications" "elasticsearch" {
   org_id     = var.harness_org_id
   project_id = var.harness_project_id
   cluster_id = var.gitops_cluster_id
-  repo_id    = var.gitops_repo_id
+  repo_id    = harness_platform_gitops_repository.elastic.identifier
   agent_id   = var.gitops_agent_id
   name       = "elasticsearch"
 
@@ -68,10 +101,6 @@ resource "harness_platform_gitops_applications" "elasticsearch" {
             name  = "extraEnvs[0].value"
             value = random_password.efk.result
           }
-          parameters {
-            name  = "esConfig.elasticsearch\\.yml"
-            value = "xpack.security.enabled: true\nxpack.security.transport.ssl.enabled: false"
-          }
         }
       }
       destination {
@@ -80,6 +109,8 @@ resource "harness_platform_gitops_applications" "elasticsearch" {
       }
     }
   }
+
+  depends_on = [harness_platform_gitops_repository.elastic]
 }
 
 # Kibana — Harness GitOps Application
@@ -89,7 +120,7 @@ resource "harness_platform_gitops_applications" "kibana" {
   org_id     = var.harness_org_id
   project_id = var.harness_project_id
   cluster_id = var.gitops_cluster_id
-  repo_id    = var.gitops_repo_id
+  repo_id    = harness_platform_gitops_repository.elastic.identifier
   agent_id   = var.gitops_agent_id
   name       = "kibana"
 
@@ -108,22 +139,6 @@ resource "harness_platform_gitops_applications" "kibana" {
           parameters {
             name  = "elasticsearchHosts"
             value = "http://elasticsearch-master:9200"
-          }
-          parameters {
-            name  = "extraEnvs[0].name"
-            value = "ELASTICSEARCH_USERNAME"
-          }
-          parameters {
-            name  = "extraEnvs[0].value"
-            value = "elastic"
-          }
-          parameters {
-            name  = "extraEnvs[1].name"
-            value = "ELASTICSEARCH_PASSWORD"
-          }
-          parameters {
-            name  = "extraEnvs[1].value"
-            value = random_password.efk.result
           }
           parameters {
             name  = "ingress.enabled"
@@ -160,7 +175,7 @@ resource "harness_platform_gitops_applications" "fluentd" {
   org_id     = var.harness_org_id
   project_id = var.harness_project_id
   cluster_id = var.gitops_cluster_id
-  repo_id    = var.gitops_repo_id
+  repo_id    = harness_platform_gitops_repository.fluent.identifier
   agent_id   = var.gitops_agent_id
   name       = "fluentd"
 
@@ -179,46 +194,6 @@ resource "harness_platform_gitops_applications" "fluentd" {
           parameters {
             name  = "kind"
             value = "DaemonSet"
-          }
-          parameters {
-            name  = "env[0].name"
-            value = "FLUENT_ELASTICSEARCH_HOST"
-          }
-          parameters {
-            name  = "env[0].value"
-            value = "elasticsearch-master.logging.svc.cluster.local"
-          }
-          parameters {
-            name  = "env[1].name"
-            value = "FLUENT_ELASTICSEARCH_PORT"
-          }
-          parameters {
-            name  = "env[1].value"
-            value = "9200"
-          }
-          parameters {
-            name  = "env[2].name"
-            value = "FLUENT_ELASTICSEARCH_USER"
-          }
-          parameters {
-            name  = "env[2].value"
-            value = "elastic"
-          }
-          parameters {
-            name  = "env[3].name"
-            value = "FLUENT_ELASTICSEARCH_PASSWORD"
-          }
-          parameters {
-            name  = "env[3].value"
-            value = random_password.efk.result
-          }
-          parameters {
-            name  = "env[4].name"
-            value = "FLUENT_ELASTICSEARCH_SCHEME"
-          }
-          parameters {
-            name  = "env[4].value"
-            value = "http"
           }
         }
       }

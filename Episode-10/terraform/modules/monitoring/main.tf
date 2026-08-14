@@ -1,5 +1,6 @@
 # ═══════════════════════════════════════════════════════════════════
 # Monitoring Module — Prometheus + Grafana via ArgoCD (Helm)
+# Self-contained: registers its own Helm repo + creates Harness app
 # ═══════════════════════════════════════════════════════════════════
 
 # Auto-generate Grafana password and store in AWS SM
@@ -21,6 +22,23 @@ resource "aws_secretsmanager_secret_version" "grafana" {
   })
 }
 
+# Register Helm repo in Harness GitOps
+resource "harness_platform_gitops_repository" "prometheus" {
+  identifier = "helm_prometheus"
+  account_id = var.harness_account_id
+  project_id = var.harness_project_id
+  org_id     = var.harness_org_id
+  agent_id   = var.gitops_agent_id
+  upsert     = true
+  repo {
+    repo            = "https://prometheus-community.github.io/helm-charts"
+    name            = "prometheus-community"
+    type_           = "helm"
+    insecure        = true
+    connection_type = "HTTPS"
+  }
+}
+
 # Harness GitOps Application — creates ArgoCD app + shows in Harness UI
 resource "harness_platform_gitops_applications" "monitoring" {
   identifier = "monitoring"
@@ -28,7 +46,7 @@ resource "harness_platform_gitops_applications" "monitoring" {
   org_id     = var.harness_org_id
   project_id = var.harness_project_id
   cluster_id = var.gitops_cluster_id
-  repo_id    = var.gitops_repo_id
+  repo_id    = harness_platform_gitops_repository.prometheus.identifier
   agent_id   = var.gitops_agent_id
   name       = "monitoring"
 
@@ -84,6 +102,8 @@ resource "harness_platform_gitops_applications" "monitoring" {
       }
     }
   }
+
+  depends_on = [harness_platform_gitops_repository.prometheus]
 }
 
 resource "kubernetes_namespace" "monitoring" {
@@ -91,7 +111,6 @@ resource "kubernetes_namespace" "monitoring" {
   lifecycle { ignore_changes = all }
 }
 
-# Grafana dashboard — Online Boutique Application metrics
 resource "kubernetes_config_map" "grafana_dashboard_app" {
   metadata {
     name      = "grafana-dashboard-online-boutique"

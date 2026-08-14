@@ -162,6 +162,7 @@ resource "harness_platform_gitops_repository" "repo" {
   depends_on = [null_resource.install_gitops_agent]
 }
 
+
 # Step 6: ArgoCD auto-registers in-cluster when agent installs — no manual cluster resource needed
 # The cluster "incluster" is created automatically by the deploy YAML (kubectl apply)
 

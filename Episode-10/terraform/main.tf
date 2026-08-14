@@ -173,7 +173,6 @@ module "monitoring" {
   harness_org_id     = var.harness_org_id
   harness_project_id = var.harness_project_id
   gitops_agent_id    = module.gitops.agent_identifier
-  gitops_repo_id     = module.gitops.repo_identifier
   gitops_cluster_id  = module.gitops.cluster_identifier
   depends_on         = [module.gitops, module.external_secrets]
 }
@@ -189,7 +188,6 @@ module "logging" {
   harness_org_id     = var.harness_org_id
   harness_project_id = var.harness_project_id
   gitops_agent_id    = module.gitops.agent_identifier
-  gitops_repo_id     = module.gitops.repo_identifier
   gitops_cluster_id  = module.gitops.cluster_identifier
   depends_on         = [module.gitops, module.external_secrets]
 }
@@ -205,7 +203,6 @@ module "tracing" {
   harness_org_id     = var.harness_org_id
   harness_project_id = var.harness_project_id
   gitops_agent_id    = module.gitops.agent_identifier
-  gitops_repo_id     = module.gitops.repo_identifier
   gitops_cluster_id  = module.gitops.cluster_identifier
   depends_on         = [module.gitops]
 }
