@@ -1,5 +1,5 @@
 # ═══════════════════════════════════════════════════════════════════
-# Monitoring Module — Prometheus + Grafana via ArgoCD (Helm + Git values)
+# Monitoring Module — Prometheus + Grafana via ArgoCD (Helm)
 # ═══════════════════════════════════════════════════════════════════
 
 # Auto-generate Grafana password and store in AWS SM
@@ -21,37 +21,69 @@ resource "aws_secretsmanager_secret_version" "grafana" {
   })
 }
 
-# kube-prometheus-stack — prometheus-community.github.io + values from Git
-resource "kubectl_manifest" "argocd_monitoring" {
-  yaml_body = yamlencode({
-    apiVersion = "argoproj.io/v1alpha1"
-    kind       = "Application"
-    metadata   = { name = "monitoring", namespace = "gitops" }
-    spec = {
-      project = "online-boutique"
-      sources = [
-        {
-          repoURL        = "https://github.com/${var.github_username}/${var.github_repo}"
-          targetRevision = var.github_branch
-          ref            = "values"
-        },
-        {
-          repoURL        = "https://prometheus-community.github.io/helm-charts"
-          chart          = "kube-prometheus-stack"
-          targetRevision = "62.3.0"
-          helm = {
-            valueFiles = ["$values/Episode-10/k8s/monitoring/kube-prometheus-stack-values.yaml"]
-            parameters = [
-              { name = "grafana.adminPassword", value = random_password.grafana.result },
-              { name = "grafana.ingress.hosts[0]", value = "grafana.${var.domain_name}" },
-            ]
+# Harness GitOps Application — creates ArgoCD app + shows in Harness UI
+resource "harness_platform_gitops_applications" "monitoring" {
+  identifier = "monitoring"
+  account_id = var.harness_account_id
+  org_id     = var.harness_org_id
+  project_id = var.harness_project_id
+  cluster_id = var.gitops_cluster_id
+  repo_id    = var.gitops_repo_id
+  agent_id   = var.gitops_agent_id
+  name       = "monitoring"
+
+  application {
+    metadata {
+      name   = "monitoring"
+      labels = { "harness.io/envRef" = "production" }
+    }
+    spec {
+      sync_policy { sync_options = ["CreateNamespace=true", "ServerSideApply=true"] }
+      source {
+        repo_url        = "https://prometheus-community.github.io/helm-charts"
+        chart           = "kube-prometheus-stack"
+        target_revision = "62.3.0"
+        helm {
+          parameters {
+            name  = "grafana.adminPassword"
+            value = random_password.grafana.result
+          }
+          parameters {
+            name  = "grafana.ingress.hosts[0]"
+            value = "grafana.${var.domain_name}"
+          }
+          parameters {
+            name  = "grafana.ingress.enabled"
+            value = "true"
+          }
+          parameters {
+            name  = "grafana.ingress.ingressClassName"
+            value = "kong"
+          }
+          parameters {
+            name  = "prometheus.prometheusSpec.retention"
+            value = "15d"
+          }
+          parameters {
+            name  = "prometheus.prometheusSpec.storageSpec.volumeClaimTemplate.spec.storageClassName"
+            value = "auto-ebs-sc"
+          }
+          parameters {
+            name  = "prometheus.prometheusSpec.storageSpec.volumeClaimTemplate.spec.resources.requests.storage"
+            value = "50Gi"
+          }
+          parameters {
+            name  = "alertmanager.enabled"
+            value = "true"
           }
         }
-      ]
-      destination = { server = "https://kubernetes.default.svc", namespace = "monitoring" }
-      syncPolicy  = { automated = { prune = true, selfHeal = true }, syncOptions = ["CreateNamespace=true", "ServerSideApply=true"] }
+      }
+      destination {
+        server    = "https://kubernetes.default.svc"
+        namespace = "monitoring"
+      }
     }
-  })
+  }
 }
 
 resource "kubernetes_namespace" "monitoring" {

@@ -164,30 +164,48 @@ module "harness_platform" {
 
 # ── Monitoring (Prometheus + Grafana) ──
 module "monitoring" {
-  source          = "./modules/monitoring"
-  domain_name     = var.domain_name
-  github_username = var.github_username
-  github_repo     = var.github_repo
-  github_branch   = var.github_branch
-  depends_on      = [module.gitops, module.external_secrets]
+  source             = "./modules/monitoring"
+  domain_name        = var.domain_name
+  github_username    = var.github_username
+  github_repo        = var.github_repo
+  github_branch      = var.github_branch
+  harness_account_id = var.harness_account_id
+  harness_org_id     = var.harness_org_id
+  harness_project_id = var.harness_project_id
+  gitops_agent_id    = module.gitops.agent_identifier
+  gitops_repo_id     = module.gitops.repo_identifier
+  gitops_cluster_id  = module.gitops.cluster_identifier
+  depends_on         = [module.gitops, module.external_secrets]
 }
 
 # ── Logging (EFK — Elasticsearch + Fluentd + Kibana) ──
 module "logging" {
-  source          = "./modules/logging"
-  domain_name     = var.domain_name
-  github_username = var.github_username
-  github_repo     = var.github_repo
-  github_branch   = var.github_branch
-  depends_on      = [module.gitops, module.external_secrets]
+  source             = "./modules/logging"
+  domain_name        = var.domain_name
+  github_username    = var.github_username
+  github_repo        = var.github_repo
+  github_branch      = var.github_branch
+  harness_account_id = var.harness_account_id
+  harness_org_id     = var.harness_org_id
+  harness_project_id = var.harness_project_id
+  gitops_agent_id    = module.gitops.agent_identifier
+  gitops_repo_id     = module.gitops.repo_identifier
+  gitops_cluster_id  = module.gitops.cluster_identifier
+  depends_on         = [module.gitops, module.external_secrets]
 }
 
 # ── Tracing (Jaeger + OTel Collector) ──
 module "tracing" {
-  source          = "./modules/tracing"
-  domain_name     = var.domain_name
-  github_username = var.github_username
-  github_repo     = var.github_repo
-  github_branch   = var.github_branch
-  depends_on      = [module.gitops]
+  source             = "./modules/tracing"
+  domain_name        = var.domain_name
+  github_username    = var.github_username
+  github_repo        = var.github_repo
+  github_branch      = var.github_branch
+  harness_account_id = var.harness_account_id
+  harness_org_id     = var.harness_org_id
+  harness_project_id = var.harness_project_id
+  gitops_agent_id    = module.gitops.agent_identifier
+  gitops_repo_id     = module.gitops.repo_identifier
+  gitops_cluster_id  = module.gitops.cluster_identifier
+  depends_on         = [module.gitops]
 }

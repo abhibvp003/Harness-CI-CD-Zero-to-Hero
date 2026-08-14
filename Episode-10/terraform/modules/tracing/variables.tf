@@ -19,3 +19,11 @@ variable "github_branch" {
   description = "Git branch to sync from"
   type        = string
 }
+
+# Harness GitOps identifiers (for app registration in Harness UI)
+variable "harness_account_id" { type = string }
+variable "harness_org_id" { type = string }
+variable "harness_project_id" { type = string }
+variable "gitops_agent_id" { type = string }
+variable "gitops_repo_id" { type = string }
+variable "gitops_cluster_id" { type = string }

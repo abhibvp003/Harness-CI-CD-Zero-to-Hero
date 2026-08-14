@@ -1,8 +1,19 @@
 terraform {
   required_providers {
+    harness = {
+      source = "harness/harness"
+    }
     kubectl = {
-      source  = "gavinbunney/kubectl"
-      version = "~> 1.14"
+      source = "gavinbunney/kubectl"
+    }
+    kubernetes = {
+      source = "hashicorp/kubernetes"
+    }
+    aws = {
+      source = "hashicorp/aws"
+    }
+    random = {
+      source = "hashicorp/random"
     }
   }
 }
