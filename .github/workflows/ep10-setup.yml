@@ -383,6 +383,10 @@ jobs:
           BASTION=$(aws ec2 describe-instances --region "$REGION" --filters "Name=tag:Name,Values=*bastion*" "Name=instance-state-name,Values=running,pending" --query "Reservations[].Instances[].InstanceId" --output text 2>/dev/null)
           [ -z "$BASTION" ] && BASTION="✅ Deleted" || BASTION="❌ EXISTS ($BASTION)"
           CW_LOG=$(aws logs describe-log-groups --region "$REGION" --log-group-name-prefix "/aws/eks/${CLUSTER_NAME}" --query "logGroups[].logGroupName" --output text 2>/dev/null)
+          if [ -n "$CW_LOG" ]; then
+            aws logs delete-log-group --log-group-name "/aws/eks/${CLUSTER_NAME}/cluster" --region "$REGION" 2>/dev/null || true
+            CW_LOG=$(aws logs describe-log-groups --region "$REGION" --log-group-name-prefix "/aws/eks/${CLUSTER_NAME}" --query "logGroups[].logGroupName" --output text 2>/dev/null)
+          fi
           [ -z "$CW_LOG" ] && CW_LOG="✅ Deleted" || CW_LOG="❌ EXISTS"
           SECRETS=$(aws secretsmanager list-secrets --region "$REGION" --filters Key=name,Values=online-boutique --query 'SecretList[].Name' --output text 2>/dev/null)
           [ -z "$SECRETS" ] && SECRETS="✅ Deleted" || SECRETS="❌ EXISTS"
