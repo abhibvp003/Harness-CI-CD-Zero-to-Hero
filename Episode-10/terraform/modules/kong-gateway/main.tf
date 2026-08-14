@@ -20,9 +20,9 @@ resource "helm_release" "kong" {
   namespace        = "kong"
   create_namespace = true
   version          = "2.39.3"
-  skip_crds        = false # Install CRDs on fresh deploy (Kong custom resources need these)
-  wait             = true  # Wait for pods to be ready before marking success
-  timeout          = 900   # 15 min — EKS Auto Mode needs time to scale nodes for Kong pods
+  skip_crds        = true # CRDs installed by ingressController.installCRDs (avoids ownership conflict on re-apply)
+  wait             = true # Wait for pods to be ready before marking success
+  timeout          = 900  # 15 min — EKS Auto Mode needs time to scale nodes for Kong pods
   values = [
     yamlencode({
       # Ingress Controller
