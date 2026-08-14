@@ -74,11 +74,11 @@ resource "helm_release" "kong" {
         enabled = true
       }
 
-      # HA — 2 replicas minimum, autoscale to 6
-      replicaCount = 2
+      # HA — 1 initial replica, autoscale to 6
+      replicaCount = 1
       autoscaling = {
         enabled                        = true
-        minReplicas                    = 2
+        minReplicas                    = 1
         maxReplicas                    = 6
         targetCPUUtilizationPercentage = 70
       }
