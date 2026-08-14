@@ -293,6 +293,9 @@ jobs:
             terraform state rm "kubernetes_storage_class.ebs" 2>/dev/null || true
           fi
 
+          # Delete orphaned CloudWatch log group (EKS auto-creates it, survives cluster deletion)
+          aws logs delete-log-group --log-group-name "/aws/eks/${CLUSTER_NAME}/cluster" --region "${{ env.AWS_REGION_VALUE }}" 2>/dev/null || true
+
           terraform destroy -auto-approve -no-color \
             -var="harness_account_id=${{ vars.HARNESS_ACCOUNT_ID }}" \
             -var="harness_api_key=${{ secrets.HARNESS_API_KEY }}" \
