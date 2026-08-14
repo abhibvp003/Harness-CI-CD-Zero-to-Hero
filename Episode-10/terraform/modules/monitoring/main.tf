@@ -34,6 +34,8 @@ resource "harness_platform_gitops_repository" "prometheus" {
     repo            = "https://prometheus-community.github.io/helm-charts"
     name            = "prometheus-community"
     type_           = "helm"
+    username        = ""
+    password        = ""
     insecure        = true
     connection_type = "HTTPS"
   }

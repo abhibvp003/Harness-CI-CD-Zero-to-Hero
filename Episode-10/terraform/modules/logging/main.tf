@@ -33,6 +33,8 @@ resource "harness_platform_gitops_repository" "elastic" {
     repo            = "https://helm.elastic.co"
     name            = "elastic"
     type_           = "helm"
+    username        = ""
+    password        = ""
     insecure        = true
     connection_type = "HTTPS"
   }
@@ -49,6 +51,8 @@ resource "harness_platform_gitops_repository" "fluent" {
     repo            = "https://fluent.github.io/helm-charts"
     name            = "fluent"
     type_           = "helm"
+    username        = ""
+    password        = ""
     insecure        = true
     connection_type = "HTTPS"
   }
