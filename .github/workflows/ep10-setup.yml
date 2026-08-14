@@ -288,7 +288,7 @@ jobs:
             terraform state list 2>/dev/null | grep -E '^(kubernetes_|module\..+\.kubernetes_|module\..+\.helm_|module\..+\.kubectl_)' | while read -r resource; do
               echo "  Removing from state: $resource"
               terraform state rm "$resource" 2>/dev/null || true
-            done
+            done || true
             # Also remove the storage class
             terraform state rm "kubernetes_storage_class.ebs" 2>/dev/null || true
           fi
@@ -322,7 +322,7 @@ jobs:
             terraform state list 2>/dev/null | grep -E '^(kubernetes_|module\..+\.kubernetes_|module\..+\.helm_|module\..+\.kubectl_)' | while read -r resource; do
               echo "  Removing: $resource"
               terraform state rm "$resource" 2>/dev/null || true
-            done
+            done || true
             terraform state rm "kubernetes_storage_class.ebs" 2>/dev/null || true
           fi
 
