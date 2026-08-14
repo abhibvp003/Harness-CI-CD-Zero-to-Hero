@@ -103,6 +103,28 @@ jobs:
         id: terraform_apply
         continue-on-error: true
         run: |
+          # Pre-apply: Import orphaned CloudWatch log group if it exists outside state
+          LOG_GROUP="/aws/eks/${{ vars.CLUSTER_NAME }}/cluster"
+          if aws logs describe-log-groups --log-group-name-prefix "$LOG_GROUP" --region "${{ env.AWS_REGION_VALUE }}" --query "logGroups[?logGroupName=='${LOG_GROUP}'].logGroupName" --output text 2>/dev/null | grep -q "$LOG_GROUP"; then
+            if ! terraform state show "module.eks.aws_cloudwatch_log_group.eks" >/dev/null 2>&1; then
+              echo "Importing orphaned CloudWatch log group..."
+              terraform import \
+                -var="harness_account_id=${{ vars.HARNESS_ACCOUNT_ID }}" \
+                -var="harness_api_key=${{ secrets.HARNESS_API_KEY }}" \
+                -var="harness_delegate_token=${{ secrets.HARNESS_DELEGATE_TOKEN }}" \
+                -var="github_username=${{ github.repository_owner }}" \
+                -var="github_repo=${{ github.event.repository.name }}" \
+                -var="github_branch=${{ vars.GIT_BRANCH }}" \
+                -var="github_pat=${{ secrets.GH_PAT }}" \
+                -var="domain_name=${{ vars.DOMAIN_NAME }}" \
+                -var="cluster_name=${{ vars.CLUSTER_NAME }}" \
+                -var="harness_project_id=${{ vars.HARNESS_PROJECT_ID }}" \
+                -var="harness_org_id=${{ vars.HARNESS_ORG_ID }}" \
+                -var="aws_region=${{ vars.AWS_REGION }}" \
+                "module.eks.aws_cloudwatch_log_group.eks" "$LOG_GROUP" 2>/dev/null || true
+            fi
+          fi
+
           terraform apply -auto-approve -no-color \
             -var="harness_account_id=${{ vars.HARNESS_ACCOUNT_ID }}" \
             -var="harness_api_key=${{ secrets.HARNESS_API_KEY }}" \
