@@ -271,6 +271,16 @@ jobs:
 
             echo "Waiting 90s for AWS resources (LBs, ENIs) to release..."
             sleep 90
+
+            # Final force-delete gitops namespace (ArgoCD may re-add finalizers during wait)
+            if kubectl get ns gitops >/dev/null 2>&1; then
+              for app in $(kubectl get applications -n gitops -o name 2>/dev/null); do
+                kubectl patch "$app" -n gitops --type json -p='[{"op":"remove","path":"/metadata/finalizers"}]' 2>/dev/null || true
+                kubectl delete "$app" -n gitops --force --grace-period=0 2>/dev/null || true
+              done
+              kubectl patch ns gitops --type json -p='[{"op":"replace","path":"/spec/finalizers","value":[]}]' 2>/dev/null || true
+              kubectl delete ns gitops --force --grace-period=0 --timeout=30s 2>/dev/null || true
+            fi
           else
             echo "EKS cluster not ACTIVE (status: ${CLUSTER_STATUS}). Removing K8s resources from Terraform state..."
             # Cluster is gone — remove all kubernetes/helm/kubectl resources from state
