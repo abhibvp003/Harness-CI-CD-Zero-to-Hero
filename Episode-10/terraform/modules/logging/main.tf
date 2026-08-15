@@ -123,6 +123,10 @@ resource "harness_platform_gitops_applications" "elasticsearch" {
             name  = "extraEnvs[0].value"
             value = random_password.efk.result
           }
+          parameters {
+            name  = "esConfig.elasticsearch\\.yml"
+            value = "xpack.security.enabled: true\nxpack.license.self_generated.type: trial\nxpack.security.transport.ssl.enabled: false\n"
+          }
         }
       }
       destination {
@@ -167,6 +171,22 @@ resource "harness_platform_gitops_applications" "kibana" {
           parameters {
             name  = "elasticsearchHosts"
             value = "http://elasticsearch-master:9200"
+          }
+          parameters {
+            name  = "extraEnvs[0].name"
+            value = "ELASTICSEARCH_USERNAME"
+          }
+          parameters {
+            name  = "extraEnvs[0].value"
+            value = "elastic"
+          }
+          parameters {
+            name  = "extraEnvs[1].name"
+            value = "ELASTICSEARCH_PASSWORD"
+          }
+          parameters {
+            name  = "extraEnvs[1].value"
+            value = random_password.efk.result
           }
           parameters {
             name  = "ingress.enabled"

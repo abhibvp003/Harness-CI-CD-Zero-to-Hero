@@ -72,6 +72,7 @@ resource "helm_release" "kong" {
           path             = "/"
           annotations = {
             "konghq.com/strip-path" = "false"
+            "konghq.com/plugins"    = "kong-manager-basic-auth"
           }
         }
       }
