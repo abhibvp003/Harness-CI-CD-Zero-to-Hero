@@ -41,7 +41,7 @@ resource "helm_release" "kong" {
           "service.beta.kubernetes.io/aws-load-balancer-nlb-target-type"  = "ip"
           "service.beta.kubernetes.io/aws-load-balancer-scheme"           = "internet-facing"
           "service.beta.kubernetes.io/aws-load-balancer-ssl-cert"         = data.aws_acm_certificate.wildcard.arn
-          "service.beta.kubernetes.io/aws-load-balancer-ssl-ports"        = "kong-proxy-tls"
+          "service.beta.kubernetes.io/aws-load-balancer-ssl-ports"        = "443"
           "service.beta.kubernetes.io/aws-load-balancer-backend-protocol" = "http"
         }
         http = { enabled = true, containerPort = 8000, servicePort = 80 }
