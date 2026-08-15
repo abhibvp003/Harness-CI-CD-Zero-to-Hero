@@ -125,7 +125,7 @@ resource "harness_platform_gitops_applications" "elasticsearch" {
           }
           parameters {
             name  = "esConfig.elasticsearch\\.yml"
-            value = "xpack.security.enabled: true\ndiscovery.type: single-node\nxpack.security.transport.ssl.enabled: false\n"
+            value = "xpack.security.enabled: true\nxpack.security.transport.ssl.enabled: false\n"
           }
         }
       }

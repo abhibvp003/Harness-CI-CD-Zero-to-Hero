@@ -216,6 +216,8 @@ jobs:
             echo "kubectl get pods -n tracing"
             echo "kubectl get pods -n kong"
             echo ""
+            echo "kubectl get ingress -A"
+            echo ""
             echo "# Check Kong NLB external IP"
             echo "kubectl get svc -n kong kong-kong-proxy"
             echo ""
