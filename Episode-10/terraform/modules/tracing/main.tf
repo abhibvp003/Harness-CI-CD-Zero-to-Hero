@@ -192,7 +192,7 @@ resource "kubectl_manifest" "jaeger_ingress" {
             pathType = "Prefix"
             backend = {
               service = {
-                name = "jaeger"
+                name = "jaeger-query"
                 port = { number = 16686 }
               }
             }
@@ -201,4 +201,6 @@ resource "kubectl_manifest" "jaeger_ingress" {
       }]
     }
   })
+
+  depends_on = [harness_platform_gitops_applications.jaeger]
 }

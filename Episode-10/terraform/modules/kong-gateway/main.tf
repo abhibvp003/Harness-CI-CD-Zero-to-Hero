@@ -49,25 +49,34 @@ resource "helm_release" "kong" {
       }                                                                    # User browser (HTTPS encrypted) → NLB (decrypts using ACM cert) → Kong pod (receives plain HTTP)
       #Browser → HTTPS:443 → NLB (decrypts with ACM cert) → plain HTTP → Kong port 8000 (HTTP)
 
-      # Admin API (ClusterIP — only accessible inside cluster for Kong Manager)
+      # Admin API (ClusterIP — only accessible inside cluster for Kong Manager OSS)
       admin = {
         enabled = true
         type    = "ClusterIP"
-        http    = { enabled = true }
+        http    = { enabled = true, containerPort = 8001 }
       }
 
-      # Kong Manager UI (dashboard — routes, plugins, upstreams, health)
+      # Kong Manager OSS (built-in since Kong 3.4+ — no extra containers needed)
+      # Serves admin UI at port 8002, connects to Admin API internally
       manager = {
         enabled = true
         type    = "ClusterIP"
+        http    = { enabled = true, containerPort = 8002 }
         ingress = {
           enabled          = true
           ingressClassName = "kong"
           hostname         = "kong.${var.domain_name}"
+          path             = "/"
           annotations = {
             "konghq.com/strip-path" = "false"
           }
         }
+      }
+
+      # Kong OSS 3.9 (includes Kong Manager OSS built-in since 3.4+)
+      image = {
+        repository = "kong"
+        tag        = "3.9"
       }
 
       # Prometheus metrics endpoint (Kong exposes /metrics for scraping)
@@ -99,6 +108,9 @@ resource "helm_release" "kong" {
         # Real IP header from NLB
         real_ip_header    = "X-Forwarded-For"
         real_ip_recursive = "on"
+        # Kong Manager OSS — tells Manager its public URL + where Admin API is reachable
+        admin_gui_url  = "https://kong.${var.domain_name}"
+        admin_gui_path = "/"
       }
     })
   ]
