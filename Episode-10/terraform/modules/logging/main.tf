@@ -289,3 +289,33 @@ resource "harness_platform_gitops_applications" "fluentd" {
 
   depends_on = [harness_platform_gitops_applications.elasticsearch]
 }
+
+# Auto-create Kibana index pattern (runs once after Fluentd starts writing logs)
+resource "kubectl_manifest" "kibana_index_pattern_job" {
+  yaml_body = yamlencode({
+    apiVersion = "batch/v1"
+    kind       = "Job"
+    metadata = {
+      name      = "kibana-index-pattern-setup"
+      namespace = "logging"
+    }
+    spec = {
+      ttlSecondsAfterFinished = 300
+      backoffLimit            = 10
+      template = {
+        spec = {
+          restartPolicy = "OnFailure"
+          containers = [{
+            name    = "setup"
+            image   = "curlimages/curl:8.7.1"
+            command = ["/bin/sh", "-c"]
+            args = [
+              "echo 'Waiting for Fluentd index...' && for i in $(seq 1 60); do IDX=$(curl -s -u elastic:${random_password.efk.result} http://elasticsearch-master:9200/_cat/indices 2>/dev/null | grep fluentd); if [ -n \"$IDX\" ]; then echo \"Index found\"; break; fi; echo \"Attempt $i/60\"; sleep 10; done && curl -s -u elastic:${random_password.efk.result} -X POST 'http://kibana-kibana:5601/api/saved_objects/index-pattern/fluentd' -H 'kbn-xsrf: true' -H 'Content-Type: application/json' -d '{\"attributes\":{\"title\":\"fluentd*\",\"timeFieldName\":\"@timestamp\"}}' && curl -s -u elastic:${random_password.efk.result} -X POST 'http://kibana-kibana:5601/api/kibana/settings/defaultIndex' -H 'kbn-xsrf: true' -H 'Content-Type: application/json' -d '{\"value\":\"fluentd\"}' && echo 'Index pattern created and set as default'"
+            ]
+          }]
+        }
+      }
+    }
+  })
+  depends_on = [harness_platform_gitops_applications.fluentd]
+}
