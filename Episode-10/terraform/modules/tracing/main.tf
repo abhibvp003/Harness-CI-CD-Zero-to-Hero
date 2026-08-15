@@ -78,6 +78,10 @@ resource "harness_platform_gitops_applications" "jaeger" {
             value = "jaeger.${var.domain_name}"
           }
           parameters {
+            name  = "jaeger.ingress.pathType"
+            value = "Prefix"
+          }
+          parameters {
             name  = "provisionDataStore.cassandra"
             value = "false"
           }
@@ -164,4 +168,37 @@ resource "harness_platform_gitops_applications" "otel_collector" {
   }
 
   depends_on = [harness_platform_gitops_repository.otel]
+}
+
+# Jaeger Ingress — chart v3.1.1 doesn't create it properly via parameters
+resource "kubectl_manifest" "jaeger_ingress" {
+  yaml_body = yamlencode({
+    apiVersion = "networking.k8s.io/v1"
+    kind       = "Ingress"
+    metadata = {
+      name      = "jaeger-query"
+      namespace = "tracing"
+      annotations = {
+        "konghq.com/strip-path" = "false"
+      }
+    }
+    spec = {
+      ingressClassName = "kong"
+      rules = [{
+        host = "jaeger.${var.domain_name}"
+        http = {
+          paths = [{
+            path     = "/"
+            pathType = "Prefix"
+            backend = {
+              service = {
+                name = "jaeger"
+                port = { number = 16686 }
+              }
+            }
+          }]
+        }
+      }]
+    }
+  })
 }
