@@ -72,6 +72,7 @@ resource "helm_release" "kong" {
           path             = "/"
           annotations = {
             "konghq.com/strip-path" = "false"
+            "konghq.com/plugins"    = "kong-manager-basic-auth"
           }
         }
       }
@@ -396,14 +397,14 @@ resource "kubectl_manifest" "kong_proxy_cache" {
   depends_on = [helm_release.kong]
 }
 
-# Plugin 13: Key Auth — API Key authentication (for external API consumers)
+# Plugin 13: Key Auth — API Key authentication (apply per-route via annotation, not global)
 resource "kubectl_manifest" "kong_key_auth" {
   yaml_body = yamlencode({
     apiVersion = "configuration.konghq.com/v1"
-    kind       = "KongClusterPlugin"
+    kind       = "KongPlugin"
     metadata = {
-      name        = "global-key-auth"
-      annotations = { "kubernetes.io/ingress.class" = "kong" }
+      name      = "global-key-auth"
+      namespace = "kong"
     }
     plugin = "key-auth"
     config = {
@@ -417,14 +418,14 @@ resource "kubectl_manifest" "kong_key_auth" {
   depends_on = [helm_release.kong]
 }
 
-# Plugin 14: ACL (Access Control List) — Group-based access to routes
+# Plugin 14: ACL (Access Control List) — apply per-route via annotation, not global
 resource "kubectl_manifest" "kong_acl" {
   yaml_body = yamlencode({
     apiVersion = "configuration.konghq.com/v1"
-    kind       = "KongClusterPlugin"
+    kind       = "KongPlugin"
     metadata = {
-      name        = "global-acl"
-      annotations = { "kubernetes.io/ingress.class" = "kong" }
+      name      = "global-acl"
+      namespace = "kong"
     }
     plugin = "acl"
     config = {
