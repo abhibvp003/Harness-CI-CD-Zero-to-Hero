@@ -47,7 +47,7 @@ resource "helm_release" "kong" {
         http = { enabled = true, containerPort = 8000, servicePort = 80 }
         tls  = { enabled = true, containerPort = 8000, servicePort = 443 } # NLB decrypts TLS, forwards HTTP to Kong port 8000
       }                                                                    # User browser (HTTPS encrypted) → NLB (decrypts using ACM cert) → Kong pod (receives plain HTTP)
-      #NLB (port 443, ACM cert) → decrypts TLS → forwards HTTP → Kong (port 80)
+      #Browser → HTTPS:443 → NLB (decrypts with ACM cert) → plain HTTP → Kong port 8000 (HTTP)
 
       # Admin API (ClusterIP — only accessible inside cluster for Kong Manager)
       admin = {
