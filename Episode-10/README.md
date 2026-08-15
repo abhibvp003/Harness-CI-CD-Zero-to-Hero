@@ -36,22 +36,21 @@ Episode-10/
 │       ├── eks/                        ← EKS Auto Mode, IAM, KMS, CloudWatch
 │       ├── bastion/                    ← EC2, SSM, kubectl, Helm, SonarQube
 │       ├── ecr/                        ← 11 repos + lifecycle policies
-│       ├── rds/                        ← PostgreSQL + auto-creds in AWS SM
+│       ├── rds/                        ← PostgreSQL 16.3 + auto-creds in AWS SM
 │       ├── delegate/                   ← K8s Delegate (HA + autoscale + RBAC)
-│       ├── kong-gateway/               ← Kong API Gateway (20 plugins) + NLB
-│       ├── external-dns/               ← Auto Route53 records from Ingress
-│       ├── external-secrets/           ← ESO + ClusterSecretStore
+│       ├── kong-gateway/               ← Kong 3.9 OSS (Manager UI, 20 plugins, NLB + ACM TLS)
+│       ├── external-dns/               ← Auto Route53 records from Ingress (Pod Identity)
+│       ├── external-secrets/           ← ESO + ClusterSecretStore (Pod Identity)
 │       ├── gitops/                     ← GitOps Agent + Repo + Cluster + App
 │       ├── harness-platform/           ← Service, Envs, Connectors, OPA, CV
 │       ├── monitoring/                 ← Prometheus + Grafana (Helm via ArgoCD)
-│       ├── logging/                    ← EFK Stack (Helm via ArgoCD)
-│       └── tracing/                    ← Jaeger + OTel Collector (ArgoCD)
+│       ├── logging/                    ← EFK Stack — ES 7.17 (xpack trial auth) + Kibana + Fluentd
+│       └── tracing/                    ← Jaeger 3.1.1 + OTel Collector (ArgoCD)
 │
 ├── k8s/                                ← Helm Chart (ArgoCD syncs to cluster)
 │   ├── Chart.yaml
 │   ├── values.yaml                     ← Image URLs + config (GitOps updates via PR)
-│   ├── templates/                      ← 11 microservices + Redis + Ingress
-│   └── tracing/                        ← OTel Collector config
+│   └── templates/                      ← 11 microservices + Redis + Ingress + ExternalSecrets
 │
 ├── .harness/
 │   └── enterprise-gitops-pipeline.yaml ← CI + Security + AI + GitOps + Verify + Rollback
@@ -120,9 +119,9 @@ Notifications: Slack on success/failure
 | Service | URL | Login |
 |---------|-----|-------|
 | Online Boutique | `https://app.yourdomain.com` | No login |
-| Kong Manager | `https://kong.yourdomain.com` | admin / (from GitHub Secret) |
-| Grafana | `https://grafana.yourdomain.com` | admin / (from GitHub Secret) |
-| Kibana | `https://kibana.yourdomain.com` | elastic / (from GitHub Secret) |
+| Kong Manager | `https://kong.yourdomain.com` | admin / (from AWS SM: `online-boutique/kong-admin-password`) |
+| Grafana | `https://grafana.yourdomain.com` | admin / (from AWS SM: `online-boutique/grafana-password`) |
+| Kibana | `https://kibana.yourdomain.com` | elastic / (from AWS SM: `online-boutique/efk-password`) |
 | Jaeger | `https://jaeger.yourdomain.com` | No login |
 | SonarQube | `http://BASTION-IP:9000` | admin / admin |
 
@@ -158,7 +157,7 @@ Quick start:
 | **Platform** | Harness CI, CD, GitOps, STO, OPA |
 | **Containers** | Docker, Multi-stage Builds, ECR |
 | **Orchestration** | Kubernetes (EKS Auto Mode), Helm |
-| **API Gateway** | Kong Gateway (20 plugins, HA) |
+| **API Gateway** | Kong Gateway 3.9 OSS (20 plugins, Manager UI, HA) |
 | **Infrastructure** | Terraform (14 modules), GitHub Actions |
 | **GitOps** | ArgoCD (via Harness GitOps Agent) |
 | **Database** | RDS PostgreSQL (encrypted, auto-creds) |

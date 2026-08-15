@@ -72,7 +72,6 @@ resource "helm_release" "kong" {
           path             = "/"
           annotations = {
             "konghq.com/strip-path" = "false"
-            "konghq.com/plugins"    = "kong-manager-basic-auth"
           }
         }
       }
@@ -562,7 +561,8 @@ resource "kubectl_manifest" "kong_admin_consumer" {
       namespace   = "kong"
       annotations = { "kubernetes.io/ingress.class" = "kong" }
     }
-    username = "admin"
+    username    = "admin"
+    credentials = ["kong-admin-basic-auth"]
   })
   depends_on = [helm_release.kong]
 }

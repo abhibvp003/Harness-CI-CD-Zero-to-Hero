@@ -19,10 +19,21 @@
 │  └─────────┘  └─────────────┘  └────────────┘  └─────────────────┘  │
 │                                                                       │
 │  ┌─────────────┐  ┌──────────────┐  ┌────────────┐  ┌────────────┐  │
-│  │ Connectors  │  │ OPA Policy   │  │ Monitored  │  │ ALB Ingress│  │
-│  │Prometheus   │  │ + PolicySet  │  │ Service    │  │ Controller │  │
-│  │AWS SM, K8s  │  │ (On Run)     │  │ (CV)       │  │(1 ALB all) │  │
+│  │ Connectors  │  │ OPA Policy   │  │ Monitored  │  │Kong Gateway│  │
+│  │Prometheus   │  │ + PolicySet  │  │ Service    │  │ 3.9 OSS    │  │
+│  │K8s, AWS SM  │  │ (On Run)     │  │ (CV)       │  │NLB + ACM   │  │
 │  └─────────────┘  └──────────────┘  └────────────┘  └────────────┘  │
+│                                                                       │
+├──────────────────────────────────────────────────────────────────────┤
+│  KONG GATEWAY 3.9 (API Gateway + Ingress Controller)                 │
+│                                                                       │
+│  NLB (internet-facing, ACM TLS termination on 443)                   │
+│  ├── kong.domain    → Kong Manager OSS UI (basic-auth protected)     │
+│  ├── grafana.domain → Prometheus + Grafana (login: admin/password)   │
+│  ├── kibana.domain  → Kibana (login: elastic/password via xpack)     │
+│  ├── jaeger.domain  → Jaeger Query UI (open access)                  │
+│  └── app.domain     → Online Boutique Frontend                       │
+│  20 Global Plugins: rate-limit, CORS, Zipkin, bot-detect, JWT, etc.  │
 │                                                                       │
 ├──────────────────────────────────────────────────────────────────────┤
 │  HARNESS ENTERPRISE PIPELINE (Per Code Push)                          │
@@ -57,18 +68,21 @@
 │  └──────────────────────────────────────────────────────────────┘    │
 │                                                                       │
 ├──────────────────────────────────────────────────────────────────────┤
-│  OBSERVABILITY (ArgoCD App-of-Apps — Helm charts)                    │
+│  OBSERVABILITY (ArgoCD Helm Apps — auto-sync + self-heal)            │
 │                                                                       │
-│  Prometheus + Grafana → kube-prometheus-stack Helm (auto-sync)       │
-│  Jaeger              → jaeger Helm chart (auto-sync)                 │
-│  OTel Collector      → Git manifests (auto-sync)                     │
-│  EFK                 → Git manifests (auto-sync)                     │
-│  All via Ingress → 1 ALB → subdomains (grafana., kibana., jaeger.)  │
+│  Prometheus + Grafana → kube-prometheus-stack 62.3.0 (auto-sync)     │
+│  Elasticsearch 7.17   → elastic Helm chart (xpack trial, auth)       │
+│  Kibana 7.17          → elastic Helm chart (native login screen)     │
+│  Fluentd              → fluent Helm chart (DaemonSet, auto-sync)     │
+│  Jaeger 3.1.1         → jaeger Helm chart (badger storage)           │
+│  OTel Collector 0.97  → opentelemetry Helm chart (deployment mode)   │
+│  All via Kong Ingress → 1 NLB → subdomains (grafana., kibana., etc.) │
 │                                                                       │
 ├──────────────────────────────────────────────────────────────────────┤
-│  SECRETS (External Secrets Operator)                                  │
+│  SECRETS (External Secrets Operator + Pod Identity)                   │
 │                                                                       │
 │  AWS Secrets Manager → ESO → K8s Secret → Pods (auto-refresh 1h)   │
+│  Passwords auto-generated: Grafana, EFK, Kong Admin, JWT, RDS        │
 │  No secrets in Git. No Harness runtime resolution needed.            │
 │                                                                       │
 ├──────────────────────────────────────────────────────────────────────┤
@@ -414,9 +428,9 @@ kubectl get pods -n online-boutique
 | Service | URL | Login |
 |---------|-----|-------|
 | Online Boutique | `https://app.yourdomain.com` | No login |
-| Kong Manager | `https://kong.yourdomain.com` | admin / (see AWS SM: `online-boutique/kong-admin-password`) |
+| Kong Manager | `https://kong.yourdomain.com` | admin / (see AWS SM: `online-boutique/kong-admin-password`) — Basic Auth prompt |
 | Grafana | `https://grafana.yourdomain.com` | admin / (see AWS SM: `online-boutique/grafana-password`) |
-| Kibana | `https://kibana.yourdomain.com` | elastic / (see AWS SM: `online-boutique/efk-password`) |
+| Kibana | `https://kibana.yourdomain.com` | elastic / (see AWS SM: `online-boutique/efk-password`) — Native xpack login |
 | Jaeger | `https://jaeger.yourdomain.com` | No login |
 | SonarQube | `http://BASTION-IP:9000` | admin / admin |
 
