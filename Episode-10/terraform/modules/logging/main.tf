@@ -269,29 +269,31 @@ resource "harness_platform_gitops_applications" "fluentd" {
                   @id filter_kube_metadata
                 </filter>
               04_outputs.conf: |-
-                <match **>
-                  @type elasticsearch
-                  @id out_es
-                  host elasticsearch-master
-                  port 9200
-                  user elastic
-                  password ${random_password.efk.result}
-                  scheme http
-                  logstash_format true
-                  logstash_prefix fluentd
-                  include_tag_key true
-                  <buffer>
-                    @type file
-                    path /var/log/fluentd-buffers/kubernetes.system.buffer
-                    flush_mode interval
-                    flush_interval 5s
-                    retry_type exponential_backoff
-                    retry_max_interval 30
-                    chunk_limit_size 2M
-                    queue_limit_length 8
-                    overflow_action block
-                  </buffer>
-                </match>
+                <label @OUTPUT>
+                  <match **>
+                    @type elasticsearch
+                    @id out_es
+                    host elasticsearch-master
+                    port 9200
+                    user elastic
+                    password ${random_password.efk.result}
+                    scheme http
+                    logstash_format true
+                    logstash_prefix fluentd
+                    include_tag_key true
+                    <buffer>
+                      @type file
+                      path /var/log/fluentd-buffers/kubernetes.system.buffer
+                      flush_mode interval
+                      flush_interval 5s
+                      retry_type exponential_backoff
+                      retry_max_interval 30
+                      chunk_limit_size 2M
+                      queue_limit_length 8
+                      overflow_action block
+                    </buffer>
+                  </match>
+                </label>
           EOT
         }
       }
