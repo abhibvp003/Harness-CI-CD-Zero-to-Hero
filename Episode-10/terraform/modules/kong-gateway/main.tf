@@ -64,6 +64,7 @@ resource "helm_release" "kong" {
         enabled = true
         type    = "ClusterIP"
         http    = { enabled = true, containerPort = 8002 }
+        tls     = { enabled = false }
         ingress = {
           enabled          = true
           ingressClassName = "kong"
