@@ -121,7 +121,7 @@ resource "kubectl_manifest" "kong_rate_limit" {
     }
     plugin = "rate-limiting"
     config = {
-      minute              = 100
+      minute              = 1000
       policy              = "local"
       fault_tolerant      = true
       hide_client_headers = false
