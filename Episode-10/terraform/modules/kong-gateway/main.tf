@@ -111,14 +111,52 @@ resource "helm_release" "kong" {
         # Real IP header from NLB
         real_ip_header    = "X-Forwarded-For"
         real_ip_recursive = "on"
-        # Kong Manager OSS — tells Manager its public URL
-        admin_gui_url  = "https://kong.${var.domain_name}"
-        admin_gui_path = "/"
+        # Kong Manager OSS — tells Manager its public URL + Admin API endpoint
+        admin_gui_url     = "https://kong.${var.domain_name}"
+        admin_gui_path    = "/"
+        admin_gui_api_url = "https://kong.${var.domain_name}/admin-api"
         # Override proxy_listen — both ports accept plain HTTP (NLB handles TLS termination)
         proxy_listen = "0.0.0.0:8000 reuseport backlog=16384, 0.0.0.0:8443 reuseport backlog=16384"
       }
     })
   ]
+}
+
+# ═══════════════════════════════════════════════════════════════════
+# Admin API Ingress — exposes Admin API at /admin-api for Kong Manager UI
+# Manager's JavaScript calls this from browser to fetch routes/plugins/etc.
+# ═══════════════════════════════════════════════════════════════════
+resource "kubectl_manifest" "kong_admin_ingress" {
+  yaml_body = yamlencode({
+    apiVersion = "networking.k8s.io/v1"
+    kind       = "Ingress"
+    metadata = {
+      name      = "kong-admin-api"
+      namespace = "kong"
+      annotations = {
+        "konghq.com/strip-path" = "true"
+      }
+    }
+    spec = {
+      ingressClassName = "kong"
+      rules = [{
+        host = "kong.${var.domain_name}"
+        http = {
+          paths = [{
+            path     = "/admin-api"
+            pathType = "Prefix"
+            backend = {
+              service = {
+                name = "kong-kong-admin"
+                port = { number = 8001 }
+              }
+            }
+          }]
+        }
+      }]
+    }
+  })
+  depends_on = [helm_release.kong]
 }
 
 # ═══════════════════════════════════════════════════════════════════
