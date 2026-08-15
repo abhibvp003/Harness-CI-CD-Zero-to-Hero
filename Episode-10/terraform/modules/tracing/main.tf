@@ -193,7 +193,7 @@ resource "kubectl_manifest" "jaeger_ingress" {
             backend = {
               service = {
                 name = "jaeger-query"
-                port = { number = 16686 }
+                port = { number = 80 }
               }
             }
           }]
