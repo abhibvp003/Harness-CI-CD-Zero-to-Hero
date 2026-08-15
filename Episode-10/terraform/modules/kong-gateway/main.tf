@@ -44,9 +44,9 @@ resource "helm_release" "kong" {
           "service.beta.kubernetes.io/aws-load-balancer-ssl-ports"        = "443"
           "service.beta.kubernetes.io/aws-load-balancer-backend-protocol" = "http"
         }
-        http = { enabled = true } # Kong listens on HTTP port 80
-        tls  = { enabled = true } # Exposes port 443 on Service for NLB SSL termination
-      }                           # User browser (HTTPS encrypted) → NLB (decrypts using ACM cert) → Kong pod (receives plain HTTP)
+        http = { enabled = true, containerPort = 8000, servicePort = 80 }
+        tls  = { enabled = true, containerPort = 8000, servicePort = 443 } # NLB decrypts TLS, forwards HTTP to Kong port 8000
+      }                                                                    # User browser (HTTPS encrypted) → NLB (decrypts using ACM cert) → Kong pod (receives plain HTTP)
       #NLB (port 443, ACM cert) → decrypts TLS → forwards HTTP → Kong (port 80)
 
       # Admin API (ClusterIP — only accessible inside cluster for Kong Manager)
