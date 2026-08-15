@@ -251,23 +251,6 @@ resource "harness_platform_gitops_applications" "fluentd" {
           }
           values = <<-EOT
             fileConfigs:
-              01_sources.conf: |-
-                <source>
-                  @type tail
-                  @id in_tail_container_logs
-                  path /var/log/containers/*.log
-                  pos_file /var/log/fluentd-containers.log.pos
-                  tag kubernetes.*
-                  read_from_head true
-                  <parse>
-                    @type cri
-                  </parse>
-                </source>
-              02_filters.conf: |-
-                <filter kubernetes.**>
-                  @type kubernetes_metadata
-                  @id filter_kube_metadata
-                </filter>
               04_outputs.conf: |-
                 <label @OUTPUT>
                   <match **>
