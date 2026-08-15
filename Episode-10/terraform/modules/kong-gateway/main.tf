@@ -45,14 +45,10 @@ resource "helm_release" "kong" {
           "service.beta.kubernetes.io/aws-load-balancer-backend-protocol" = "http"
         }
         http = { enabled = true, containerPort = 8000, servicePort = 80 }
-        tls = {
-          enabled       = true
-          containerPort = 8443
-          servicePort   = 443
-          parameters    = ["http"]
-        }
+        tls  = { enabled = true, containerPort = 8443, servicePort = 443 }
       }
-      # NLB terminates TLS on port "kong-proxy-tls" (443), forwards HTTP to Kong 8443 which listens as HTTP (parameters: http)
+      # NLB listens on 443 (TLS terminated via ACM), forwards decrypted HTTP to Kong 8443
+      # Kong 8443 is the default TLS listener but NLB sends plain HTTP — works because backend-protocol=http
 
       # Admin API (ClusterIP — controller sidecar connects via HTTPS 8444 internally)
       admin = {
@@ -114,9 +110,11 @@ resource "helm_release" "kong" {
         # Real IP header from NLB
         real_ip_header    = "X-Forwarded-For"
         real_ip_recursive = "on"
-        # Kong Manager OSS — tells Manager its public URL + where Admin API is reachable
+        # Kong Manager OSS — tells Manager its public URL
         admin_gui_url  = "https://kong.${var.domain_name}"
         admin_gui_path = "/"
+        # Override proxy_listen — both ports accept plain HTTP (NLB handles TLS termination)
+        proxy_listen = "0.0.0.0:8000 reuseport backlog=16384, 0.0.0.0:8443 reuseport backlog=16384"
       }
     })
   ]
