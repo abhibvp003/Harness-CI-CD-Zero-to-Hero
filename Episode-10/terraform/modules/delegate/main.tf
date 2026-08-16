@@ -86,6 +86,3 @@ resource "kubernetes_cluster_role_binding" "delegate" {
   }
 }
 
-# Note: EKS Auto Mode manages its own NodePools (general-purpose, system)
-# Custom NodePools are not supported in Auto Mode
-# CI pods schedule on general-purpose xlarge nodes (c6a.xlarge has 3770m CPU)
