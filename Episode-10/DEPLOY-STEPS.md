@@ -262,6 +262,7 @@ After `terraform apply`, **ExternalDNS automatically creates Route53 records** w
 | **Bastion** | EC2 (t2.medium), SSM access, kubectl, Helm, Docker, SonarQube |
 | **RDS** | PostgreSQL 16.3 (private subnet, encrypted, credentials auto-stored in AWS SM) |
 | **Delegate** | K8s Delegate (HA — 2 replicas, autoscale to 6, 2Gi-4Gi memory) |
+| **CI NodePool** | Karpenter NodePool `ci-builds` (xlarge/2xlarge instances, auto-scales to 64 CPU, auto-terminates when idle) |
 | **GitOps Agent** | ArgoCD (HA — controller×2, repo-server×2→5, server×2→4, redis×2) |
 | **ECR** | 11 repositories + lifecycle policy (delete untagged after 7 days) |
 | **ALB Controller** | AWS Load Balancer Controller (1 shared ALB for all services) |
@@ -278,9 +279,23 @@ After `terraform apply`, **ExternalDNS automatically creates Route53 records** w
 
 ---
 
-## Step 5: Verify in Harness UI
+## Step 5: Verify in Harness UI + Cluster
 
 After Terraform completes, verify everything appeared:
+
+**5.0 — CI NodePool (run on Bastion via SSM):**
+```bash
+# Verify CI NodePool exists (dedicated xlarge nodes for pipeline builds)
+kubectl get nodepools
+
+# Expected output:
+# NAME              READY
+# general-purpose   True
+# system            True
+# ci-builds         True    ← Dedicated for CI builds (xlarge/2xlarge instances)
+```
+
+> If `ci-builds` doesn't appear, re-run terraform apply. The CI NodePool provisions xlarge instances (4-8 vCPU) on-demand when Harness pipelines run, and auto-terminates nodes 2 minutes after builds complete (cost = $0 when idle).
 
 **5.1 — Delegate:**
 1. Go to **Project Settings → Delegates**
