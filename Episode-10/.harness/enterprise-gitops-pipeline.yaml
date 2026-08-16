@@ -24,19 +24,12 @@ pipeline:
     # Builds run on YOUR EKS cluster (code never leaves VPC)
     # ============================================
     - stage:
-        name: build-and-push
-        identifier: build_and_push
-        description: "Build microservice images and push to ECR"
+        name: security-scans
+        identifier: security_scans
+        description: "DevSecOps security scanning (Gitleaks, Trivy, OWASP, SonarQube)"
         type: CI
         spec:
           cloneCodebase: true
-          caching:
-            enabled: true
-            paths:
-              - /root/.cache/go-build
-              - /root/go/pkg/mod
-              - /root/.npm
-              - /root/.gradle/caches
           infrastructure:
             type: KubernetesDirect
             spec:
@@ -44,10 +37,8 @@ pipeline:
               namespace: harness-delegate-ng
               automountServiceAccountToken: true
               os: Linux
-              initTimeout: 25m
           execution:
             steps:
-              # Security scans (Episode 5 — DevSecOps)
               - parallel:
                   - step:
                       type: Run
@@ -104,6 +95,32 @@ pipeline:
                             -Dsonar.host.url=$SONAR_HOST_URL \
                             -Dsonar.login=$SONAR_TOKEN || true
 
+    # ============================================
+    # STAGE 1b: Build & Push to ECR (separate stage — smaller pod fits on existing nodes)
+    # ============================================
+    - stage:
+        name: build-and-push
+        identifier: build_and_push
+        description: "Build 11 microservice images and push to ECR"
+        type: CI
+        spec:
+          cloneCodebase: true
+          caching:
+            enabled: true
+            paths:
+              - /root/.cache/go-build
+              - /root/go/pkg/mod
+              - /root/.npm
+              - /root/.gradle/caches
+          infrastructure:
+            type: KubernetesDirect
+            spec:
+              connectorRef: k8sdelegate
+              namespace: harness-delegate-ng
+              automountServiceAccountToken: true
+              os: Linux
+          execution:
+            steps:
               # Build and push all microservices (Episode 4 — parallel ECR push)
               - parallel:
                   - step:
@@ -279,7 +296,7 @@ pipeline:
               namespace: harness-delegate-ng
               automountServiceAccountToken: true
               os: Linux
-              initTimeout: 25m
+
           execution:
             steps:
               - step:
@@ -316,7 +333,7 @@ pipeline:
               namespace: harness-delegate-ng
               automountServiceAccountToken: true
               os: Linux
-              initTimeout: 25m
+
           execution:
             steps:
               - step:
