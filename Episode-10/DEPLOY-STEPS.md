@@ -283,21 +283,41 @@ After `terraform apply`, **ExternalDNS automatically creates Route53 records** w
 
 After Terraform completes, verify everything appeared:
 
-**5.0 — CI NodePool (run on Bastion via SSM):**
+**5.0 — EKS Cluster Verification (run on Bastion via SSM):**
 ```bash
-# Verify CI NodePool exists (dedicated xlarge nodes for pipeline builds)
-kubectl get nodepools
+# Connect to EKS
+aws eks update-kubeconfig --name ep10-enterprise-cluster --region us-east-1
 
-# Expected output:
-# NAME              READY
-# general-purpose   True
-# system            True
-# ci-builds         True    ← Dedicated for CI builds (xlarge/2xlarge instances)
-kubectl get nodeclaims
+# Verify nodes are ready (should see 4 nodes: 3 workload + 1 CI)
+kubectl get nodes -o wide
 
+# Verify node groups with labels
+kubectl get nodes -L role,purpose
+
+# Expected:
+# NAME          STATUS   ROLES    AGE   VERSION   ROLE        PURPOSE
+# ip-10-0-...   Ready    <none>   5m    v1.31     workloads
+# ip-10-0-...   Ready    <none>   5m    v1.31     workloads
+# ip-10-0-...   Ready    <none>   5m    v1.31     workloads
+# ip-10-0-...   Ready    <none>   5m    v1.31                 ci-builds
+
+# Verify AWS Load Balancer Controller is running
+kubectl get pods -n kube-system -l app.kubernetes.io/name=aws-load-balancer-controller
+
+# Verify Cluster Autoscaler is running
+kubectl get pods -n kube-system -l app.kubernetes.io/name=aws-cluster-autoscaler
+
+# Verify EBS CSI Driver is running
+kubectl get pods -n kube-system -l app=ebs-csi-controller
+
+# Verify Pod Identity Agent is running
+kubectl get pods -n kube-system -l app.kubernetes.io/name=eks-pod-identity-agent
+
+# Verify all EKS addons are ACTIVE
+aws eks list-addons --cluster-name ep10-enterprise-cluster --region us-east-1
 ```
 
-> If `ci-builds` doesn't appear, re-run terraform apply. The CI NodePool provisions xlarge instances (4-8 vCPU) on-demand when Harness pipelines run, and auto-terminates nodes 2 minutes after builds complete (cost = $0 when idle).
+> All pods should be Running. If any are Pending/CrashLoop, check `kubectl describe pod <pod-name> -n kube-system` for the reason.
 
 **5.1 — Delegate:**
 1. Go to **Project Settings → Delegates**
