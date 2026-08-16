@@ -44,11 +44,7 @@ pipeline:
               namespace: harness-delegate-ng
               automountServiceAccountToken: true
               os: Linux
-              initTimeout: 20m
-              tolerations:
-                - key: "CriticalAddonsOnly"
-                  operator: "Exists"
-                  effect: "NoSchedule"
+              initTimeout: 25m
           execution:
             steps:
               # Security scans (Episode 5 — DevSecOps)
