@@ -102,8 +102,7 @@ resource "kubectl_manifest" "ci_nodepool" {
       template = {
         metadata = {
           labels = {
-            "karpenter.sh/nodepool" = "ci-builds"
-            "purpose"               = "ci"
+            "purpose" = "ci"
           }
         }
         spec = {
