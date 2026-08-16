@@ -46,7 +46,7 @@ pipeline:
               os: Linux
               initTimeout: 25m
               nodeSelector:
-                karpenter.sh/nodepool: general-purpose
+                karpenter.sh/nodepool: ci-builds
               tolerations:
                 - effect: NoSchedule
                   key: CriticalAddonsOnly
@@ -287,7 +287,7 @@ pipeline:
               os: Linux
               initTimeout: 25m
               nodeSelector:
-                karpenter.sh/nodepool: general-purpose
+                karpenter.sh/nodepool: ci-builds
               tolerations:
                 - effect: NoSchedule
                   key: CriticalAddonsOnly
@@ -330,7 +330,7 @@ pipeline:
               os: Linux
               initTimeout: 25m
               nodeSelector:
-                karpenter.sh/nodepool: general-purpose
+                karpenter.sh/nodepool: ci-builds
               tolerations:
                 - effect: NoSchedule
                   key: CriticalAddonsOnly

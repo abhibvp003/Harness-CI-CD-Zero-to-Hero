@@ -85,3 +85,51 @@ resource "kubernetes_cluster_role_binding" "delegate" {
     namespace = "harness-delegate-ng"
   }
 }
+
+# ═══════════════════════════════════════════════════════════════════
+# CI NodePool — Dedicated Karpenter NodePool for CI build pods
+# Allows xlarge instances (4+ vCPU) so build pods fit without issues
+# Production pattern: separate compute for CI vs application workloads
+# ═══════════════════════════════════════════════════════════════════
+resource "kubectl_manifest" "ci_nodepool" {
+  yaml_body = yamlencode({
+    apiVersion = "karpenter.sh/v1"
+    kind       = "NodePool"
+    metadata = {
+      name = "ci-builds"
+    }
+    spec = {
+      template = {
+        metadata = {
+          labels = {
+            "karpenter.sh/nodepool" = "ci-builds"
+            "purpose"               = "ci"
+          }
+        }
+        spec = {
+          nodeClassRef = {
+            group = "eks.amazonaws.com"
+            kind  = "NodeClass"
+            name  = "default"
+          }
+          requirements = [
+            { key = "kubernetes.io/arch", operator = "In", values = ["amd64"] },
+            { key = "kubernetes.io/os", operator = "In", values = ["linux"] },
+            { key = "karpenter.sh/capacity-type", operator = "In", values = ["on-demand"] },
+            { key = "eks.amazonaws.com/instance-category", operator = "In", values = ["c", "m"] },
+            { key = "eks.amazonaws.com/instance-generation", operator = "Gt", values = ["4"] },
+            { key = "node.kubernetes.io/instance-type", operator = "In", values = ["c5.xlarge", "c5.2xlarge", "c6a.xlarge", "c6a.2xlarge", "m5.xlarge", "m5.2xlarge", "m5a.xlarge", "m5a.2xlarge", "c5a.xlarge", "c5a.2xlarge", "m6a.xlarge", "m6a.2xlarge"] }
+          ]
+        }
+      }
+      limits = {
+        cpu    = "64"
+        memory = "128Gi"
+      }
+      disruption = {
+        consolidationPolicy = "WhenEmpty"
+        consolidateAfter    = "2m"
+      }
+    }
+  })
+}
