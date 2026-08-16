@@ -209,6 +209,11 @@ resource "aws_eks_node_group" "workloads" {
     max_unavailable = 1
   }
 
+  launch_template {
+    id      = aws_launch_template.workloads.id
+    version = aws_launch_template.workloads.latest_version
+  }
+
   labels = {
     role = "workloads"
   }
@@ -220,6 +225,18 @@ resource "aws_eks_node_group" "workloads" {
   })
 
   depends_on = [aws_iam_role_policy_attachment.node_policies]
+}
+
+resource "aws_launch_template" "workloads" {
+  name_prefix = "${var.cluster_name}-workloads-"
+  tag_specifications {
+    resource_type = "instance"
+    tags          = merge(var.tags, { Name = "${var.cluster_name}-workloads" })
+  }
+  tag_specifications {
+    resource_type = "volume"
+    tags          = merge(var.tags, { Name = "${var.cluster_name}-workloads" })
+  }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -245,6 +262,11 @@ resource "aws_eks_node_group" "ci" {
     max_unavailable = 1
   }
 
+  launch_template {
+    id      = aws_launch_template.ci.id
+    version = aws_launch_template.ci.latest_version
+  }
+
   labels = {
     purpose = "ci-builds"
   }
@@ -256,6 +278,18 @@ resource "aws_eks_node_group" "ci" {
   })
 
   depends_on = [aws_iam_role_policy_attachment.node_policies]
+}
+
+resource "aws_launch_template" "ci" {
+  name_prefix = "${var.cluster_name}-ci-builds-"
+  tag_specifications {
+    resource_type = "instance"
+    tags          = merge(var.tags, { Name = "${var.cluster_name}-ci-builds" })
+  }
+  tag_specifications {
+    resource_type = "volume"
+    tags          = merge(var.tags, { Name = "${var.cluster_name}-ci-builds" })
+  }
 }
 
 # ═══════════════════════════════════════════════════════════════════
