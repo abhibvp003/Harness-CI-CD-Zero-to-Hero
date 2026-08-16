@@ -148,3 +148,29 @@ resource "aws_eks_cluster" "main" {
   tags = merge(var.tags, { Name = var.cluster_name })
 }
 
+
+# ═══════════════════════════════════════════════════════════════════
+# Managed Node Group for CI Builds — dedicated, no taints, always available
+# Production pattern: separates CI compute from application workloads
+# ═══════════════════════════════════════════════════════════════════
+resource "aws_eks_node_group" "ci" {
+  cluster_name    = aws_eks_cluster.main.name
+  node_group_name = "${var.cluster_name}-ci-builds"
+  node_role_arn   = aws_iam_role.eks_nodes.arn
+  subnet_ids      = var.subnet_ids
+
+  instance_types = ["m5.xlarge", "m5a.xlarge", "c5.xlarge", "c5a.xlarge"]
+  capacity_type  = "ON_DEMAND"
+
+  scaling_config {
+    desired_size = 1
+    min_size     = 1
+    max_size     = 3
+  }
+
+  labels = {
+    purpose = "ci-builds"
+  }
+
+  tags = merge(var.tags, { Name = "${var.cluster_name}-ci-node-group" })
+}

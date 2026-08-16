@@ -37,6 +37,8 @@ pipeline:
               namespace: harness-delegate-ng
               automountServiceAccountToken: true
               os: Linux
+              nodeSelector:
+                purpose: ci-builds
           execution:
             steps:
               - parallel:
@@ -119,6 +121,8 @@ pipeline:
               namespace: harness-delegate-ng
               automountServiceAccountToken: true
               os: Linux
+              nodeSelector:
+                purpose: ci-builds
           execution:
             steps:
               # Build and push all microservices (Episode 4 — parallel ECR push)
@@ -296,7 +300,8 @@ pipeline:
               namespace: harness-delegate-ng
               automountServiceAccountToken: true
               os: Linux
-
+              nodeSelector:
+                purpose: ci-builds
           execution:
             steps:
               - step:
@@ -333,7 +338,8 @@ pipeline:
               namespace: harness-delegate-ng
               automountServiceAccountToken: true
               os: Linux
-
+              nodeSelector:
+                purpose: ci-builds
           execution:
             steps:
               - step:
