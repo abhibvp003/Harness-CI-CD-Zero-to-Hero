@@ -21,8 +21,8 @@ resource "helm_release" "kong" {
   create_namespace = true
   version          = "2.39.3"
   skip_crds        = false # Helm installs CRDs from crds/ directory on fresh deploy
-  wait             = false # NLB takes 15+ min on EKS Auto Mode, dont block pipeline
-  timeout          = 1200  # 20 min — EKS Auto Mode provisions nodes from zero on fresh deploy
+  wait             = false
+  timeout          = 1200
   values = [
     yamlencode({
       # Ingress Controller

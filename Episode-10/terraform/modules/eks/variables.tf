@@ -28,3 +28,8 @@ variable "tags" {
   type    = map(string)
   default = {}
 }
+
+# AWS region for LB Controller and Cluster Autoscaler
+variable "region" {
+  type = string
+}
