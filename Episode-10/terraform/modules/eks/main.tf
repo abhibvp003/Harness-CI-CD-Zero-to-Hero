@@ -292,9 +292,32 @@ resource "aws_iam_policy" "lb_controller" {
   })
 }
 
+# IAM role for LB Controller (Pod Identity)
+resource "aws_iam_role" "lb_controller" {
+  name = "${var.cluster_name}-lb-controller-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Principal = {
+        Service = "pods.eks.amazonaws.com"
+      }
+      Action = ["sts:AssumeRole", "sts:TagSession"]
+    }]
+  })
+}
+
 resource "aws_iam_role_policy_attachment" "lb_controller" {
   policy_arn = aws_iam_policy.lb_controller.arn
-  role       = aws_iam_role.eks_nodes.name
+  role       = aws_iam_role.lb_controller.name
+}
+
+resource "aws_eks_pod_identity_association" "lb_controller" {
+  cluster_name    = aws_eks_cluster.main.name
+  namespace       = "kube-system"
+  service_account = "aws-load-balancer-controller"
+  role_arn        = aws_iam_role.lb_controller.arn
+  depends_on      = [aws_eks_addon.pod_identity_agent]
 }
 
 resource "helm_release" "aws_lb_controller" {
@@ -348,9 +371,32 @@ resource "aws_iam_policy" "cluster_autoscaler" {
   })
 }
 
+# IAM role for Cluster Autoscaler (Pod Identity)
+resource "aws_iam_role" "cluster_autoscaler" {
+  name = "${var.cluster_name}-autoscaler-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Principal = {
+        Service = "pods.eks.amazonaws.com"
+      }
+      Action = ["sts:AssumeRole", "sts:TagSession"]
+    }]
+  })
+}
+
 resource "aws_iam_role_policy_attachment" "cluster_autoscaler" {
   policy_arn = aws_iam_policy.cluster_autoscaler.arn
-  role       = aws_iam_role.eks_nodes.name
+  role       = aws_iam_role.cluster_autoscaler.name
+}
+
+resource "aws_eks_pod_identity_association" "cluster_autoscaler" {
+  cluster_name    = aws_eks_cluster.main.name
+  namespace       = "kube-system"
+  service_account = "cluster-autoscaler-aws-cluster-autoscaler"
+  role_arn        = aws_iam_role.cluster_autoscaler.arn
+  depends_on      = [aws_eks_addon.pod_identity_agent]
 }
 
 resource "helm_release" "cluster_autoscaler" {
