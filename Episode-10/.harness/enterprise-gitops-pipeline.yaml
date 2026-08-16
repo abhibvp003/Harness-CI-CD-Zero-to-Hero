@@ -45,10 +45,8 @@ pipeline:
               automountServiceAccountToken: true
               os: Linux
               initTimeout: 25m
-              tolerations:
-                - effect: NoSchedule
-                  key: CriticalAddonsOnly
-                  operator: Exists
+              nodeSelector:
+                karpenter.sh/nodepool: general-purpose
           execution:
             steps:
               # Security scans (Episode 5 — DevSecOps)
@@ -284,10 +282,8 @@ pipeline:
               automountServiceAccountToken: true
               os: Linux
               initTimeout: 25m
-              tolerations:
-                - effect: NoSchedule
-                  key: CriticalAddonsOnly
-                  operator: Exists
+              nodeSelector:
+                karpenter.sh/nodepool: general-purpose
           execution:
             steps:
               - step:
@@ -325,10 +321,8 @@ pipeline:
               automountServiceAccountToken: true
               os: Linux
               initTimeout: 25m
-              tolerations:
-                - effect: NoSchedule
-                  key: CriticalAddonsOnly
-                  operator: Exists
+              nodeSelector:
+                karpenter.sh/nodepool: general-purpose
           execution:
             steps:
               - step:
