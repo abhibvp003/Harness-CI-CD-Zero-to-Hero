@@ -293,6 +293,8 @@ kubectl get nodepools
 # general-purpose   True
 # system            True
 # ci-builds         True    ← Dedicated for CI builds (xlarge/2xlarge instances)
+kubectl get nodeclaims
+
 ```
 
 > If `ci-builds` doesn't appear, re-run terraform apply. The CI NodePool provisions xlarge instances (4-8 vCPU) on-demand when Harness pipelines run, and auto-terminates nodes 2 minutes after builds complete (cost = $0 when idle).
