@@ -365,7 +365,6 @@ pipeline:
                 spec:
                   artifacts:
                     primary:
-                      primaryArtifactRef: ecr_frontend
                       sources:
                         - identifier: ecr_frontend
                           type: Ecr
