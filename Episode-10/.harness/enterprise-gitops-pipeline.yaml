@@ -39,6 +39,10 @@ pipeline:
               os: Linux
               nodeSelector:
                 purpose: ci-builds
+              tolerations:
+                - key: dedicated
+                  value: ci-builds
+                  effect: NoSchedule
           execution:
             steps:
               - parallel:
@@ -123,6 +127,10 @@ pipeline:
               os: Linux
               nodeSelector:
                 purpose: ci-builds
+              tolerations:
+                - key: dedicated
+                  value: ci-builds
+                  effect: NoSchedule
           execution:
             steps:
               # Build and push all microservices (Episode 4 — parallel ECR push)
@@ -302,6 +310,10 @@ pipeline:
               os: Linux
               nodeSelector:
                 purpose: ci-builds
+              tolerations:
+                - key: dedicated
+                  value: ci-builds
+                  effect: NoSchedule
           execution:
             steps:
               - step:
@@ -340,6 +352,10 @@ pipeline:
               os: Linux
               nodeSelector:
                 purpose: ci-builds
+              tolerations:
+                - key: dedicated
+                  value: ci-builds
+                  effect: NoSchedule
           execution:
             steps:
               - step:

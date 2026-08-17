@@ -262,6 +262,12 @@ resource "aws_eks_node_group" "ci" {
     max_unavailable = 1
   }
 
+  taint {
+    key    = "dedicated"
+    value  = "ci-builds"
+    effect = "NO_SCHEDULE"
+  }
+
   launch_template {
     id      = aws_launch_template.ci.id
     version = aws_launch_template.ci.latest_version
