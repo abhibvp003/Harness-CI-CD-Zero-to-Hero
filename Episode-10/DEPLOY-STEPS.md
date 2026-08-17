@@ -151,7 +151,19 @@
 
 ## Prerequisites (New for Episode 10 — Already Configured)
 
-### A. Domain + Route53 + ACM Certificate
+### A. AWS vCPU Quota Increase (REQUIRED)
+
+> **Without this, Terraform apply will fail** when creating the CI node group.
+
+1. Go to **AWS Console** → **Service Quotas** → **EC2**: https://console.aws.amazon.com/servicequotas/home/services/ec2/quotas/L-1216C47A
+4. Click **"Request increase at account level"**
+5. Set value to **32** (default is 5 or 16, we need at least 20)
+6. Click **Request**
+7. Wait for approval (usually 5-30 minutes for small increases)
+
+> **Why?** The EKS cluster uses ~16 vCPUs total (3 workload nodes + 1 CI node + 1 bastion). The default AWS limit of 5-16 vCPUs is not enough. Every production AWS account needs this increase.
+
+### B. Domain + Route53 + ACM Certificate
 
 > These are already configured and will be reused for this project. No action needed.
 
