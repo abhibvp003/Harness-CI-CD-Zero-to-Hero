@@ -133,7 +133,7 @@ pipeline:
                   effect: NoSchedule
           execution:
             steps:
-              # Build and push all microservices (Episode 4 — parallel ECR push)
+              # Build and push all microservices (2 per batch — fits on t3a.xlarge 16GB)
               - parallel:
                   - step:
                       type: BuildAndPushECR
@@ -163,6 +163,7 @@ pipeline:
                         dockerfile: Episode-10/src/cartservice/src/Dockerfile
                         context: Episode-10/src/cartservice/src
 
+              - parallel:
                   - step:
                       type: BuildAndPushECR
                       name: Push CheckoutService
@@ -220,6 +221,7 @@ pipeline:
                         dockerfile: Episode-10/src/emailservice/Dockerfile
                         context: Episode-10/src/emailservice
 
+              - parallel:
                   - step:
                       type: BuildAndPushECR
                       name: Push PaymentService
@@ -277,19 +279,19 @@ pipeline:
                         dockerfile: Episode-10/src/adservice/Dockerfile
                         context: Episode-10/src/adservice
 
-                  - step:
-                      type: BuildAndPushECR
-                      name: Push LoadGenerator
-                      identifier: push_loadgenerator
-                      spec:
-                        connectorRef: account.aws_account
-                        region: <+variable.aws_region>
-                        account: <+variable.aws_account_id>
-                        imageName: loadgenerator
-                        tags:
-                          - v<+pipeline.sequenceId>
-                        dockerfile: Episode-10/src/loadgenerator/Dockerfile
-                        context: Episode-10/src/loadgenerator
+              - step:
+                  type: BuildAndPushECR
+                  name: Push LoadGenerator
+                  identifier: push_loadgenerator
+                  spec:
+                    connectorRef: account.aws_account
+                    region: <+variable.aws_region>
+                    account: <+variable.aws_account_id>
+                    imageName: loadgenerator
+                    tags:
+                      - v<+pipeline.sequenceId>
+                    dockerfile: Episode-10/src/loadgenerator/Dockerfile
+                    context: Episode-10/src/loadgenerator
 
     # ============================================
     # STAGE 2: AI Security Agent
