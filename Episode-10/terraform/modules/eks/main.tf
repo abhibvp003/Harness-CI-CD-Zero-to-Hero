@@ -249,7 +249,7 @@ resource "aws_eks_node_group" "ci" {
   node_role_arn   = aws_iam_role.eks_nodes.arn
   subnet_ids      = var.subnet_ids
 
-  instance_types = ["t3a.xlarge", "t3.xlarge", "m5a.xlarge"]
+  instance_types = ["m5a.2xlarge", "m5.2xlarge", "t3a.2xlarge"]
   capacity_type  = "ON_DEMAND"
 
   scaling_config {
