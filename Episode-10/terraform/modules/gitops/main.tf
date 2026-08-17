@@ -49,7 +49,6 @@ resource "local_file" "gitops_agent_yaml" {
 resource "null_resource" "install_gitops_agent" {
   triggers = {
     agent_id = harness_platform_gitops_agent.agent.identifier
-    yaml_sha = sha256(local_file.gitops_agent_yaml.content)
   }
 
   provisioner "local-exec" {
