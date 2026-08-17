@@ -161,7 +161,13 @@
 6. Click **Request**
 7. Wait for approval (usually 5-30 minutes for small increases)
 
-> **Why?** The EKS cluster uses ~16 vCPUs total (3 workload nodes + 1 CI node + 1 bastion). The default AWS limit of 5-16 vCPUs is not enough. Every production AWS account needs this increase.
+> **Why?** The EKS cluster uses ~12 vCPUs total:
+> - Workloads: 3 × t3a.large = 6 vCPU
+> - Bastion: 1 × t2.medium = 2 vCPU
+> - CI Builds: 1 × t3a.xlarge = 4 vCPU
+> - **Total: 12 vCPU** (20 vCPU headroom for autoscaling)
+>
+> The default AWS limit of 5-16 vCPUs is not enough. Every production AWS account needs this increase.
 
 ### B. Domain + Route53 + ACM Certificate
 
