@@ -291,6 +291,11 @@ resource "harness_platform_gitops_applications" "fluentd" {
 }
 
 # Auto-create Kibana index pattern (runs once after Fluentd starts writing logs)
+resource "kubernetes_namespace" "logging" {
+  metadata { name = "logging" }
+  lifecycle { ignore_changes = all }
+}
+
 resource "kubectl_manifest" "kibana_index_pattern_job" {
   yaml_body = yamlencode({
     apiVersion = "batch/v1"
@@ -317,5 +322,5 @@ resource "kubectl_manifest" "kibana_index_pattern_job" {
       }
     }
   })
-  depends_on = [harness_platform_gitops_applications.fluentd]
+  depends_on = [harness_platform_gitops_applications.fluentd, kubernetes_namespace.logging]
 }

@@ -171,6 +171,11 @@ resource "harness_platform_gitops_applications" "otel_collector" {
 }
 
 # Jaeger Ingress — chart v3.1.1 doesn't create it properly via parameters
+resource "kubernetes_namespace" "tracing" {
+  metadata { name = "tracing" }
+  lifecycle { ignore_changes = all }
+}
+
 resource "kubectl_manifest" "jaeger_ingress" {
   yaml_body = yamlencode({
     apiVersion = "networking.k8s.io/v1"
@@ -202,5 +207,5 @@ resource "kubectl_manifest" "jaeger_ingress" {
     }
   })
 
-  depends_on = [harness_platform_gitops_applications.jaeger]
+  depends_on = [harness_platform_gitops_applications.jaeger, kubernetes_namespace.tracing]
 }
