@@ -99,7 +99,7 @@ pipeline:
                           cd /harness/Episode-10
                           sonar-scanner \
                             -Dsonar.host.url=$SONAR_HOST_URL \
-                            -Dsonar.login=$SONAR_TOKEN || true
+                            -Dsonar.login=$SONAR_TOKEN
 
     # ============================================
     # STAGE 1b: Build & Push to ECR (separate stage — smaller pod fits on existing nodes)
