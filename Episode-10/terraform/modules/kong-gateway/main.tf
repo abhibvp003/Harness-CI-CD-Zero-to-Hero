@@ -603,7 +603,7 @@ resource "kubectl_manifest" "kong_admin_consumer" {
     username    = "admin"
     credentials = ["kong-admin-basic-auth"]
   })
-  depends_on = [helm_release.kong]
+  depends_on = [helm_release.kong, kubernetes_secret.kong_admin_credentials]
 }
 
 # Basic Auth credentials for the admin consumer
@@ -622,7 +622,7 @@ resource "kubernetes_secret" "kong_admin_credentials" {
     password     = random_password.kong_admin.result
   }
 
-  depends_on = [kubectl_manifest.kong_admin_consumer]
+  depends_on = [helm_release.kong]
 }
 
 # Basic Auth plugin — applied ONLY to Kong Manager route (not global)
