@@ -379,7 +379,7 @@ resource "helm_release" "aws_lb_controller" {
     })
   ]
 
-  depends_on = [aws_eks_node_group.workloads]
+  depends_on = [aws_eks_node_group.workloads, aws_eks_pod_identity_association.lb_controller]
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -461,5 +461,5 @@ resource "helm_release" "cluster_autoscaler" {
     })
   ]
 
-  depends_on = [aws_eks_node_group.workloads]
+  depends_on = [aws_eks_node_group.workloads, aws_eks_pod_identity_association.cluster_autoscaler]
 }
