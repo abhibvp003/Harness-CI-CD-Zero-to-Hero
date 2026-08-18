@@ -129,12 +129,18 @@ resource "harness_platform_policyset" "production" {
 
 # ── Monitored Service (CV) ──
 
+# Delay between monitored service deletion and service/environment deletion (Harness API eventual consistency)
+resource "time_sleep" "wait_for_monitored_service_delete" {
+  depends_on       = [harness_platform_service.online_boutique, harness_platform_environment.production]
+  destroy_duration = "10s"
+}
+
 # Monitored service that tracks error rate for continuous verification
 resource "harness_platform_monitored_service" "online_boutique" {
   identifier = "online_boutique_production"
   org_id     = var.org_id
   project_id = var.project_id
-  depends_on = [harness_platform_service.online_boutique, harness_platform_environment.production]
+  depends_on = [time_sleep.wait_for_monitored_service_delete]
 
   request {
     name            = "online-boutique-production"

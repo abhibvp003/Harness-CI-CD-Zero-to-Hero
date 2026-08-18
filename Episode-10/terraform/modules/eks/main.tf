@@ -310,7 +310,21 @@ resource "aws_iam_policy" "lb_controller" {
       {
         Effect = "Allow"
         Action = [
+          "iam:CreateServiceLinkedRole"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "iam:AWSServiceName" = "elasticloadbalancing.amazonaws.com"
+          }
+        }
+      },
+      {
+        Effect = "Allow"
+        Action = [
           "ec2:Describe*",
+          "ec2:GetCoipPoolUsage",
+          "ec2:GetSecurityGroupsForVpc",
           "ec2:AuthorizeSecurityGroupIngress",
           "ec2:RevokeSecurityGroupIngress",
           "ec2:CreateSecurityGroup",
@@ -318,13 +332,23 @@ resource "aws_iam_policy" "lb_controller" {
           "ec2:CreateTags",
           "ec2:DeleteTags",
           "elasticloadbalancing:*",
-          "iam:CreateServiceLinkedRole",
-          "shield:GetSubscriptionState",
-          "wafv2:GetWebACL",
-          "wafv2:GetWebACLForResource",
-          "waf-regional:GetWebACL",
+          "cognito-idp:DescribeUserPoolClient",
           "acm:ListCertificates",
           "acm:DescribeCertificate",
+          "iam:ListServerCertificates",
+          "iam:GetServerCertificate",
+          "wafv2:GetWebACL",
+          "wafv2:GetWebACLForResource",
+          "wafv2:AssociateWebACL",
+          "wafv2:DisassociateWebACL",
+          "waf-regional:GetWebACLForResource",
+          "waf-regional:GetWebACL",
+          "waf-regional:AssociateWebACL",
+          "waf-regional:DisassociateWebACL",
+          "shield:GetSubscriptionState",
+          "shield:DescribeProtection",
+          "shield:CreateProtection",
+          "shield:DeleteProtection"
         ]
         Resource = ["*"]
       }
@@ -366,6 +390,8 @@ resource "helm_release" "aws_lb_controller" {
   chart      = "aws-load-balancer-controller"
   namespace  = "kube-system"
   version    = "1.7.2"
+  wait       = true
+  timeout    = 300
 
   values = [
     yamlencode({
@@ -380,6 +406,31 @@ resource "helm_release" "aws_lb_controller" {
   ]
 
   depends_on = [aws_eks_node_group.workloads, aws_eks_pod_identity_association.lb_controller]
+}
+
+# Restart LB Controller to ensure Pod Identity credentials are injected
+resource "null_resource" "restart_lb_controller" {
+  triggers = {
+    lb_controller = helm_release.aws_lb_controller.metadata[0].revision
+  }
+
+  provisioner "local-exec" {
+    interpreter = ["/bin/bash", "-c"]
+    command     = <<-EOT
+      aws eks update-kubeconfig --name ${aws_eks_cluster.main.name} --region ${var.region} --kubeconfig /tmp/kubeconfig
+      # Wait for deployment to exist and be ready before restarting
+      for i in $(seq 1 12); do
+        READY=$(KUBECONFIG=/tmp/kubeconfig kubectl get deployment aws-load-balancer-controller -n kube-system -o jsonpath='{.status.readyReplicas}' 2>/dev/null)
+        if [ "$READY" -ge 1 ] 2>/dev/null; then break; fi
+        echo "Waiting for LB Controller deployment... (attempt $i/12)"
+        sleep 10
+      done
+      KUBECONFIG=/tmp/kubeconfig kubectl rollout restart deployment/aws-load-balancer-controller -n kube-system
+      KUBECONFIG=/tmp/kubeconfig kubectl rollout status deployment/aws-load-balancer-controller -n kube-system --timeout=180s
+    EOT
+  }
+
+  depends_on = [helm_release.aws_lb_controller]
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -445,13 +496,23 @@ resource "helm_release" "cluster_autoscaler" {
   chart      = "cluster-autoscaler"
   namespace  = "kube-system"
   version    = "9.37.0"
+  wait       = true
+  timeout    = 300
 
   values = [
     yamlencode({
+      cloudProvider = "aws"
       autoDiscovery = {
         clusterName = aws_eks_cluster.main.name
       }
       awsRegion = var.region
+      rbac = {
+        create = true
+        serviceAccount = {
+          create = true
+          name   = "cluster-autoscaler-aws-cluster-autoscaler"
+        }
+      }
       extraArgs = {
         "balance-similar-node-groups"   = "true"
         "skip-nodes-with-local-storage" = "false"
@@ -462,4 +523,29 @@ resource "helm_release" "cluster_autoscaler" {
   ]
 
   depends_on = [aws_eks_node_group.workloads, aws_eks_pod_identity_association.cluster_autoscaler]
+}
+
+# Restart Cluster Autoscaler to ensure Pod Identity credentials are injected
+resource "null_resource" "restart_cluster_autoscaler" {
+  triggers = {
+    autoscaler = helm_release.cluster_autoscaler.metadata[0].revision
+  }
+
+  provisioner "local-exec" {
+    interpreter = ["/bin/bash", "-c"]
+    command     = <<-EOT
+      aws eks update-kubeconfig --name ${aws_eks_cluster.main.name} --region ${var.region} --kubeconfig /tmp/kubeconfig
+      # Wait for deployment to exist and be ready before restarting
+      for i in $(seq 1 12); do
+        READY=$(KUBECONFIG=/tmp/kubeconfig kubectl get deployment cluster-autoscaler-aws-cluster-autoscaler -n kube-system -o jsonpath='{.status.readyReplicas}' 2>/dev/null)
+        if [ "$READY" -ge 1 ] 2>/dev/null; then break; fi
+        echo "Waiting for Cluster Autoscaler deployment... (attempt $i/12)"
+        sleep 10
+      done
+      KUBECONFIG=/tmp/kubeconfig kubectl rollout restart deployment/cluster-autoscaler-aws-cluster-autoscaler -n kube-system
+      KUBECONFIG=/tmp/kubeconfig kubectl rollout status deployment/cluster-autoscaler-aws-cluster-autoscaler -n kube-system --timeout=180s
+    EOT
+  }
+
+  depends_on = [helm_release.cluster_autoscaler]
 }

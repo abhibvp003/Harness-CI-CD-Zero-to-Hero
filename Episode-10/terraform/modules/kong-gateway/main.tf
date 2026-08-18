@@ -21,8 +21,8 @@ resource "helm_release" "kong" {
   create_namespace = true
   version          = "2.39.3"
   skip_crds        = false # Helm installs CRDs from crds/ directory on fresh deploy
-  wait             = false
-  timeout          = 1200
+  wait             = true
+  timeout          = 600
   values = [
     yamlencode({
       # Ingress Controller
