@@ -1,14 +1,18 @@
-# Latest Amazon Linux 2023 AMI (auto-resolves per region — no hardcoded AMI ID)
+# Latest Amazon Linux 2023 AMI (standard, not minimal — includes cloud-init user_data execution)
 data "aws_ami" "amazon_linux" {
   most_recent = true
   owners      = ["amazon"]
   filter {
     name   = "name"
-    values = ["al2023-ami-*-x86_64"]
+    values = ["al2023-ami-2023*-x86_64"]
   }
   filter {
     name   = "state"
     values = ["available"]
+  }
+  filter {
+    name   = "architecture"
+    values = ["x86_64"]
   }
 }
 
@@ -66,7 +70,7 @@ resource "aws_instance" "bastion" {
   subnet_id                   = var.subnet_id
   vpc_security_group_ids      = [aws_security_group.bastion.id]
   iam_instance_profile        = aws_iam_instance_profile.bastion.name
-  user_data_replace_on_change = false
+  user_data_replace_on_change = true
   user_data = templatefile("${path.module}/tools.sh", {
     cluster_name = var.eks_cluster_name
     aws_region   = var.aws_region
