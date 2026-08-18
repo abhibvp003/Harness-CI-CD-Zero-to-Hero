@@ -32,14 +32,6 @@ resource "helm_release" "delegate" {
   timeout = 900
 }
 
-# Creates a namespace where Harness CI builds will run
-resource "kubernetes_namespace" "builds" {
-  metadata {
-    name   = "harness-builds"
-    labels = { purpose = "ci-builds" }
-  }
-}
-
 # ClusterRole granting the delegate broad access to K8s resources
 resource "kubernetes_cluster_role" "delegate" {
   metadata { name = "harness-delegate-cluster-role" }

@@ -148,6 +148,9 @@ pipeline:
                           - v<+pipeline.sequenceId>
                         dockerfile: Episode-10/src/frontend/Dockerfile
                         context: Episode-10/src/frontend
+                        resources: # Memory limit prevents out-of-memory during parallel Docker builds
+                          limits:
+                            memory: 4Gi
 
                   - step:
                       type: BuildAndPushECR
@@ -162,6 +165,9 @@ pipeline:
                           - v<+pipeline.sequenceId>
                         dockerfile: Episode-10/src/cartservice/src/Dockerfile
                         context: Episode-10/src/cartservice/src
+                        resources: # .NET compilation needs more memory
+                          limits:
+                            memory: 4Gi
 
               - parallel:
                   - step:
@@ -177,6 +183,9 @@ pipeline:
                           - v<+pipeline.sequenceId>
                         dockerfile: Episode-10/src/checkoutservice/Dockerfile
                         context: Episode-10/src/checkoutservice
+                        resources: # Go compilation memory limit
+                          limits:
+                            memory: 3Gi
 
                   - step:
                       type: BuildAndPushECR
@@ -191,6 +200,9 @@ pipeline:
                           - v<+pipeline.sequenceId>
                         dockerfile: Episode-10/src/productcatalogservice/Dockerfile
                         context: Episode-10/src/productcatalogservice
+                        resources: # Go compilation memory limit
+                          limits:
+                            memory: 3Gi
 
               - parallel:
                   - step:
@@ -206,6 +218,9 @@ pipeline:
                           - v<+pipeline.sequenceId>
                         dockerfile: Episode-10/src/currencyservice/Dockerfile
                         context: Episode-10/src/currencyservice
+                        resources: # Node.js build memory limit
+                          limits:
+                            memory: 2Gi
 
                   - step:
                       type: BuildAndPushECR
@@ -220,6 +235,9 @@ pipeline:
                           - v<+pipeline.sequenceId>
                         dockerfile: Episode-10/src/emailservice/Dockerfile
                         context: Episode-10/src/emailservice
+                        resources: # Python build memory limit
+                          limits:
+                            memory: 2Gi
 
               - parallel:
                   - step:
@@ -235,6 +253,9 @@ pipeline:
                           - v<+pipeline.sequenceId>
                         dockerfile: Episode-10/src/paymentservice/Dockerfile
                         context: Episode-10/src/paymentservice
+                        resources: # Node.js build memory limit
+                          limits:
+                            memory: 2Gi
 
                   - step:
                       type: BuildAndPushECR
@@ -249,6 +270,9 @@ pipeline:
                           - v<+pipeline.sequenceId>
                         dockerfile: Episode-10/src/recommendationservice/Dockerfile
                         context: Episode-10/src/recommendationservice
+                        resources: # Python build memory limit
+                          limits:
+                            memory: 2Gi
 
               - parallel:
                   - step:
@@ -264,6 +288,9 @@ pipeline:
                           - v<+pipeline.sequenceId>
                         dockerfile: Episode-10/src/shippingservice/Dockerfile
                         context: Episode-10/src/shippingservice
+                        resources: # Go compilation memory limit
+                          limits:
+                            memory: 3Gi
 
                   - step:
                       type: BuildAndPushECR
@@ -278,6 +305,9 @@ pipeline:
                           - v<+pipeline.sequenceId>
                         dockerfile: Episode-10/src/adservice/Dockerfile
                         context: Episode-10/src/adservice
+                        resources: # Java/Gradle compilation needs more memory
+                          limits:
+                            memory: 4Gi
 
               - step:
                   type: BuildAndPushECR
@@ -292,6 +322,9 @@ pipeline:
                       - v<+pipeline.sequenceId>
                     dockerfile: Episode-10/src/loadgenerator/Dockerfile
                     context: Episode-10/src/loadgenerator
+                    resources: # Python build memory limit
+                      limits:
+                        memory: 2Gi
 
     # ============================================
     # STAGE 2: AI Security Agent
