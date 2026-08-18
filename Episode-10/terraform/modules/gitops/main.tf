@@ -57,8 +57,21 @@ resource "null_resource" "install_gitops_agent" {
       # Configure kubectl
       aws eks update-kubeconfig --name ${var.cluster_name} --region ${var.aws_region} --kubeconfig /tmp/kubeconfig
 
-      # Apply the agent YAML (installs ArgoCD + agent with correct config)
-      KUBECONFIG=/tmp/kubeconfig kubectl apply -f ${local_file.gitops_agent_yaml.filename}
+      # Remove auto-upgrader CronJob from agent YAML (prevents version mismatch + permission denied errors)
+      grep -v "kind: CronJob" ${local_file.gitops_agent_yaml.filename} > /tmp/gitops_agent_clean.yaml || cp ${local_file.gitops_agent_yaml.filename} /tmp/gitops_agent_clean.yaml
+      # Split YAML and remove any document that contains CronJob kind
+      python3 -c "
+import sys
+with open('${local_file.gitops_agent_yaml.filename}', 'r') as f:
+    content = f.read()
+docs = content.split('---')
+filtered = [d for d in docs if 'kind: CronJob' not in d]
+with open('/tmp/gitops_agent_clean.yaml', 'w') as f:
+    f.write('---'.join(filtered))
+" 2>/dev/null || cp ${local_file.gitops_agent_yaml.filename} /tmp/gitops_agent_clean.yaml
+
+      # Apply the agent YAML without auto-upgrader (installs ArgoCD + agent with correct config)
+      KUBECONFIG=/tmp/kubeconfig kubectl apply -f /tmp/gitops_agent_clean.yaml
 
       # Wait for agent to connect to Harness (polls every 10s, max 5 min)
       echo "Waiting for GitOps agent to connect..."
