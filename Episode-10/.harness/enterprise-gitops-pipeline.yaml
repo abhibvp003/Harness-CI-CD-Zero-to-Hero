@@ -134,6 +134,12 @@ pipeline:
           execution:
             steps:
               # Build and push all microservices (2 per batch — fits on t3a.xlarge 16GB)
+              ###########################################################
+              # 2 parallel × 4Gi = 8GB used → fits in 16GB node
+              # If 3 parallel: 3 × 4Gi = 12GB → fits but tight (OS + kubelet + delegate also need RAM)
+              # If 4 parallel: 4 × 4Gi = 16GB → OOMKilled, node has no RAM left for system processes ❌
+              ################################################################
+              # Batch 1: Frontend(4Gi) + CartService(4Gi) = 8GB at same time → finishes
               - parallel:
                   - step:
                       type: BuildAndPushECR
@@ -150,7 +156,7 @@ pipeline:
                         context: Episode-10/src/frontend
                         resources: # Memory limit prevents out-of-memory during parallel Docker builds
                           limits:
-                            memory: 4Gi
+                            memory: 4Gi # 4 GB RAM limit for this build step
 
                   - step:
                       type: BuildAndPushECR
@@ -167,8 +173,9 @@ pipeline:
                         context: Episode-10/src/cartservice/src
                         resources: # .NET compilation needs more memory
                           limits:
-                            memory: 4Gi
+                            memory: 4Gi # 4 GB RAM limit for this build step
 
+                            # Batch 2: Checkout(3Gi) + ProductCatalog(3Gi) = 6GB at same time → finishes
               - parallel:
                   - step:
                       type: BuildAndPushECR
@@ -185,7 +192,7 @@ pipeline:
                         context: Episode-10/src/checkoutservice
                         resources: # Go compilation memory limit
                           limits:
-                            memory: 3Gi
+                            memory: 3Gi # 3 GB RAM limit for this build step
 
                   - step:
                       type: BuildAndPushECR
@@ -202,8 +209,9 @@ pipeline:
                         context: Episode-10/src/productcatalogservice
                         resources: # Go compilation memory limit
                           limits:
-                            memory: 3Gi
+                            memory: 3Gi # 3 GB RAM limit for this build step
 
+              #Batch 3: Currency(2Gi) + Email(2Gi) = 4GB at same time → finishes
               - parallel:
                   - step:
                       type: BuildAndPushECR
@@ -220,7 +228,7 @@ pipeline:
                         context: Episode-10/src/currencyservice
                         resources: # Node.js build memory limit
                           limits:
-                            memory: 2Gi
+                            memory: 2Gi # 2 GB RAM limit for this build step
 
                   - step:
                       type: BuildAndPushECR
@@ -237,8 +245,9 @@ pipeline:
                         context: Episode-10/src/emailservice
                         resources: # Python build memory limit
                           limits:
-                            memory: 2Gi
+                            memory: 2Gi # 2 GB RAM limit for this build step
 
+                #Batch 4: Payment(2Gi) + Recommendation(2Gi) = 4GB at same time → finishesSS
               - parallel:
                   - step:
                       type: BuildAndPushECR
@@ -253,9 +262,9 @@ pipeline:
                           - v<+pipeline.sequenceId>
                         dockerfile: Episode-10/src/paymentservice/Dockerfile
                         context: Episode-10/src/paymentservice
-                        resources: # Node.js build memory limit
+                        resources: # 2Gi — Node.js npm install + small image, lightweight build
                           limits:
-                            memory: 2Gi
+                            memory: 2Gi # 2 GB RAM limit for this build step
 
                   - step:
                       type: BuildAndPushECR
@@ -272,8 +281,9 @@ pipeline:
                         context: Episode-10/src/recommendationservice
                         resources: # Python build memory limit
                           limits:
-                            memory: 2Gi
+                            memory: 2Gi # 2 GB RAM limit for this build step
 
+              #Batch 5: Shipping(3Gi) + AdService(4Gi) = 7GB at same time → finishes
               - parallel:
                   - step:
                       type: BuildAndPushECR
@@ -290,7 +300,7 @@ pipeline:
                         context: Episode-10/src/shippingservice
                         resources: # Go compilation memory limit
                           limits:
-                            memory: 3Gi
+                            memory: 3Gi # 3 GB RAM limit for this build step
 
                   - step:
                       type: BuildAndPushECR
@@ -307,8 +317,9 @@ pipeline:
                         context: Episode-10/src/adservice
                         resources: # Java/Gradle compilation needs more memory
                           limits:
-                            memory: 4Gi
+                            memory: 4Gi # 4 GB RAM limit for this build step
 
+              #Batch 6: LoadGenerator(2Gi) = 2GB alone → finishes
               - step:
                   type: BuildAndPushECR
                   name: Push LoadGenerator
@@ -324,7 +335,7 @@ pipeline:
                     context: Episode-10/src/loadgenerator
                     resources: # Python build memory limit
                       limits:
-                        memory: 2Gi
+                        memory: 2Gi # 2 GB RAM limit for this build step
 
     # ============================================
     # STAGE 2: AI Security Agent
