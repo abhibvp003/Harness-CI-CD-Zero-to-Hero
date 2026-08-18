@@ -73,6 +73,22 @@ module "ecr" {
   tags             = local.common_tags
 }
 
+# ── S3 Cache Bucket (CI build cache — Go modules, npm packages, Gradle deps) ── {ep10-enterprise-cluster-ci-cache-713939171080}
+resource "aws_s3_bucket" "ci_cache" {
+  bucket        = "${var.cluster_name}-ci-cache-${data.aws_caller_identity.current.account_id}"
+  force_destroy = true
+  tags          = merge(local.common_tags, { Name = "${var.cluster_name}-ci-cache" })
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "ci_cache" {
+  bucket = aws_s3_bucket.ci_cache.id
+  rule {
+    id     = "expire-old-cache"
+    status = "Enabled"
+    expiration { days = 14 }
+  }
+}
+
 # ── RDS ──
 module "rds" {
   source         = "./modules/rds"
@@ -160,6 +176,7 @@ module "harness_platform" {
   github_username = var.github_username
   github_repo     = var.github_repo
   github_branch   = var.github_branch
+  ci_cache_bucket = aws_s3_bucket.ci_cache.bucket
   opa_policy_rego = file("${path.module}/../policies/production-governance.rego")
   depends_on      = [module.delegate]
 }

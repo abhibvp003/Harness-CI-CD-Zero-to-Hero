@@ -45,3 +45,8 @@ variable "github_branch" {
   description = "Git branch to fetch manifests from"
   type        = string
 }
+
+# S3 bucket name for CI build cache
+variable "ci_cache_bucket" {
+  type = string
+}

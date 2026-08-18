@@ -112,13 +112,6 @@ pipeline:
         type: CI
         spec:
           cloneCodebase: true
-          caching:
-            enabled: true
-            paths:
-              - /root/.cache/go-build
-              - /root/go/pkg/mod
-              - /root/.npm
-              - /root/.gradle/caches
           infrastructure:
             type: KubernetesDirect
             spec:
@@ -140,6 +133,19 @@ pipeline:
               # If 3 parallel: 3 × 4Gi = 12GB → fits but tight (OS + kubelet + delegate also need RAM)
               # If 4 parallel: 4 × 4Gi = 16GB → OOMKilled, node has no RAM left for system processes ❌
               ################################################################
+              # Restore cached build dependencies from S3 (Go modules, npm packages, Gradle deps)
+              - step:
+                  type: RestoreCacheS3
+                  name: Restore Cache
+                  identifier: restore_cache
+                  spec:
+                    connectorRef: account.aws_account
+                    region: <+variable.aws_region>
+                    bucket: <+variable.ci_cache_bucket>
+                    key: ep10-build-cache
+                    archiveFormat: Tar
+                    failIfKeyNotFound: false
+              # 2 builds run in parallel on t3a.xlarge (16GB). Memory limits prevent OOMKilled.
               # Batch 1: Frontend(4Gi) + CartService(4Gi) = 8GB at same time → finishes
               - parallel:
                   - step:
@@ -337,6 +343,23 @@ pipeline:
                     resources: # Python build memory limit
                       limits:
                         memory: 2Gi # 2 GB RAM limit for this build step
+
+              # Save build dependencies to S3 cache (next pipeline run will be faster)
+              - step:
+                  type: SaveCacheS3
+                  name: Save Cache
+                  identifier: save_cache
+                  spec:
+                    connectorRef: account.aws_account
+                    region: <+variable.aws_region>
+                    bucket: <+variable.ci_cache_bucket>
+                    key: ep10-build-cache
+                    sourcePaths:
+                      - /root/.cache/go-build
+                      - /root/go/pkg/mod
+                      - /root/.npm
+                      - /root/.gradle/caches
+                    archiveFormat: Tar
 
     # ============================================
     # STAGE 2: AI Security Agent

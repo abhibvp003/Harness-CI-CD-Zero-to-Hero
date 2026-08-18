@@ -127,6 +127,19 @@ resource "harness_platform_policyset" "production" {
   }
 }
 
+# ── Harness Variable: CI Cache Bucket (used by RestoreCacheS3/SaveCacheS3 in pipeline) ──
+resource "harness_platform_variables" "ci_cache_bucket" {
+  identifier = "ci_cache_bucket"
+  name       = "ci_cache_bucket"
+  org_id     = var.org_id
+  project_id = var.project_id
+  type       = "String"
+  spec {
+    value_type  = "FIXED"
+    fixed_value = var.ci_cache_bucket
+  }
+}
+
 # ── Monitored Service (CV) ──
 
 # Delay between monitored service deletion and service/environment deletion (Harness API eventual consistency)

@@ -43,3 +43,7 @@ output "aws_account_id" {
 }
 
 data "aws_caller_identity" "current" {}
+
+output "ci_cache_bucket" {
+  value = aws_s3_bucket.ci_cache.bucket
+}
