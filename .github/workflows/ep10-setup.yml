@@ -367,6 +367,44 @@ jobs:
           RESOURCES_BEFORE=$(terraform state list 2>/dev/null | grep -c '.' || echo "0")
           echo "RESOURCES_BEFORE=${RESOURCES_BEFORE}" >> "$GITHUB_ENV"
 
+          # Release Elastic IPs associated with VPC (prevents IGW detach failure)
+          VPC_ID="$(terraform output -raw vpc_id 2>/dev/null || true)"
+          if [ -n "$VPC_ID" ]; then
+            echo "Releasing Elastic IPs associated with VPC ${VPC_ID}..."
+            # Disassociate and release EIPs attached to NAT Gateways in this VPC
+            for nat in $(aws ec2 describe-nat-gateways --region "${{ env.AWS_REGION_VALUE }}" \
+              --filter "Name=vpc-id,Values=${VPC_ID}" "Name=state,Values=available,pending" \
+              --query 'NatGateways[].NatGatewayId' --output text 2>/dev/null); do
+              echo "  Deleting NAT Gateway: $nat"
+              aws ec2 delete-nat-gateway --region "${{ env.AWS_REGION_VALUE }}" --nat-gateway-id "$nat" 2>/dev/null || true
+            done
+            # Wait for NAT Gateways to fully delete (releases EIPs)
+            echo "Waiting 60s for NAT Gateways to release EIPs..."
+            sleep 60
+            # Release any remaining unassociated EIPs in the account
+            for alloc in $(aws ec2 describe-addresses --region "${{ env.AWS_REGION_VALUE }}" \
+              --query 'Addresses[?AssociationId==null].AllocationId' --output text 2>/dev/null); do
+              echo "  Releasing EIP: $alloc"
+              aws ec2 release-address --region "${{ env.AWS_REGION_VALUE }}" --allocation-id "$alloc" 2>/dev/null || true
+            done
+          fi
+
+          # Force-delete Harness monitored service first (it blocks service+environment deletion)
+          terraform destroy -auto-approve -no-color -target="module.harness_platform.harness_platform_monitored_service.online_boutique" \
+            -var="harness_account_id=${{ vars.HARNESS_ACCOUNT_ID }}" \
+            -var="harness_api_key=${{ secrets.HARNESS_API_KEY }}" \
+            -var="harness_delegate_token=${{ secrets.HARNESS_DELEGATE_TOKEN }}" \
+            -var="github_username=${{ github.repository_owner }}" \
+            -var="github_repo=${{ github.event.repository.name }}" \
+            -var="github_branch=${{ vars.GIT_BRANCH }}" \
+            -var="github_pat=${{ secrets.GH_PAT }}" \
+            -var="domain_name=${{ vars.DOMAIN_NAME }}" \
+            -var="cluster_name=${{ vars.CLUSTER_NAME }}" \
+            -var="harness_project_id=${{ vars.HARNESS_PROJECT_ID }}" \
+            -var="harness_org_id=${{ vars.HARNESS_ORG_ID }}" \
+            -var="aws_region=${{ vars.AWS_REGION }}" 2>/dev/null || true
+          sleep 5
+
           terraform destroy -auto-approve -no-color \
             -var="harness_account_id=${{ vars.HARNESS_ACCOUNT_ID }}" \
             -var="harness_api_key=${{ secrets.HARNESS_API_KEY }}" \
@@ -386,6 +424,9 @@ jobs:
         run: |
           echo "First destroy attempt failed. Cleaning up..."
 
+          # Force-remove Harness monitored service (blocks service/env deletion)
+          terraform state rm "module.harness_platform.harness_platform_monitored_service.online_boutique" 2>/dev/null || true
+
           # If cluster is gone, remove all K8s resources from state
           CLUSTER_NAME=$(terraform output -raw eks_cluster_name 2>/dev/null || echo "ep10-enterprise-cluster")
           if ! aws eks describe-cluster --name "${CLUSTER_NAME}" --region "${{ env.AWS_REGION_VALUE }}" >/dev/null 2>&1; then
@@ -400,6 +441,23 @@ jobs:
           # Clean orphaned ENIs and security groups
           VPC_ID="$(terraform output -raw vpc_id 2>/dev/null || true)"
           if [ -n "$VPC_ID" ]; then
+            echo "Deleting NAT Gateways in VPC ${VPC_ID}..."
+            for nat in $(aws ec2 describe-nat-gateways --region "${{ env.AWS_REGION_VALUE }}" \
+              --filter "Name=vpc-id,Values=${VPC_ID}" "Name=state,Values=available,pending" \
+              --query 'NatGateways[].NatGatewayId' --output text 2>/dev/null); do
+              [ -z "$nat" ] && continue
+              aws ec2 delete-nat-gateway --region "${{ env.AWS_REGION_VALUE }}" --nat-gateway-id "$nat" 2>/dev/null || true
+            done
+            echo "Waiting 60s for NAT Gateways to release EIPs..."
+            sleep 60
+
+            echo "Releasing orphaned Elastic IPs..."
+            for alloc in $(aws ec2 describe-addresses --region "${{ env.AWS_REGION_VALUE }}" \
+              --query 'Addresses[?AssociationId==null].AllocationId' --output text 2>/dev/null); do
+              [ -z "$alloc" ] && continue
+              aws ec2 release-address --region "${{ env.AWS_REGION_VALUE }}" --allocation-id "$alloc" 2>/dev/null || true
+            done
+
             echo "Cleaning orphaned ENIs in VPC ${VPC_ID}..."
             aws ec2 describe-network-interfaces --region "${{ env.AWS_REGION_VALUE }}" \
               --filters "Name=vpc-id,Values=${VPC_ID}" "Name=status,Values=available" \
