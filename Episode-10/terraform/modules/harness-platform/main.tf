@@ -6,7 +6,7 @@ resource "harness_platform_connector_prometheus" "prometheus" {
   name               = "prometheus"
   org_id             = var.org_id
   project_id         = var.project_id
-  url                = "http://prometheus-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090"
+  url                = "http://monitoring-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090"
   delegate_selectors = [var.delegate_name]
 }
 
