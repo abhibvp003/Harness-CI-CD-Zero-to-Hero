@@ -194,7 +194,7 @@ resource "aws_eks_node_group" "workloads" {
   cluster_name    = aws_eks_cluster.main.name
   node_group_name = "${var.cluster_name}-workloads"
   node_role_arn   = aws_iam_role.eks_nodes.arn
-  subnet_ids      = var.subnet_ids
+  subnet_ids      = var.private_subnet_ids
 
   instance_types = ["t3a.large", "t3.large", "m5a.large"]
   capacity_type  = "ON_DEMAND"
@@ -247,7 +247,7 @@ resource "aws_eks_node_group" "ci" {
   cluster_name    = aws_eks_cluster.main.name
   node_group_name = "${var.cluster_name}-ci-builds"
   node_role_arn   = aws_iam_role.eks_nodes.arn
-  subnet_ids      = var.subnet_ids
+  subnet_ids      = var.private_subnet_ids
 
   instance_types = ["t3a.xlarge", "t3.xlarge", "m5a.xlarge"]
   capacity_type  = "ON_DEMAND"

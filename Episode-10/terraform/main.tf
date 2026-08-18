@@ -30,14 +30,15 @@ module "vpc" {
 
 # ── EKS ──
 module "eks" {
-  source          = "./modules/eks"
-  cluster_name    = var.cluster_name
-  cluster_version = var.cluster_version
-  subnet_ids      = module.vpc.all_subnet_ids
-  vpc_id          = module.vpc.vpc_id
-  vpc_cidr        = var.vpc_cidr
-  region          = var.aws_region
-  tags            = local.common_tags
+  source             = "./modules/eks"
+  cluster_name       = var.cluster_name
+  cluster_version    = var.cluster_version
+  subnet_ids         = module.vpc.all_subnet_ids
+  private_subnet_ids = module.vpc.private_subnet_ids
+  vpc_id             = module.vpc.vpc_id
+  vpc_cidr           = var.vpc_cidr
+  region             = var.aws_region
+  tags               = local.common_tags
 }
 
 # ── StorageClass ──

@@ -13,6 +13,11 @@ variable "subnet_ids" {
   type = list(string)
 }
 
+# Private subnet IDs for worker node groups (nodes don't need public IPs)
+variable "private_subnet_ids" {
+  type = list(string)
+}
+
 # VPC ID to deploy the EKS cluster into
 variable "vpc_id" {
   type = string
