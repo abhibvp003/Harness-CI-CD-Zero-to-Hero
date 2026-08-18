@@ -37,7 +37,7 @@ chmod 666 /var/run/docker.sock
 # ─────────────────────────────────────────────────────────────────
 curl -LO "https://dl.k8s.io/release/$(curl -fsSL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
 chmod +x kubectl
-mv kubectl /usr/local/bin/
+mv kubectl /usr/bin/
 kubectl version --client || true
 
 # ─────────────────────────────────────────────────────────────────
@@ -46,7 +46,7 @@ kubectl version --client || true
 curl --silent --location \
   "https://github.com/eksctl-io/eksctl/releases/latest/download/eksctl_$(uname -s)_amd64.tar.gz" \
   | tar xz -C /tmp
-mv /tmp/eksctl /usr/local/bin/
+mv /tmp/eksctl /usr/bin/
 eksctl version || true
 
 # ─────────────────────────────────────────────────────────────────
@@ -91,8 +91,9 @@ helm repo add prometheus-community https://prometheus-community.github.io/helm-c
 helm repo update || true
 
 # ─────────────────────────────────────────────────────────────────
-# Configure kubectl for EKS
+# Configure kubectl for EKS (both root and ec2-user)
 # ─────────────────────────────────────────────────────────────────
+aws eks update-kubeconfig --name ${cluster_name} --region ${aws_region} || true
 su - ec2-user -c "aws eks update-kubeconfig --name ${cluster_name} --region ${aws_region}" || true
 
 echo "=========================================="
