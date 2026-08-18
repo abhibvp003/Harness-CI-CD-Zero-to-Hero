@@ -95,11 +95,12 @@ pipeline:
                         envVariables:
                           SONAR_HOST_URL: <+variable.sonar_host_url>
                           SONAR_TOKEN: <+secrets.getValue("sonar_token")>
+                          SONAR_USER_HOME: /tmp/.sonar
                         command: |-
                           cd /harness/Episode-10
                           sonar-scanner \
                             -Dsonar.host.url=$SONAR_HOST_URL \
-                            -Dsonar.login=$SONAR_TOKEN
+                            -Dsonar.token=$SONAR_TOKEN
 
     # ============================================
     # STAGE 1b: Build & Push to ECR (separate stage — smaller pod fits on existing nodes)
