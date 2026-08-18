@@ -114,3 +114,27 @@ resource "helm_release" "external_dns" {
 
   depends_on = [aws_eks_pod_identity_association.external_dns]
 }
+
+# Restart ExternalDNS to ensure Pod Identity credentials are injected
+resource "null_resource" "restart_external_dns" {
+  triggers = {
+    external_dns = helm_release.external_dns.metadata[0].revision
+  }
+
+  provisioner "local-exec" {
+    interpreter = ["/bin/bash", "-c"]
+    command     = <<-EOT
+      aws eks update-kubeconfig --name ${var.cluster_name} --region ${var.aws_region} --kubeconfig /tmp/kubeconfig
+      for i in $(seq 1 12); do
+        READY=$(KUBECONFIG=/tmp/kubeconfig kubectl get deployment external-dns -n external-dns -o jsonpath='{.status.readyReplicas}' 2>/dev/null)
+        if [ "$READY" -ge 1 ] 2>/dev/null; then break; fi
+        echo "Waiting for ExternalDNS deployment... (attempt $i/12)"
+        sleep 10
+      done
+      KUBECONFIG=/tmp/kubeconfig kubectl rollout restart deployment/external-dns -n external-dns
+      KUBECONFIG=/tmp/kubeconfig kubectl rollout status deployment/external-dns -n external-dns --timeout=120s
+    EOT
+  }
+
+  depends_on = [helm_release.external_dns]
+}

@@ -71,6 +71,30 @@ resource "helm_release" "external_secrets" {
   depends_on = [aws_eks_pod_identity_association.external_secrets]
 }
 
+# Restart ESO to ensure Pod Identity credentials are injected
+resource "null_resource" "restart_external_secrets" {
+  triggers = {
+    eso = helm_release.external_secrets.metadata[0].revision
+  }
+
+  provisioner "local-exec" {
+    interpreter = ["/bin/bash", "-c"]
+    command     = <<-EOT
+      aws eks update-kubeconfig --name ${var.cluster_name} --region ${var.aws_region} --kubeconfig /tmp/kubeconfig
+      for i in $(seq 1 12); do
+        READY=$(KUBECONFIG=/tmp/kubeconfig kubectl get deployment external-secrets -n external-secrets -o jsonpath='{.status.readyReplicas}' 2>/dev/null)
+        if [ "$READY" -ge 1 ] 2>/dev/null; then break; fi
+        echo "Waiting for External Secrets deployment... (attempt $i/12)"
+        sleep 10
+      done
+      KUBECONFIG=/tmp/kubeconfig kubectl rollout restart deployment/external-secrets -n external-secrets
+      KUBECONFIG=/tmp/kubeconfig kubectl rollout status deployment/external-secrets -n external-secrets --timeout=120s
+    EOT
+  }
+
+  depends_on = [helm_release.external_secrets]
+}
+
 # ClusterSecretStore that connects to AWS Secrets Manager
 # Uses Pod Identity (no explicit auth needed — EKS injects creds automatically)
 resource "kubectl_manifest" "cluster_secret_store" {
