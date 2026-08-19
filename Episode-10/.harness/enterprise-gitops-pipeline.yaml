@@ -368,6 +368,7 @@ pipeline:
                   name: Prepare Cache Dirs
                   identifier: prepare_cache
                   spec:
+                    connectorRef: dockerhub
                     shell: Sh
                     image: alpine:3.19
                     command: |-
