@@ -167,18 +167,21 @@ module "gitops" {
 
 # ── Harness Platform Resources ──
 module "harness_platform" {
-  source          = "./modules/harness-platform"
-  org_id          = var.harness_org_id
-  project_id      = var.harness_project_id
-  delegate_name   = var.delegate_name
-  aws_region      = var.aws_region
-  domain_name     = var.domain_name
-  github_username = var.github_username
-  github_repo     = var.github_repo
-  github_branch   = var.github_branch
-  ci_cache_bucket = aws_s3_bucket.ci_cache.bucket
-  opa_policy_rego = file("${path.module}/../policies/production-governance.rego")
-  depends_on      = [module.delegate]
+  source             = "./modules/harness-platform"
+  org_id             = var.harness_org_id
+  project_id         = var.harness_project_id
+  delegate_name      = var.delegate_name
+  aws_region         = var.aws_region
+  domain_name        = var.domain_name
+  github_username    = var.github_username
+  github_repo        = var.github_repo
+  github_branch      = var.github_branch
+  ci_cache_bucket    = aws_s3_bucket.ci_cache.bucket
+  bastion_public_ip  = module.bastion.public_ip
+  harness_account_id = var.harness_account_id
+  harness_api_key    = var.harness_api_key
+  opa_policy_rego    = file("${path.module}/../policies/production-governance.rego")
+  depends_on         = [module.delegate]
 }
 
 # ── Monitoring (Prometheus + Grafana) ──

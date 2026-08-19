@@ -153,6 +153,32 @@ resource "harness_platform_variables" "domain_name" {
   }
 }
 
+# ── Harness Variable: SonarQube Host URL (bastion IP auto-detected — no manual entry) ──
+# Pre-delete if manually created (prevents "already exists" error on first apply)
+resource "null_resource" "delete_existing_sonar_var" {
+  provisioner "local-exec" {
+    interpreter = ["/bin/bash", "-c"]
+    command     = <<-EOT
+      curl -s -X DELETE \
+        "https://app.harness.io/gateway/ng/api/variables/sonar_host_url?accountIdentifier=${var.harness_account_id}&orgIdentifier=${var.org_id}&projectIdentifier=${var.project_id}" \
+        -H "x-api-key: ${var.harness_api_key}" 2>/dev/null || true
+    EOT
+  }
+}
+
+resource "harness_platform_variables" "sonar_host_url" {
+  identifier = "sonar_host_url"
+  name       = "sonar_host_url"
+  org_id     = var.org_id
+  project_id = var.project_id
+  type       = "String"
+  spec {
+    value_type  = "FIXED"
+    fixed_value = "http://${var.bastion_public_ip}:9000"
+  }
+  depends_on = [null_resource.delete_existing_sonar_var]
+}
+
 # ── Monitored Service (CV) ──
 
 # Delay between monitored service deletion and service/environment deletion (Harness API eventual consistency)

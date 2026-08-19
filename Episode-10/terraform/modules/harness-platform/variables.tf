@@ -50,3 +50,19 @@ variable "github_branch" {
 variable "ci_cache_bucket" {
   type = string
 }
+
+# Bastion public IP (for SonarQube URL variable)
+variable "bastion_public_ip" {
+  type = string
+}
+
+# Harness account ID (for API calls)
+variable "harness_account_id" {
+  type = string
+}
+
+# Harness API key (for API calls to delete existing variables)
+variable "harness_api_key" {
+  type      = string
+  sensitive = true
+}
