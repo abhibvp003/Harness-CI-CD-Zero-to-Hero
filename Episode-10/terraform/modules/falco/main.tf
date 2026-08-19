@@ -4,6 +4,17 @@
 # UI: falcosidekick-ui with login (password stored in AWS Secrets Manager)
 # ═══════════════════════════════════════════════════════════════════
 
+terraform {
+  required_providers {
+    harness = {
+      source = "harness/harness"
+    }
+    kubernetes = {
+      source = "hashicorp/kubernetes"
+    }
+  }
+}
+
 # Auto-generate Falco UI password and store in AWS SM
 resource "random_password" "falco" {
   length  = 16
