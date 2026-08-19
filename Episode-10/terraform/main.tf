@@ -225,3 +225,15 @@ module "tracing" {
   gitops_cluster_id  = module.gitops.cluster_identifier
   depends_on         = [module.gitops]
 }
+
+# ── Falco (Runtime Security — detects suspicious container behavior) ──
+module "falco" {
+  source             = "./modules/falco"
+  domain_name        = var.domain_name
+  harness_account_id = var.harness_account_id
+  harness_org_id     = var.harness_org_id
+  harness_project_id = var.harness_project_id
+  gitops_agent_id    = module.gitops.agent_identifier
+  gitops_cluster_id  = module.gitops.cluster_identifier
+  depends_on         = [module.gitops]
+}
