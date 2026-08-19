@@ -3,9 +3,21 @@ variable "aws_region" {
   type = string
 }
 
-# EKS cluster name (required for Pod Identity Association)
+# EKS cluster name (used for resource naming)
 variable "cluster_name" {
-  description = "EKS cluster name for Pod Identity binding"
+  description = "EKS cluster name"
+  type        = string
+}
+
+# OIDC provider ARN for IRSA trust policy
+variable "oidc_provider_arn" {
+  description = "EKS OIDC provider ARN for IRSA"
+  type        = string
+}
+
+# OIDC provider URL (without https://) for IAM condition keys
+variable "oidc_provider_url" {
+  description = "EKS OIDC provider URL without protocol prefix"
   type        = string
 }
 

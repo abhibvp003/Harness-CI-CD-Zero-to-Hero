@@ -125,21 +125,25 @@ module "kong_gateway" {
 
 # ── ExternalDNS (Auto-creates Route53 records from Ingress) ──
 module "external_dns" {
-  source       = "./modules/external-dns"
-  domain_name  = var.domain_name
-  aws_region   = var.aws_region
-  cluster_name = var.cluster_name
-  depends_on   = [module.kong_gateway]
+  source            = "./modules/external-dns"
+  domain_name       = var.domain_name
+  aws_region        = var.aws_region
+  cluster_name      = var.cluster_name
+  oidc_provider_arn = module.eks.oidc_provider_arn
+  oidc_provider_url = module.eks.oidc_provider_url
+  depends_on        = [module.kong_gateway]
 }
 
 # ── External Secrets Operator ──
 module "external_secrets" {
-  source       = "./modules/external-secrets"
-  aws_region   = var.aws_region
-  cluster_name = var.cluster_name
-  secret_name  = "online-boutique/app-secrets"
-  tags         = local.common_tags
-  depends_on   = [module.eks]
+  source            = "./modules/external-secrets"
+  aws_region        = var.aws_region
+  cluster_name      = var.cluster_name
+  oidc_provider_arn = module.eks.oidc_provider_arn
+  oidc_provider_url = module.eks.oidc_provider_url
+  secret_name       = "online-boutique/app-secrets"
+  tags              = local.common_tags
+  depends_on        = [module.eks]
 }
 
 # ── GitOps Agent ──

@@ -48,7 +48,7 @@ resource "local_file" "gitops_agent_yaml" {
 # Step 5: Apply the YAML to cluster + wait for agent to connect
 resource "null_resource" "install_gitops_agent" {
   triggers = {
-    always_run = timestamp()
+    agent_id = harness_platform_gitops_agent.agent.identifier
   }
 
   provisioner "local-exec" {

@@ -1,11 +1,12 @@
 # ═══════════════════════════════════════════════════════════════════
 # External Secrets Operator — Syncs AWS Secrets Manager → K8s Secrets
-# EKS Pod Identity grants SecretsManager access (no IMDS in Auto Mode)
+# IRSA grants SecretsManager access via projected SA tokens
+# No webhook timing issues — credentials available instantly at pod start
 # ═══════════════════════════════════════════════════════════════════
 
 # ─────────────────────────────────────────
-# IAM Role for External Secrets (EKS Pod Identity)
-# EKS Auto Mode blocks IMDS — pods need Pod Identity for AWS creds
+# IAM Role for External Secrets (IRSA)
+# Uses OIDC trust policy — no webhook, credentials available at pod start
 # ─────────────────────────────────────────
 resource "aws_iam_role" "external_secrets" {
   name = "external-secrets-role"
@@ -14,9 +15,15 @@ resource "aws_iam_role" "external_secrets" {
     Statement = [{
       Effect = "Allow"
       Principal = {
-        Service = "pods.eks.amazonaws.com"
+        Federated = var.oidc_provider_arn
       }
-      Action = ["sts:AssumeRole", "sts:TagSession"]
+      Action = "sts:AssumeRoleWithWebIdentity"
+      Condition = {
+        StringEquals = {
+          "${var.oidc_provider_url}:sub" = "system:serviceaccount:external-secrets:external-secrets"
+          "${var.oidc_provider_url}:aud" = "sts.amazonaws.com"
+        }
+      }
     }]
   })
 }
@@ -42,14 +49,6 @@ resource "aws_iam_role_policy" "external_secrets_sm" {
   })
 }
 
-# EKS Pod Identity Association — binds IAM role to external-secrets SA
-resource "aws_eks_pod_identity_association" "external_secrets" {
-  cluster_name    = var.cluster_name
-  namespace       = "external-secrets"
-  service_account = "external-secrets"
-  role_arn        = aws_iam_role.external_secrets.arn
-}
-
 # ─────────────────────────────────────────
 # External Secrets Operator Helm Release
 # ─────────────────────────────────────────
@@ -63,40 +62,22 @@ resource "helm_release" "external_secrets" {
 
   values = [
     yamlencode({
-      installCRDs    = true
-      serviceAccount = { create = true, name = "external-secrets" }
+      installCRDs = true
+      serviceAccount = {
+        create = true
+        name   = "external-secrets"
+        annotations = {
+          "eks.amazonaws.com/role-arn" = aws_iam_role.external_secrets.arn
+        }
+      }
     })
   ]
 
-  depends_on = [aws_eks_pod_identity_association.external_secrets]
-}
-
-# Restart ESO to ensure Pod Identity credentials are injected
-resource "null_resource" "restart_external_secrets" {
-  triggers = {
-    always_run = timestamp()
-  }
-
-  provisioner "local-exec" {
-    interpreter = ["/bin/bash", "-c"]
-    command     = <<-EOT
-      aws eks update-kubeconfig --name ${var.cluster_name} --region ${var.aws_region} --kubeconfig /tmp/kubeconfig
-      for i in $(seq 1 12); do
-        READY=$(KUBECONFIG=/tmp/kubeconfig kubectl get deployment external-secrets -n external-secrets -o jsonpath='{.status.readyReplicas}' 2>/dev/null)
-        if [ "$READY" -ge 1 ] 2>/dev/null; then break; fi
-        echo "Waiting for External Secrets deployment... (attempt $i/12)"
-        sleep 10
-      done
-      KUBECONFIG=/tmp/kubeconfig kubectl rollout restart deployment/external-secrets -n external-secrets
-      KUBECONFIG=/tmp/kubeconfig kubectl rollout status deployment/external-secrets -n external-secrets --timeout=120s
-    EOT
-  }
-
-  depends_on = [helm_release.external_secrets]
+  depends_on = [aws_iam_role_policy.external_secrets_sm]
 }
 
 # ClusterSecretStore that connects to AWS Secrets Manager
-# Uses Pod Identity (no explicit auth needed — EKS injects creds automatically)
+# Uses IRSA (ServiceAccount annotation provides AWS credentials automatically)
 resource "kubectl_manifest" "cluster_secret_store" {
   yaml_body = yamlencode({
     apiVersion = "external-secrets.io/v1beta1"

@@ -3,11 +3,12 @@
 # MNC Pattern: Zero manual DNS management
 # Watches Ingress → creates CNAME in Route53 → deletes on Ingress removal
 # Only manages records it creates (ownership via TXT records)
+# IRSA: projected SA token provides credentials instantly at pod start
 # ═══════════════════════════════════════════════════════════════════
 
 # ─────────────────────────────────────────
-# IAM Role for External DNS (EKS Pod Identity)
-# EKS Auto Mode blocks IMDS access — pods need Pod Identity for AWS creds
+# IAM Role for External DNS (IRSA)
+# Uses OIDC trust policy — no webhook, credentials available at pod start
 # ─────────────────────────────────────────
 resource "aws_iam_role" "external_dns" {
   name = "external-dns-role"
@@ -16,9 +17,15 @@ resource "aws_iam_role" "external_dns" {
     Statement = [{
       Effect = "Allow"
       Principal = {
-        Service = "pods.eks.amazonaws.com"
+        Federated = var.oidc_provider_arn
       }
-      Action = ["sts:AssumeRole", "sts:TagSession"]
+      Action = "sts:AssumeRoleWithWebIdentity"
+      Condition = {
+        StringEquals = {
+          "${var.oidc_provider_url}:sub" = "system:serviceaccount:external-dns:external-dns"
+          "${var.oidc_provider_url}:aud" = "sts.amazonaws.com"
+        }
+      }
     }]
   })
 }
@@ -46,14 +53,6 @@ resource "aws_iam_role_policy" "external_dns_route53" {
       }
     ]
   })
-}
-
-# EKS Pod Identity Association — binds IAM role to the external-dns service account
-resource "aws_eks_pod_identity_association" "external_dns" {
-  cluster_name    = var.cluster_name
-  namespace       = "external-dns"
-  service_account = "external-dns"
-  role_arn        = aws_iam_role.external_dns.arn
 }
 
 # ─────────────────────────────────────────
@@ -89,10 +88,13 @@ resource "helm_release" "external_dns" {
         { name = "AWS_DEFAULT_REGION", value = var.aws_region }
       ]
 
-      # Service account — must match Pod Identity association name
+      # Service account with IRSA annotation — credentials available instantly
       serviceAccount = {
         create = true
         name   = "external-dns"
+        annotations = {
+          "eks.amazonaws.com/role-arn" = aws_iam_role.external_dns.arn
+        }
       }
 
       # Log level (debug helps troubleshoot — change to info once working)
@@ -112,29 +114,5 @@ resource "helm_release" "external_dns" {
     })
   ]
 
-  depends_on = [aws_eks_pod_identity_association.external_dns]
-}
-
-# Restart ExternalDNS to ensure Pod Identity credentials are injected
-resource "null_resource" "restart_external_dns" {
-  triggers = {
-    always_run = timestamp()
-  }
-
-  provisioner "local-exec" {
-    interpreter = ["/bin/bash", "-c"]
-    command     = <<-EOT
-      aws eks update-kubeconfig --name ${var.cluster_name} --region ${var.aws_region} --kubeconfig /tmp/kubeconfig
-      for i in $(seq 1 12); do
-        READY=$(KUBECONFIG=/tmp/kubeconfig kubectl get deployment external-dns -n external-dns -o jsonpath='{.status.readyReplicas}' 2>/dev/null)
-        if [ "$READY" -ge 1 ] 2>/dev/null; then break; fi
-        echo "Waiting for ExternalDNS deployment... (attempt $i/12)"
-        sleep 10
-      done
-      KUBECONFIG=/tmp/kubeconfig kubectl rollout restart deployment/external-dns -n external-dns
-      KUBECONFIG=/tmp/kubeconfig kubectl rollout status deployment/external-dns -n external-dns --timeout=120s
-    EOT
-  }
-
-  depends_on = [helm_release.external_dns]
+  depends_on = [aws_iam_role_policy.external_dns_route53]
 }

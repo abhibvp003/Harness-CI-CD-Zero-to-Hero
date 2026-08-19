@@ -2,6 +2,7 @@
 # EKS Cluster — Standard Managed (NOT Auto Mode)
 # Production pattern: Managed Node Groups + Cluster Autoscaler
 # High availability, auto-scaling, no taints on worker nodes
+# IRSA (IAM Roles for Service Accounts) for workload IAM access
 # ═══════════════════════════════════════════════════════════════════
 
 # IAM role for the EKS control plane
@@ -125,6 +126,21 @@ resource "aws_eks_cluster" "main" {
 }
 
 # ═══════════════════════════════════════════════════════════════════
+# OIDC Provider — Required for IRSA (IAM Roles for Service Accounts)
+# Enables pods to assume IAM roles via projected service account tokens
+# ═══════════════════════════════════════════════════════════════════
+data "tls_certificate" "eks" {
+  url = aws_eks_cluster.main.identity[0].oidc[0].issuer
+}
+
+resource "aws_iam_openid_connect_provider" "eks" {
+  client_id_list  = ["sts.amazonaws.com"]
+  thumbprint_list = [data.tls_certificate.eks.certificates[0].sha1_fingerprint]
+  url             = aws_eks_cluster.main.identity[0].oidc[0].issuer
+  tags            = merge(var.tags, { Name = "${var.cluster_name}-oidc" })
+}
+
+# ═══════════════════════════════════════════════════════════════════
 # EKS Addons (required for managed node groups)
 # ═══════════════════════════════════════════════════════════════════
 resource "aws_eks_addon" "vpc_cni" {
@@ -150,10 +166,10 @@ resource "aws_eks_addon" "ebs_csi" {
   addon_name                  = "aws-ebs-csi-driver"
   service_account_role_arn    = aws_iam_role.ebs_csi.arn
   resolve_conflicts_on_create = "OVERWRITE"
-  depends_on                  = [aws_eks_node_group.workloads, aws_eks_addon.pod_identity_agent]
+  depends_on                  = [aws_eks_node_group.workloads]
 }
 
-# IAM role for EBS CSI driver (Pod Identity)
+# IAM role for EBS CSI driver (IRSA)
 resource "aws_iam_role" "ebs_csi" {
   name = "${var.cluster_name}-ebs-csi-role"
   assume_role_policy = jsonencode({
@@ -161,9 +177,15 @@ resource "aws_iam_role" "ebs_csi" {
     Statement = [{
       Effect = "Allow"
       Principal = {
-        Service = "pods.eks.amazonaws.com"
+        Federated = aws_iam_openid_connect_provider.eks.arn
       }
-      Action = ["sts:AssumeRole", "sts:TagSession"]
+      Action = "sts:AssumeRoleWithWebIdentity"
+      Condition = {
+        StringEquals = {
+          "${replace(aws_eks_cluster.main.identity[0].oidc[0].issuer, "https://", "")}:sub" = "system:serviceaccount:kube-system:ebs-csi-controller-sa"
+          "${replace(aws_eks_cluster.main.identity[0].oidc[0].issuer, "https://", "")}:aud" = "sts.amazonaws.com"
+        }
+      }
     }]
   })
 }
@@ -171,20 +193,6 @@ resource "aws_iam_role" "ebs_csi" {
 resource "aws_iam_role_policy_attachment" "ebs_csi" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
   role       = aws_iam_role.ebs_csi.name
-}
-
-resource "aws_eks_pod_identity_association" "ebs_csi" {
-  cluster_name    = aws_eks_cluster.main.name
-  namespace       = "kube-system"
-  service_account = "ebs-csi-controller-sa"
-  role_arn        = aws_iam_role.ebs_csi.arn
-  depends_on      = [aws_eks_addon.pod_identity_agent]
-}
-
-resource "aws_eks_addon" "pod_identity_agent" {
-  cluster_name = aws_eks_cluster.main.name
-  addon_name   = "eks-pod-identity-agent"
-  depends_on   = [aws_eks_node_group.workloads]
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -301,6 +309,7 @@ resource "aws_launch_template" "ci" {
 # ═══════════════════════════════════════════════════════════════════
 # AWS Load Balancer Controller — creates NLB/ALB from K8s Service annotations
 # Required for service.beta.kubernetes.io/aws-load-balancer-type: external
+# IRSA: projected SA token provides credentials instantly at pod start
 # ═══════════════════════════════════════════════════════════════════
 resource "aws_iam_policy" "lb_controller" {
   name = "${var.cluster_name}-lb-controller-policy"
@@ -356,7 +365,7 @@ resource "aws_iam_policy" "lb_controller" {
   })
 }
 
-# IAM role for LB Controller (Pod Identity)
+# IAM role for LB Controller (IRSA)
 resource "aws_iam_role" "lb_controller" {
   name = "${var.cluster_name}-lb-controller-role"
   assume_role_policy = jsonencode({
@@ -364,9 +373,15 @@ resource "aws_iam_role" "lb_controller" {
     Statement = [{
       Effect = "Allow"
       Principal = {
-        Service = "pods.eks.amazonaws.com"
+        Federated = aws_iam_openid_connect_provider.eks.arn
       }
-      Action = ["sts:AssumeRole", "sts:TagSession"]
+      Action = "sts:AssumeRoleWithWebIdentity"
+      Condition = {
+        StringEquals = {
+          "${replace(aws_eks_cluster.main.identity[0].oidc[0].issuer, "https://", "")}:sub" = "system:serviceaccount:kube-system:aws-load-balancer-controller"
+          "${replace(aws_eks_cluster.main.identity[0].oidc[0].issuer, "https://", "")}:aud" = "sts.amazonaws.com"
+        }
+      }
     }]
   })
 }
@@ -374,14 +389,6 @@ resource "aws_iam_role" "lb_controller" {
 resource "aws_iam_role_policy_attachment" "lb_controller" {
   policy_arn = aws_iam_policy.lb_controller.arn
   role       = aws_iam_role.lb_controller.name
-}
-
-resource "aws_eks_pod_identity_association" "lb_controller" {
-  cluster_name    = aws_eks_cluster.main.name
-  namespace       = "kube-system"
-  service_account = "aws-load-balancer-controller"
-  role_arn        = aws_iam_role.lb_controller.arn
-  depends_on      = [aws_eks_addon.pod_identity_agent]
 }
 
 resource "helm_release" "aws_lb_controller" {
@@ -401,41 +408,20 @@ resource "helm_release" "aws_lb_controller" {
       serviceAccount = {
         create = true
         name   = "aws-load-balancer-controller"
+        annotations = {
+          "eks.amazonaws.com/role-arn" = aws_iam_role.lb_controller.arn
+        }
       }
     })
   ]
 
-  depends_on = [aws_eks_node_group.workloads, aws_eks_pod_identity_association.lb_controller]
-}
-
-# Restart LB Controller to ensure Pod Identity credentials are injected
-resource "null_resource" "restart_lb_controller" {
-  triggers = {
-    always_run = timestamp()
-  }
-
-  provisioner "local-exec" {
-    interpreter = ["/bin/bash", "-c"]
-    command     = <<-EOT
-      aws eks update-kubeconfig --name ${aws_eks_cluster.main.name} --region ${var.region} --kubeconfig /tmp/kubeconfig
-      # Wait for deployment to exist and be ready before restarting
-      for i in $(seq 1 12); do
-        READY=$(KUBECONFIG=/tmp/kubeconfig kubectl get deployment aws-load-balancer-controller -n kube-system -o jsonpath='{.status.readyReplicas}' 2>/dev/null)
-        if [ "$READY" -ge 1 ] 2>/dev/null; then break; fi
-        echo "Waiting for LB Controller deployment... (attempt $i/12)"
-        sleep 10
-      done
-      KUBECONFIG=/tmp/kubeconfig kubectl rollout restart deployment/aws-load-balancer-controller -n kube-system
-      KUBECONFIG=/tmp/kubeconfig kubectl rollout status deployment/aws-load-balancer-controller -n kube-system --timeout=180s
-    EOT
-  }
-
-  depends_on = [helm_release.aws_lb_controller]
+  depends_on = [aws_eks_node_group.workloads, aws_iam_role_policy_attachment.lb_controller]
 }
 
 # ═══════════════════════════════════════════════════════════════════
 # Cluster Autoscaler — auto-scales node groups when pods are pending
 # Monitors pending pods → increases desired_size → new nodes join cluster
+# IRSA: projected SA token provides credentials instantly at pod start
 # ═══════════════════════════════════════════════════════════════════
 resource "aws_iam_policy" "cluster_autoscaler" {
   name = "${var.cluster_name}-autoscaler-policy"
@@ -462,7 +448,7 @@ resource "aws_iam_policy" "cluster_autoscaler" {
   })
 }
 
-# IAM role for Cluster Autoscaler (Pod Identity)
+# IAM role for Cluster Autoscaler (IRSA)
 resource "aws_iam_role" "cluster_autoscaler" {
   name = "${var.cluster_name}-autoscaler-role"
   assume_role_policy = jsonencode({
@@ -470,9 +456,15 @@ resource "aws_iam_role" "cluster_autoscaler" {
     Statement = [{
       Effect = "Allow"
       Principal = {
-        Service = "pods.eks.amazonaws.com"
+        Federated = aws_iam_openid_connect_provider.eks.arn
       }
-      Action = ["sts:AssumeRole", "sts:TagSession"]
+      Action = "sts:AssumeRoleWithWebIdentity"
+      Condition = {
+        StringEquals = {
+          "${replace(aws_eks_cluster.main.identity[0].oidc[0].issuer, "https://", "")}:sub" = "system:serviceaccount:kube-system:cluster-autoscaler-aws-cluster-autoscaler"
+          "${replace(aws_eks_cluster.main.identity[0].oidc[0].issuer, "https://", "")}:aud" = "sts.amazonaws.com"
+        }
+      }
     }]
   })
 }
@@ -480,14 +472,6 @@ resource "aws_iam_role" "cluster_autoscaler" {
 resource "aws_iam_role_policy_attachment" "cluster_autoscaler" {
   policy_arn = aws_iam_policy.cluster_autoscaler.arn
   role       = aws_iam_role.cluster_autoscaler.name
-}
-
-resource "aws_eks_pod_identity_association" "cluster_autoscaler" {
-  cluster_name    = aws_eks_cluster.main.name
-  namespace       = "kube-system"
-  service_account = "cluster-autoscaler-aws-cluster-autoscaler"
-  role_arn        = aws_iam_role.cluster_autoscaler.arn
-  depends_on      = [aws_eks_addon.pod_identity_agent]
 }
 
 resource "helm_release" "cluster_autoscaler" {
@@ -511,6 +495,9 @@ resource "helm_release" "cluster_autoscaler" {
         serviceAccount = {
           create = true
           name   = "cluster-autoscaler-aws-cluster-autoscaler"
+          annotations = {
+            "eks.amazonaws.com/role-arn" = aws_iam_role.cluster_autoscaler.arn
+          }
         }
       }
       extraArgs = {
@@ -522,30 +509,5 @@ resource "helm_release" "cluster_autoscaler" {
     })
   ]
 
-  depends_on = [aws_eks_node_group.workloads, aws_eks_pod_identity_association.cluster_autoscaler]
-}
-
-# Restart Cluster Autoscaler to ensure Pod Identity credentials are injected
-resource "null_resource" "restart_cluster_autoscaler" {
-  triggers = {
-    always_run = timestamp()
-  }
-
-  provisioner "local-exec" {
-    interpreter = ["/bin/bash", "-c"]
-    command     = <<-EOT
-      aws eks update-kubeconfig --name ${aws_eks_cluster.main.name} --region ${var.region} --kubeconfig /tmp/kubeconfig
-      # Wait for deployment to exist and be ready before restarting
-      for i in $(seq 1 12); do
-        READY=$(KUBECONFIG=/tmp/kubeconfig kubectl get deployment cluster-autoscaler-aws-cluster-autoscaler -n kube-system -o jsonpath='{.status.readyReplicas}' 2>/dev/null)
-        if [ "$READY" -ge 1 ] 2>/dev/null; then break; fi
-        echo "Waiting for Cluster Autoscaler deployment... (attempt $i/12)"
-        sleep 10
-      done
-      KUBECONFIG=/tmp/kubeconfig kubectl rollout restart deployment/cluster-autoscaler-aws-cluster-autoscaler -n kube-system
-      KUBECONFIG=/tmp/kubeconfig kubectl rollout status deployment/cluster-autoscaler-aws-cluster-autoscaler -n kube-system --timeout=180s
-    EOT
-  }
-
-  depends_on = [helm_release.cluster_autoscaler]
+  depends_on = [aws_eks_node_group.workloads, aws_iam_role_policy_attachment.cluster_autoscaler]
 }
