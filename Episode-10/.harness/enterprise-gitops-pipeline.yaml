@@ -70,7 +70,7 @@ pipeline:
                         shell: Sh
                         image: aquasec/trivy:latest
                         command: |-
-                          trivy fs --format json --output /harness/trivy-results.json /harness/Episode-10/src/ || true
+                          trivy fs --severity HIGH,CRITICAL --format table --exit-code 0 /harness/Episode-10/src/
 
                   - step:
                       type: Run
@@ -84,7 +84,8 @@ pipeline:
                           apk add --no-cache curl
                           curl -sSfL https://github.com/google/osv-scanner/releases/latest/download/osv-scanner_linux_amd64 -o /usr/local/bin/osv-scanner
                           chmod +x /usr/local/bin/osv-scanner
-                          osv-scanner --recursive /harness/Episode-10/src/ || true
+                          osv-scanner --recursive --format table /harness/Episode-10/src/
+                          exit 0
 
                   - step:
                       type: Run
