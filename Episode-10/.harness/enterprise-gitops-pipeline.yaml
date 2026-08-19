@@ -55,7 +55,7 @@ pipeline:
                         shell: Sh
                         image: zricethezav/gitleaks:latest
                         command: |-
-                          gitleaks detect --source=/harness --no-git --report-format json --report-path /harness/gitleaks-report.json || true
+                          gitleaks detect --source=/harness --no-git --report-format json --report-path /harness/gitleaks-report.json
 
                   - step:
                       type: Run
