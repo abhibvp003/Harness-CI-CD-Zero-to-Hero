@@ -105,6 +105,9 @@ pipeline:
                           sonar-scanner \
                             -Dsonar.host.url=$SONAR_HOST_URL \
                             -Dsonar.token=$SONAR_TOKEN
+                        resources:
+                          limits:
+                            memory: 3Gi
 
                   - step:
                       type: Run
