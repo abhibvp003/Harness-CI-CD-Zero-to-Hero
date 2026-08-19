@@ -345,6 +345,7 @@ pipeline:
                         memory: 2Gi # 2 GB RAM limit for this build step
 
               # Save build dependencies to S3 cache (next pipeline run will be faster)
+              # Save build dependencies to S3 cache (next pipeline run will be faster)
               - step:
                   type: SaveCacheS3
                   name: Save Cache
@@ -360,6 +361,75 @@ pipeline:
                       - /root/.npm
                       - /root/.gradle/caches
                     archiveFormat: Tar
+
+    # ============================================
+    # STAGE 1c: Post-Build Image Security Scan (Trivy scans final Docker images for OS/runtime CVEs)
+    # Pre-build scans source code, post-build scans the actual container that runs in production
+    # ============================================
+    - stage:
+        name: image-security-scan
+        identifier: image_security_scan
+        description: "Trivy scans all 11 built ECR images for container vulnerabilities (OS packages, runtime CVEs)"
+        type: CI
+        spec:
+          cloneCodebase: false
+          infrastructure:
+            type: KubernetesDirect
+            spec:
+              connectorRef: k8sdelegate
+              namespace: harness-delegate-ng
+              automountServiceAccountToken: true
+              os: Linux
+              nodeSelector:
+                purpose: ci-builds
+              tolerations:
+                - key: dedicated
+                  value: ci-builds
+                  effect: NoSchedule
+          execution:
+            steps:
+              # Scans all 11 ECR images using aws ecr get-login-password (OIDC connector, no access keys)
+              - step:
+                  type: Run
+                  name: Trivy Scan All ECR Images
+                  identifier: trivy_scan_all_images
+                  spec:
+                    connectorRef: account.aws_account
+                    shell: Sh
+                    image: amazon/aws-cli:latest
+                    envVariables:
+                      AWS_DEFAULT_REGION: <+variable.aws_region>
+                    command: |-
+                      # Install Trivy
+                      curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+
+                      # Get ECR credentials using OIDC connector (no access keys — IAM role assumed automatically)
+                      ECR_REGISTRY="<+variable.aws_account_id>.dkr.ecr.<+variable.aws_region>.amazonaws.com"
+                      export TRIVY_USERNAME=AWS
+                      export TRIVY_PASSWORD=$(aws ecr get-login-password --region <+variable.aws_region>)
+
+                      # All 11 microservice image names
+                      SERVICES="frontend cartservice checkoutservice productcatalogservice currencyservice emailservice paymentservice recommendationservice shippingservice adservice loadgenerator"
+                      TAG="v<+pipeline.sequenceId>"
+
+                      echo "============================================"
+                      echo "  TRIVY IMAGE SCAN — 11 Microservices"
+                      echo "  Registry: ${ECR_REGISTRY}"
+                      echo "  Tag: ${TAG}"
+                      echo "============================================"
+
+                      for SVC in $SERVICES; do
+                        echo ""
+                        echo "--- Scanning: ${SVC}:${TAG} ---"
+                        trivy image --severity HIGH,CRITICAL --no-progress --exit-code 0 \
+                          "${ECR_REGISTRY}/${SVC}:${TAG}"
+                        echo "--- ${SVC} scan complete ---"
+                      done
+
+                      echo ""
+                      echo "============================================"
+                      echo "  ALL 11 IMAGE SCANS COMPLETE"
+                      echo "============================================"
 
     # ============================================
     # STAGE 2: AI Security Agent
