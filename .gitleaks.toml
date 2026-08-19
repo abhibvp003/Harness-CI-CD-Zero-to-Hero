@@ -1,0 +1,11 @@
+title = "Gitleaks Configuration"
+
+[allowlist]
+description = "Allow known safe patterns in Episode-10 infrastructure code"
+paths = [
+  '''Episode-10/terraform/.*\.tf''',
+  '''Episode-10/terraform/modules/.*\.tf''',
+  '''\.terraform\.lock\.hcl''',
+  '''Episode-10/k8s/templates/.*\.yaml''',
+  '''Episode-10/ai-agents/.*\.py''',
+]

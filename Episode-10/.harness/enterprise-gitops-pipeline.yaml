@@ -55,7 +55,11 @@ pipeline:
                         shell: Sh
                         image: zricethezav/gitleaks:latest
                         command: |-
-                          gitleaks detect --source=/harness --no-git --report-format json --report-path /harness/gitleaks-report.json
+                          gitleaks detect --source=/harness --no-git --report-format json --report-path /harness/gitleaks-report.json || true
+                          echo "--- Gitleaks Report ---"
+                          cat /harness/gitleaks-report.json
+                          LEAKS=$(cat /harness/gitleaks-report.json | grep -c '"RuleID"' || echo "0")
+                          if [ "$LEAKS" -gt 0 ]; then echo "FAILED: $LEAKS leaks found"; exit 1; fi
 
                   - step:
                       type: Run
