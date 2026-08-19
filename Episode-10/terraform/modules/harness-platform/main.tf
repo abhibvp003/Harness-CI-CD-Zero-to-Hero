@@ -140,6 +140,19 @@ resource "harness_platform_variables" "ci_cache_bucket" {
   }
 }
 
+# ── Harness Variable: Domain Name (used by OWASP ZAP to scan live app URL) ──
+resource "harness_platform_variables" "domain_name" {
+  identifier = "domain_name"
+  name       = "domain_name"
+  org_id     = var.org_id
+  project_id = var.project_id
+  type       = "String"
+  spec {
+    value_type  = "FIXED"
+    fixed_value = var.domain_name
+  }
+}
+
 # ── Monitored Service (CV) ──
 
 # Delay between monitored service deletion and service/environment deletion (Harness API eventual consistency)

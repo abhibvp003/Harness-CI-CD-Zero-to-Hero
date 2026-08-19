@@ -102,6 +102,18 @@ pipeline:
                             -Dsonar.host.url=$SONAR_HOST_URL \
                             -Dsonar.token=$SONAR_TOKEN
 
+                  - step:
+                      type: Run
+                      name: Checkov IaC Scan
+                      identifier: checkov
+                      spec:
+                        connectorRef: dockerhub
+                        shell: Sh
+                        image: bridgecrew/checkov:latest
+                        command: |-
+                          checkov --directory /harness/Episode-10/terraform --framework terraform --output cli --soft-fail
+                          checkov --directory /harness/Episode-10/k8s --framework kubernetes --output cli --soft-fail
+
     # ============================================
     # STAGE 1b: Build & Push to ECR (separate stage — smaller pod fits on existing nodes)
     # ============================================
@@ -722,6 +734,54 @@ pipeline:
               action:
                 type: StageRollback
         gitOpsEnabled: true
+
+    # ============================================
+    # STAGE 6: OWASP ZAP — Dynamic Application Security Testing (DAST)
+    # Scans the LIVE deployed application for web vulnerabilities (XSS, SQL injection, etc.)
+    # Runs AFTER deployment because DAST needs a running application to test against
+    # ============================================
+    - stage:
+        name: dast-owasp-zap
+        identifier: dast_owasp_zap
+        description: "OWASP ZAP baseline scan against live application URL"
+        type: CI
+        spec:
+          cloneCodebase: false
+          infrastructure:
+            type: KubernetesDirect
+            spec:
+              connectorRef: k8sdelegate
+              namespace: harness-delegate-ng
+              automountServiceAccountToken: true
+              os: Linux
+              nodeSelector:
+                purpose: ci-builds
+              tolerations:
+                - key: dedicated
+                  value: ci-builds
+                  effect: NoSchedule
+          execution:
+            steps:
+              # OWASP ZAP baseline scan — spiders the app for 1 minute, then passive scans all responses
+              - step:
+                  type: Run
+                  name: OWASP ZAP Baseline Scan
+                  identifier: owasp_zap_scan
+                  spec:
+                    connectorRef: dockerhub
+                    shell: Sh
+                    image: ghcr.io/zaproxy/zaproxy:stable
+                    command: |-
+                      echo "============================================"
+                      echo "  OWASP ZAP — Dynamic Application Security Test"
+                      echo "  Target: https://app.<+variable.domain_name>"
+                      echo "============================================"
+                      zap-baseline.py -t https://app.<+variable.domain_name> -r /harness/zap-report.html -I
+                      echo ""
+                      echo "============================================"
+                      echo "  ZAP BASELINE SCAN COMPLETE"
+                      echo "  Report: /harness/zap-report.html"
+                      echo "============================================"
 
   # Slack notification on success/failure
   notificationRules:
