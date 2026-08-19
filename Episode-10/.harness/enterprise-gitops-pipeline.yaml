@@ -103,7 +103,7 @@ pipeline:
                             DIR="/harness/Episode-10/src/$SVC"
                             if [ -f "$DIR/sonar-project.properties" ]; then
                               echo "--- Scanning: $SVC ---"
-                              sonar-scanner -Dsonar.host.url=$SONAR_HOST_URL -Dsonar.token=$SONAR_TOKEN -Dproject.settings="$DIR/sonar-project.properties" || FAILED=$((FAILED+1))
+                              sonar-scanner -Dsonar.host.url=$SONAR_HOST_URL -Dsonar.token=$SONAR_TOKEN -Dsonar.projectBaseDir="$DIR" -Dproject.settings="$DIR/sonar-project.properties" || FAILED=$((FAILED+1))
                             else
                               echo "--- SKIP: $SVC (no sonar-project.properties) ---"
                             fi
