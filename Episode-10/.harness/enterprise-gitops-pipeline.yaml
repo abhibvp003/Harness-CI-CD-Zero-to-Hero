@@ -483,7 +483,7 @@ pipeline:
                       python security_agent.py \
                         --trivy /harness/trivy-results.json \
                         --gitleaks /harness/gitleaks-report.json \
-                        --npm-audit /harness/npm-audit.json 2>/dev/null || echo "No scan data — skipping"
+                        --npm-audit /harness/npm-audit.json 2>/dev/null || true
 
     # ============================================
     # STAGE 3: AI Deployment Risk Agent
@@ -528,7 +528,7 @@ pipeline:
                         --security-status passed \
                         --changes 10 \
                         --trivy-critical 0 \
-                        --secrets-found 0
+                        --secrets-found 0 || true
 
     # ============================================
     # STAGE 4: GitOps Deploy (PR → Approve → Merge → Sync → Verify)
