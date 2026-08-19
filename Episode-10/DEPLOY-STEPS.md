@@ -412,12 +412,8 @@ aws eks list-addons --cluster-name ep10-enterprise-cluster --region us-east-1
 | 3 | `sonar_token` | `squ_xxx...` | http://BASTION-IP:9000 → Login (admin/admin) → My Account → Security → Generate Token |
 
 **7.2 — Create Variable:**
-1. Go to **Project Settings → Variables → + New Variable**
-2. Create:
 
-| Name | Type | Value |
-|------|------|-------|
-| `sonar_host_url` | String | `http://BASTION-IP:9000` (replace BASTION-IP with actual IP from Terraform output) |
+> **`sonar_host_url` is auto-created by Terraform** — it reads the bastion IP and sets `http://BASTION-IP:9000` automatically. No manual step needed.
 
 ---
 
@@ -487,6 +483,7 @@ kubectl get pods -n online-boutique
 | Grafana | `https://grafana.yourdomain.com` | admin / (see AWS SM: `online-boutique/grafana-password`) |
 | Kibana | `https://kibana.yourdomain.com` | elastic / (see AWS SM: `online-boutique/efk-password`) — Native xpack login |
 | Jaeger | `https://jaeger.yourdomain.com` | No login |
+| Falco (Runtime Security) | `https://falco.yourdomain.com` | admin / (see AWS SM: `online-boutique/falco-password`) |
 | SonarQube | `http://BASTION-IP:9000` | admin / admin |
 
 ---
