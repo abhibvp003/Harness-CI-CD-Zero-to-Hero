@@ -85,6 +85,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "ci_cache" {
   rule {
     id     = "expire-old-cache"
     status = "Enabled"
+    filter {}
     expiration { days = 14 }
   }
 }
