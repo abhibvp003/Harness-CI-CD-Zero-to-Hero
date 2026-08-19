@@ -118,7 +118,7 @@ resource "helm_release" "external_dns" {
 # Restart ExternalDNS to ensure Pod Identity credentials are injected
 resource "null_resource" "restart_external_dns" {
   triggers = {
-    external_dns = helm_release.external_dns.metadata[0].revision
+    always_run = timestamp()
   }
 
   provisioner "local-exec" {

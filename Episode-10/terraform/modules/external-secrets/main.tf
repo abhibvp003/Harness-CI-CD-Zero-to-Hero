@@ -74,7 +74,7 @@ resource "helm_release" "external_secrets" {
 # Restart ESO to ensure Pod Identity credentials are injected
 resource "null_resource" "restart_external_secrets" {
   triggers = {
-    eso = helm_release.external_secrets.metadata[0].revision
+    always_run = timestamp()
   }
 
   provisioner "local-exec" {

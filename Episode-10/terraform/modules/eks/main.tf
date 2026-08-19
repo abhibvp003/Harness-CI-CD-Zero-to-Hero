@@ -411,7 +411,7 @@ resource "helm_release" "aws_lb_controller" {
 # Restart LB Controller to ensure Pod Identity credentials are injected
 resource "null_resource" "restart_lb_controller" {
   triggers = {
-    lb_controller = helm_release.aws_lb_controller.metadata[0].revision
+    always_run = timestamp()
   }
 
   provisioner "local-exec" {
@@ -528,7 +528,7 @@ resource "helm_release" "cluster_autoscaler" {
 # Restart Cluster Autoscaler to ensure Pod Identity credentials are injected
 resource "null_resource" "restart_cluster_autoscaler" {
   triggers = {
-    autoscaler = helm_release.cluster_autoscaler.metadata[0].revision
+    always_run = timestamp()
   }
 
   provisioner "local-exec" {
