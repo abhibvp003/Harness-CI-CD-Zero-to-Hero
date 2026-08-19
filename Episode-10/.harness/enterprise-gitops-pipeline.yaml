@@ -82,7 +82,7 @@ pipeline:
                         image: golang:1.21-alpine
                         command: |-
                           go install github.com/google/osv-scanner/cmd/osv-scanner@latest
-                          osv-scanner --recursive /harness/Episode-10/src/ || true
+                          osv-scanner --recursive /harness/Episode-10/src/
 
                   - step:
                       type: Run
