@@ -101,10 +101,19 @@ pipeline:
                           SONAR_TOKEN: <+secrets.getValue("sonar_token")>
                           SONAR_USER_HOME: /tmp/.sonar
                         command: |-
-                          cd /harness/Episode-10
-                          sonar-scanner \
-                            -Dsonar.host.url=$SONAR_HOST_URL \
-                            -Dsonar.token=$SONAR_TOKEN
+                          echo "=== SonarQube Multi-Project Scan (11 microservices) ==="
+                          SERVICES="frontend cartservice checkoutservice productcatalogservice currencyservice emailservice paymentservice recommendationservice shippingservice loadgenerator adservice"
+                          FAILED=0
+                          for SVC in $SERVICES; do
+                            DIR="/harness/Episode-10/src/$SVC"
+                            if [ -f "$DIR/sonar-project.properties" ]; then
+                              echo "--- Scanning: $SVC ---"
+                              sonar-scanner -Dsonar.host.url=$SONAR_HOST_URL -Dsonar.token=$SONAR_TOKEN -Dproject.settings="$DIR/sonar-project.properties" || FAILED=$((FAILED+1))
+                            else
+                              echo "--- SKIP: $SVC (no sonar-project.properties) ---"
+                            fi
+                          done
+                          echo "=== SonarQube Complete: $FAILED failures ==="
                         resources:
                           limits:
                             memory: 3Gi
