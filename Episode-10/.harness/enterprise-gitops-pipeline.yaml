@@ -74,19 +74,14 @@ pipeline:
 
                   - step:
                       type: Run
-                      name: OWASP Dependency Check
+                      name: OSV Dependency Scan
                       identifier: owasp
                       spec:
                         connectorRef: dockerhub
                         shell: Sh
-                        image: owasp/dependency-check:latest
+                        image: ghcr.io/google/osv-scanner:latest
                         command: |-
-                          /usr/share/dependency-check/bin/dependency-check.sh \
-                            --scan /harness/Episode-10/src/ \
-                            --format JSON \
-                            --out /harness/owasp-report \
-                            --project "online-boutique" \
-                            --failOnCVSS 9 || true
+                          osv-scanner --recursive /harness/Episode-10/src/
 
                   - step:
                       type: Run
