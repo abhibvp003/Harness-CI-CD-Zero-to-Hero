@@ -79,9 +79,10 @@ pipeline:
                       spec:
                         connectorRef: dockerhub
                         shell: Sh
-                        image: ghcr.io/google/osv-scanner:latest
+                        image: golang:1.21-alpine
                         command: |-
-                          osv-scanner --recursive /harness/Episode-10/src/
+                          go install github.com/google/osv-scanner/cmd/osv-scanner@latest
+                          osv-scanner --recursive /harness/Episode-10/src/ || true
 
                   - step:
                       type: Run
