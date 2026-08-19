@@ -374,6 +374,7 @@ pipeline:
                   identifier: prepare_cache
                   spec:
                     shell: Sh
+                    image: alpine:3.19
                     command: |-
                       mkdir -p /root/.cache/go-build /root/go/pkg/mod /root/.npm /root/.gradle/caches
               - step:
