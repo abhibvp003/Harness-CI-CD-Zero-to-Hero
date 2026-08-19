@@ -305,8 +305,7 @@ resource "kubectl_manifest" "kibana_index_pattern_job" {
       namespace = "logging"
     }
     spec = {
-      ttlSecondsAfterFinished = 300
-      backoffLimit            = 10
+      backoffLimit = 10
       template = {
         spec = {
           restartPolicy = "OnFailure"
