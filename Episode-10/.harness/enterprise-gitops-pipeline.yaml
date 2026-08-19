@@ -357,7 +357,14 @@ pipeline:
                         memory: 2Gi # 2 GB RAM limit for this build step
 
               # Save build dependencies to S3 cache (next pipeline run will be faster)
-              # Save build dependencies to S3 cache (next pipeline run will be faster)
+              - step:
+                  type: Run
+                  name: Prepare Cache Dirs
+                  identifier: prepare_cache
+                  spec:
+                    shell: Sh
+                    command: |-
+                      mkdir -p /root/.cache/go-build /root/go/pkg/mod /root/.npm /root/.gradle/caches
               - step:
                   type: SaveCacheS3
                   name: Save Cache
