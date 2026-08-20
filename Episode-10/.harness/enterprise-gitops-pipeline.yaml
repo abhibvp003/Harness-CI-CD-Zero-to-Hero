@@ -407,9 +407,52 @@ pipeline:
                     archiveFormat: Tar
                     pathStyle: false
                     override: true
-              # Post-Build Image Security Scan — ECR native scan_on_push handles this automatically
-              # Every image pushed to ECR is scanned by AWS (configured in Terraform: scan_on_push = true)
-              # Results visible in: AWS Console → ECR → Repositories → Select image → Vulnerabilities tab
+              # Post-Build Image Security Scan — Fetch ECR native scan results for all 11 images
+              - step:
+                  type: Run
+                  name: ECR Image Scan Results
+                  identifier: ecr_scan_results
+                  spec:
+                    connectorRef: account.aws_account
+                    shell: Sh
+                    image: <+variable.aws_account_id>.dkr.ecr.<+variable.aws_region>.amazonaws.com/frontend:v<+pipeline.sequenceId>
+                    entrypoint:
+                      - ""
+                    envVariables:
+                      AWS_DEFAULT_REGION: <+variable.aws_region>
+                    command: |-
+                      # Install AWS CLI (alpine-based frontend image)
+                      apk add --no-cache aws-cli jq
+
+                      SERVICES="frontend cartservice checkoutservice productcatalogservice currencyservice emailservice paymentservice recommendationservice shippingservice adservice loadgenerator"
+                      TAG="v<+pipeline.sequenceId>"
+                      CRITICAL_TOTAL=0
+                      HIGH_TOTAL=0
+
+                      echo "============================================"
+                      echo "  ECR IMAGE SCAN RESULTS — 11 Microservices"
+                      echo "  Tag: ${TAG}"
+                      echo "============================================"
+
+                      for SVC in $SERVICES; do
+                        echo ""
+                        echo "--- ${SVC}:${TAG} ---"
+                        # Wait for scan to complete (max 60s per image)
+                        aws ecr wait image-scan-complete --repository-name "$SVC" --image-id imageTag="$TAG" 2>/dev/null || true
+                        # Get scan findings summary
+                        FINDINGS=$(aws ecr describe-image-scan-findings --repository-name "$SVC" --image-id imageTag="$TAG" --query 'imageScanFindings.findingSeverityCounts' --output json 2>/dev/null || echo '{}')
+                        CRITICAL=$(echo "$FINDINGS" | jq -r '.CRITICAL // 0')
+                        HIGH=$(echo "$FINDINGS" | jq -r '.HIGH // 0')
+                        MEDIUM=$(echo "$FINDINGS" | jq -r '.MEDIUM // 0')
+                        echo "  CRITICAL: $CRITICAL | HIGH: $HIGH | MEDIUM: $MEDIUM"
+                        CRITICAL_TOTAL=$((CRITICAL_TOTAL + CRITICAL))
+                        HIGH_TOTAL=$((HIGH_TOTAL + HIGH))
+                      done
+
+                      echo ""
+                      echo "============================================"
+                      echo "  TOTAL: CRITICAL=$CRITICAL_TOTAL | HIGH=$HIGH_TOTAL"
+                      echo "============================================"
 
     # ============================================
     # STAGE 2: AI Security Agent
