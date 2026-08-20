@@ -407,34 +407,8 @@ pipeline:
                     archiveFormat: Tar
                     pathStyle: false
                     override: true
-
-    # ============================================
-    # STAGE 1c: Post-Build Image Security Scan (Trivy scans final Docker images for OS/runtime CVEs)
-    # Pre-build scans source code, post-build scans the actual container that runs in production
-    # ============================================
-    - stage:
-        name: image-security-scan
-        identifier: image_security_scan
-        description: "Trivy scans all 11 built ECR images for container vulnerabilities (OS packages, runtime CVEs)"
-        type: CI
-        spec:
-          cloneCodebase: false
-          infrastructure:
-            type: KubernetesDirect
-            spec:
-              connectorRef: k8sdelegate
-              namespace: harness-delegate-ng
-              automountServiceAccountToken: true
-              os: Linux
-              nodeSelector:
-                purpose: ci-builds
-              tolerations:
-                - key: dedicated
-                  value: ci-builds
-                  effect: NoSchedule
-          execution:
-            steps:
-              # Scans all 11 ECR images using node IAM role (no access keys needed on EKS)
+              # Post-Build Image Security Scan (Trivy scans final Docker images for OS/runtime CVEs)
+              # Pre-build scans source code (Stage 1), post-build scans the actual container images
               - step:
                   type: Run
                   name: Trivy Scan All ECR Images
@@ -442,22 +416,12 @@ pipeline:
                   spec:
                     connectorRef: dockerhub
                     shell: Sh
-                    image: amazon/aws-cli:latest
+                    image: aquasec/trivy:latest
                     envVariables:
-                      AWS_DEFAULT_REGION: <+variable.aws_region>
+                      AWS_REGION: <+variable.aws_region>
                     command: |-
-                      # Install tar (required by Trivy install script) and curl
-                      yum install -y tar gzip curl -q
-
-                      # Install Trivy
-                      curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
-
-                      # Get ECR credentials using node IAM role (EKS worker nodes have ECR access)
-                      ECR_REGISTRY="<+variable.aws_account_id>.dkr.ecr.<+variable.aws_region>.amazonaws.com"
-                      export TRIVY_USERNAME=AWS
-                      export TRIVY_PASSWORD=$(aws ecr get-login-password --region <+variable.aws_region>)
-
                       # All 11 microservice image names
+                      ECR_REGISTRY="<+variable.aws_account_id>.dkr.ecr.<+variable.aws_region>.amazonaws.com"
                       SERVICES="frontend cartservice checkoutservice productcatalogservice currencyservice emailservice paymentservice recommendationservice shippingservice adservice loadgenerator"
                       TAG="v<+pipeline.sequenceId>"
 
