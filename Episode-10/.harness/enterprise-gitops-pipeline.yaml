@@ -423,13 +423,13 @@ pipeline:
                   effect: NoSchedule
           execution:
             steps:
-              # Scans all 11 ECR images using aws ecr get-login-password (OIDC connector, no access keys)
+              # Scans all 11 ECR images using node IAM role (no access keys needed on EKS)
               - step:
                   type: Run
                   name: Trivy Scan All ECR Images
                   identifier: trivy_scan_all_images
                   spec:
-                    connectorRef: account.aws_account
+                    connectorRef: dockerhub
                     shell: Sh
                     image: amazon/aws-cli:latest
                     envVariables:
@@ -438,7 +438,7 @@ pipeline:
                       # Install Trivy
                       curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
 
-                      # Get ECR credentials using OIDC connector (no access keys — IAM role assumed automatically)
+                      # Get ECR credentials using node IAM role (EKS worker nodes have ECR access)
                       ECR_REGISTRY="<+variable.aws_account_id>.dkr.ecr.<+variable.aws_region>.amazonaws.com"
                       export TRIVY_USERNAME=AWS
                       export TRIVY_PASSWORD=$(aws ecr get-login-password --region <+variable.aws_region>)
