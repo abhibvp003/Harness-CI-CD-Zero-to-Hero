@@ -26,6 +26,8 @@ from ai_provider import get_ai_response
 def get_git_diff():
     """Get the git diff of recent changes"""
     try:
+        # Fetch git history (Harness uses shallow clone)
+        subprocess.run(["git", "fetch", "--unshallow"], capture_output=True, timeout=30)
         # Get diff of last commit
         result = subprocess.run(
             ["git", "diff", "HEAD~1", "--", "*.js", "*.ts", "*.py", "*.go", "*.java", "*.cpp"],

@@ -17,6 +17,8 @@ from ai_provider import get_ai_response
 def get_recent_commits(count=10):
     """Get recent git commits"""
     try:
+        # Fetch git history (Harness uses shallow clone)
+        subprocess.run(["git", "fetch", "--unshallow"], capture_output=True, timeout=30)
         result = subprocess.run(
             ["git", "log", f"-{count}", "--pretty=format:%h|%s|%an|%ad", "--date=short"],
             capture_output=True, text=True, timeout=10
