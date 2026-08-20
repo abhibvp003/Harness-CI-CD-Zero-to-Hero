@@ -416,12 +416,20 @@ pipeline:
                   spec:
                     connectorRef: dockerhub
                     shell: Sh
-                    image: aquasec/trivy:latest
+                    image: amazon/aws-cli:latest
                     envVariables:
-                      AWS_REGION: <+variable.aws_region>
+                      AWS_DEFAULT_REGION: <+variable.aws_region>
                     command: |-
-                      # All 11 microservice image names
+                      # Install Trivy (tar + gzip required for install script)
+                      yum install -y tar gzip -q 2>/dev/null
+                      curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+
+                      # Get ECR credentials using node IAM role (EKS worker nodes have ECR access)
                       ECR_REGISTRY="<+variable.aws_account_id>.dkr.ecr.<+variable.aws_region>.amazonaws.com"
+                      export TRIVY_USERNAME=AWS
+                      export TRIVY_PASSWORD=$(aws ecr get-login-password --region <+variable.aws_region>)
+
+                      # All 11 microservice image names
                       SERVICES="frontend cartservice checkoutservice productcatalogservice currencyservice emailservice paymentservice recommendationservice shippingservice adservice loadgenerator"
                       TAG="v<+pipeline.sequenceId>"
 
