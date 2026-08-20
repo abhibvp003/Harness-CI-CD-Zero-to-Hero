@@ -407,50 +407,9 @@ pipeline:
                     archiveFormat: Tar
                     pathStyle: false
                     override: true
-              # Post-Build Image Security Scan (Trivy scans final Docker images for OS/runtime CVEs)
-              # Pre-build scans source code (Stage 1), post-build scans the actual container images
-              - step:
-                  type: Run
-                  name: Trivy Scan All ECR Images
-                  identifier: trivy_scan_all_images
-                  spec:
-                    connectorRef: dockerhub
-                    shell: Sh
-                    image: amazon/aws-cli:latest
-                    envVariables:
-                      AWS_DEFAULT_REGION: <+variable.aws_region>
-                    command: |-
-                      # Install Trivy (tar + gzip required for install script)
-                      yum install -y tar gzip -q 2>/dev/null
-                      curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
-
-                      # Get ECR credentials using node IAM role (EKS worker nodes have ECR access)
-                      ECR_REGISTRY="<+variable.aws_account_id>.dkr.ecr.<+variable.aws_region>.amazonaws.com"
-                      export TRIVY_USERNAME=AWS
-                      export TRIVY_PASSWORD=$(aws ecr get-login-password --region <+variable.aws_region>)
-
-                      # All 11 microservice image names
-                      SERVICES="frontend cartservice checkoutservice productcatalogservice currencyservice emailservice paymentservice recommendationservice shippingservice adservice loadgenerator"
-                      TAG="v<+pipeline.sequenceId>"
-
-                      echo "============================================"
-                      echo "  TRIVY IMAGE SCAN — 11 Microservices"
-                      echo "  Registry: ${ECR_REGISTRY}"
-                      echo "  Tag: ${TAG}"
-                      echo "============================================"
-
-                      for SVC in $SERVICES; do
-                        echo ""
-                        echo "--- Scanning: ${SVC}:${TAG} ---"
-                        trivy image --severity HIGH,CRITICAL --no-progress --exit-code 0 \
-                          "${ECR_REGISTRY}/${SVC}:${TAG}"
-                        echo "--- ${SVC} scan complete ---"
-                      done
-
-                      echo ""
-                      echo "============================================"
-                      echo "  ALL 11 IMAGE SCANS COMPLETE"
-                      echo "============================================"
+              # Post-Build Image Security Scan — ECR native scan_on_push handles this automatically
+              # Every image pushed to ECR is scanned by AWS (configured in Terraform: scan_on_push = true)
+              # Results visible in: AWS Console → ECR → Repositories → Select image → Vulnerabilities tab
 
     # ============================================
     # STAGE 2: AI Security Agent
