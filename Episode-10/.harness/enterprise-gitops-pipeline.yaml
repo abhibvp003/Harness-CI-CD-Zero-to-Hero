@@ -116,8 +116,8 @@ pipeline:
                         shell: Sh
                         image: bridgecrew/checkov:latest
                         command: |-
-                          checkov --directory /harness/Episode-10/terraform --framework terraform --output cli --soft-fail
-                          checkov --directory /harness/Episode-10/k8s --framework kubernetes --output cli --soft-fail
+                          checkov --directory /harness/Episode-10/terraform --framework terraform --output cli --config-file /harness/Episode-10/.checkov.yaml
+                          checkov --directory /harness/Episode-10/k8s --framework kubernetes --output cli --config-file /harness/Episode-10/.checkov.yaml
 
     # ============================================
     # STAGE 1b: Build & Push to ECR (separate stage — smaller pod fits on existing nodes)

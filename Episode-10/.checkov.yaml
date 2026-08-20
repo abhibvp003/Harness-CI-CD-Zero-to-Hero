@@ -1,0 +1,50 @@
+skip-check:
+  # S3 CI cache bucket — ephemeral cache, not production data
+  - CKV_AWS_300 # S3 lifecycle abort failed uploads
+  - CKV_AWS_144 # S3 cross-region replication (not needed for cache)
+  - CKV_AWS_21 # S3 versioning (cache is disposable)
+  - CKV_AWS_145 # S3 KMS encryption (default encryption is sufficient)
+  - CKV_AWS_18 # S3 access logging (cache bucket, not sensitive)
+  - CKV2_AWS_62 # S3 event notifications
+  - CKV2_AWS_6 # S3 public access block (bucket is private by default)
+  # Bastion — intentionally open for SSM access + SonarQube
+  - CKV_AWS_274 # AdminAccess policy (bastion needs full access for kubectl)
+  - CKV_AWS_23 # Security group description (bastion SG is simple)
+  - CKV_AWS_382 # Egress 0.0.0.0/0 (bastion needs internet for tools)
+  - CKV_AWS_24 # Ingress port 22 (bastion allows all TCP for SonarQube:9000)
+  - CKV_AWS_25 # Ingress port 3389
+  - CKV_AWS_260 # Ingress port 80
+  - CKV_AWS_126 # Detailed monitoring (cost saving for demo)
+  - CKV_AWS_135 # EBS optimized (t2.medium doesn't support it)
+  - CKV_AWS_79 # IMDSv2 (bastion needs IMDSv1 for some tools)
+  # EKS — public endpoint required for GitHub Actions access
+  - CKV_AWS_39 # EKS public endpoint disabled
+  - CKV_AWS_38 # EKS public endpoint not accessible to 0.0.0.0/0
+  # ECR — mutable tags required for CI (v1, v2, etc. overwrite)
+  - CKV_AWS_51 # ECR immutable tags
+  - CKV_AWS_136 # ECR KMS encryption (default AES-256 is sufficient)
+  # RDS — demo settings (cost optimized, not production HA)
+  - CKV_AWS_157 # Multi-AZ (cost saving)
+  - CKV_AWS_293 # Deletion protection (need easy destroy)
+  - CKV_AWS_353 # Performance insights (cost saving)
+  - CKV_AWS_161 # IAM authentication
+  - CKV_AWS_118 # Enhanced monitoring (cost saving)
+  - CKV_AWS_226 # Auto minor upgrades
+  - CKV_AWS_129 # RDS logging
+  - CKV2_AWS_30 # Query logging
+  - CKV2_AWS_60 # Copy tags to snapshots
+  # Secrets Manager — demo passwords, rotation not needed
+  - CKV_AWS_149 # KMS CMK encryption
+  - CKV2_AWS_57 # Auto rotation
+  # VPC — public subnets needed for NLB + bastion
+  - CKV_AWS_130 # Public subnets assign public IP (needed for NLB discovery)
+  - CKV2_AWS_11 # VPC flow logging (cost saving)
+  - CKV2_AWS_12 # Default SG restricts all traffic
+  # IAM policies — wildcard resources required for these services
+  - CKV_AWS_355 # IAM policy wildcard resource
+  - CKV_AWS_290 # IAM write without constraints
+  - CKV_AWS_288 # IAM data exfiltration
+  # EKS launch templates — IMDSv2 managed by EKS
+  - CKV2_AWS_64 # KMS key policy
+  # Delegate — uses default SA (Harness requirement)
+  - CKV_K8S_42 # Default service account
