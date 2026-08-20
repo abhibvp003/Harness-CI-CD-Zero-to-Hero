@@ -415,7 +415,7 @@ pipeline:
     - stage:
         name: ai-security-analysis
         identifier: ai_security_analysis
-        description: "AI agent analyzes security scan results"
+        description: "AI agents analyze security, code quality, and generate release notes"
         type: CI
         spec:
           cloneCodebase: true
@@ -434,22 +434,48 @@ pipeline:
                   effect: NoSchedule
           execution:
             steps:
-              - step:
-                  type: Run
-                  name: AI Security Agent
-                  identifier: ai_security_agent
-                  spec:
-                    connectorRef: dockerhub
-                    shell: Sh
-                    image: python:3.11-slim
-                    envVariables:
-                      OPENAI_API_KEY: <+secrets.getValue("openai_api_key")>
-                    command: |-
-                      cd Episode-10/ai-agents
-                      python security_agent.py \
-                        --trivy /harness/trivy-results.json \
-                        --gitleaks /harness/gitleaks-report.json \
-                        --npm-audit /harness/npm-audit.json 2>/dev/null || true
+              - parallel:
+                  - step:
+                      type: Run
+                      name: AI Security Agent
+                      identifier: ai_security_agent
+                      spec:
+                        connectorRef: dockerhub
+                        shell: Sh
+                        image: python:3.11-slim
+                        envVariables:
+                          OPENAI_API_KEY: <+secrets.getValue("openai_api_key")>
+                        command: |-
+                          cd Episode-10/ai-agents
+                          python security_agent.py || true
+
+                  - step:
+                      type: Run
+                      name: AI Code Review Agent
+                      identifier: ai_code_review_agent
+                      spec:
+                        connectorRef: dockerhub
+                        shell: Sh
+                        image: python:3.11-slim
+                        envVariables:
+                          OPENAI_API_KEY: <+secrets.getValue("openai_api_key")>
+                        command: |-
+                          cd Episode-10/ai-agents
+                          python code_review_agent.py || true
+
+                  - step:
+                      type: Run
+                      name: AI Release Notes Agent
+                      identifier: ai_release_notes_agent
+                      spec:
+                        connectorRef: dockerhub
+                        shell: Sh
+                        image: python:3.11-slim
+                        envVariables:
+                          OPENAI_API_KEY: <+secrets.getValue("openai_api_key")>
+                        command: |-
+                          cd Episode-10/ai-agents
+                          python release_notes_agent.py --commits 10 || true
 
     # ============================================
     # STAGE 3: AI Deployment Risk Agent
@@ -457,7 +483,7 @@ pipeline:
     - stage:
         name: ai-deployment-risk
         identifier: ai_deployment_risk
-        description: "AI agent assesses if deployment is safe"
+        description: "AI agents assess deployment risk and analyze logs"
         type: CI
         spec:
           cloneCodebase: true
@@ -476,25 +502,41 @@ pipeline:
                   effect: NoSchedule
           execution:
             steps:
-              - step:
-                  type: Run
-                  name: AI Deployment Risk Agent
-                  identifier: ai_risk_agent
-                  spec:
-                    connectorRef: dockerhub
-                    shell: Sh
-                    image: python:3.11-slim
-                    envVariables:
-                      OPENAI_API_KEY: <+secrets.getValue("openai_api_key")>
-                    command: |-
-                      cd Episode-10/ai-agents
-                      python deployment_risk_agent.py \
-                        --environment production \
-                        --test-status passed \
-                        --security-status passed \
-                        --changes 10 \
-                        --trivy-critical 0 \
-                        --secrets-found 0 || true
+              - parallel:
+                  - step:
+                      type: Run
+                      name: AI Deployment Risk Agent
+                      identifier: ai_risk_agent
+                      spec:
+                        connectorRef: dockerhub
+                        shell: Sh
+                        image: python:3.11-slim
+                        envVariables:
+                          OPENAI_API_KEY: <+secrets.getValue("openai_api_key")>
+                        command: |-
+                          cd Episode-10/ai-agents
+                          python deployment_risk_agent.py \
+                            --environment production \
+                            --test-status passed \
+                            --security-status passed \
+                            --changes 10 \
+                            --trivy-critical 0 \
+                            --secrets-found 0 || true
+
+                  - step:
+                      type: Run
+                      name: AI Log Analysis Agent
+                      identifier: ai_log_analysis_agent
+                      spec:
+                        connectorRef: dockerhub
+                        shell: Sh
+                        image: python:3.11-slim
+                        envVariables:
+                          OPENAI_API_KEY: <+secrets.getValue("openai_api_key")>
+                        command: |-
+                          cd Episode-10/ai-agents
+                          dmesg > /tmp/system.log 2>/dev/null || echo "No system logs" > /tmp/system.log
+                          python log_analysis_agent.py --logs /tmp/system.log --type system || true
 
     # ============================================
     # STAGE 4: GitOps Deploy (PR → Approve → Merge → Sync → Verify)
