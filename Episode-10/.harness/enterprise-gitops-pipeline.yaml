@@ -446,6 +446,9 @@ pipeline:
                     envVariables:
                       AWS_DEFAULT_REGION: <+variable.aws_region>
                     command: |-
+                      # Install tar (required by Trivy install script) and curl
+                      yum install -y tar gzip curl -q
+
                       # Install Trivy
                       curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
 
