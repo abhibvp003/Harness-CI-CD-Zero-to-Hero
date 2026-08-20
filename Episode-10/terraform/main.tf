@@ -13,7 +13,8 @@ locals {
   microservices = [
     "frontend", "cartservice", "checkoutservice", "productcatalogservice",
     "currencyservice", "emailservice", "paymentservice",
-    "recommendationservice", "shippingservice", "adservice", "loadgenerator"
+    "recommendationservice", "shippingservice", "adservice", "loadgenerator",
+    "cache"
   ]
 }
 

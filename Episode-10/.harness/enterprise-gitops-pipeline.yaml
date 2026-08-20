@@ -164,15 +164,15 @@ pipeline:
                     archiveFormat: Tar
                     pathStyle: false
                     failIfKeyNotFound: false
-              # Build and push all microservices (4 per batch — fits on t3a.xlarge 16GB)
-              ###########################################################################################
+              # Build and push all microservices (3 per batch — fits on t3a.xlarge 16GB)
+              ###########################################################
               # 3 parallel × 3Gi = 9GB used → fits in 16GB node comfortably
               # 3 parallel × 4Gi = 12GB used → fits but tight (OS + kubelet + delegate also need RAM)
               # 4 parallel × 4Gi = 16GB → all 16GB used, no RAM left for OS/kubelet → OOMKilled ❌
-
-              # - First run: full build (populates cache). Second run onwards: ~30s per service
-              # - Requires: Harness Account Settings → Default Settings → Object Store = S3 bucket
-              #############################################################################################
+              ###########################################################
+              # Docker Layer Caching — uses  BuildKit + ECR remote cache for microservice builds
+              # First run: full build. Second run onwards: only changed layers rebuild (~30s per service)
+              ###########################################################
               # Batch 1: Frontend(Go) + CartService(.NET) + CheckoutService(Go)
               - parallel:
                   - step:
@@ -189,6 +189,7 @@ pipeline:
                         dockerfile: Episode-10/src/frontend/Dockerfile
                         context: Episode-10/src/frontend
                         caching: true # Docker Layer Caching — reuses unchanged layers
+                        remoteCacheRepo: cache # Remote Cache — stores layers in ECR 'cache' repo
                         resources:
                           limits:
                             memory: 4Gi # Go multi-stage build needs 4 GB RAM
@@ -207,6 +208,7 @@ pipeline:
                         dockerfile: Episode-10/src/cartservice/src/Dockerfile
                         context: Episode-10/src/cartservice/src
                         caching: true # Docker Layer Caching — .NET restore cached
+                        remoteCacheRepo: cache # Remote Cache — stores layers in ECR 'cache' repo
                         resources:
                           limits:
                             memory: 4Gi # 4 GB RAM limit for this build step
@@ -225,6 +227,7 @@ pipeline:
                         dockerfile: Episode-10/src/checkoutservice/Dockerfile
                         context: Episode-10/src/checkoutservice
                         caching: true # Docker Layer Caching — go mod download cached
+                        remoteCacheRepo: cache # Remote Cache — stores layers in ECR 'cache' repo
                         resources:
                           limits:
                             memory: 3Gi # 3 GB RAM limit for this build step
@@ -245,6 +248,7 @@ pipeline:
                         dockerfile: Episode-10/src/productcatalogservice/Dockerfile
                         context: Episode-10/src/productcatalogservice
                         caching: true # Docker Layer Caching — go mod download cached
+                        remoteCacheRepo: cache # Remote Cache — stores layers in ECR 'cache' repo
                         resources:
                           limits:
                             memory: 3Gi # 3 GB RAM limit for this build step
@@ -263,6 +267,7 @@ pipeline:
                         dockerfile: Episode-10/src/currencyservice/Dockerfile
                         context: Episode-10/src/currencyservice
                         caching: true # Docker Layer Caching — npm install cached
+                        remoteCacheRepo: cache # Remote Cache — stores layers in ECR 'cache' repo
                         resources:
                           limits:
                             memory: 2Gi # Node.js build 2 GB RAM  limit
@@ -281,6 +286,7 @@ pipeline:
                         dockerfile: Episode-10/src/emailservice/Dockerfile
                         context: Episode-10/src/emailservice
                         caching: true # Docker Layer Caching — pip install cached
+                        remoteCacheRepo: cache # Remote Cache — stores layers in ECR 'cache' repo
                         resources:
                           limits:
                             memory: 2Gi # Python build memory limit
@@ -301,6 +307,7 @@ pipeline:
                         dockerfile: Episode-10/src/paymentservice/Dockerfile
                         context: Episode-10/src/paymentservice
                         caching: true # Docker Layer Caching — npm install cached
+                        remoteCacheRepo: cache # Remote Cache — stores layers in ECR 'cache' repo
                         resources:
                           limits:
                             memory: 2Gi # 2 GB RAM limit for this build step
@@ -319,6 +326,7 @@ pipeline:
                         dockerfile: Episode-10/src/recommendationservice/Dockerfile
                         context: Episode-10/src/recommendationservice
                         caching: true # Docker Layer Caching — pip install cached
+                        remoteCacheRepo: cache # Remote Cache — stores layers in ECR 'cache' repo
                         resources:
                           limits:
                             memory: 2Gi # 2 GB RAM limit for this build step
@@ -337,6 +345,7 @@ pipeline:
                         dockerfile: Episode-10/src/shippingservice/Dockerfile
                         context: Episode-10/src/shippingservice
                         caching: true # Docker Layer Caching — go mod download cached
+                        remoteCacheRepo: cache # Remote Cache — stores layers in ECR 'cache' repo
                         resources:
                           limits:
                             memory: 3Gi # 3 GB RAM limit for this build step
@@ -357,6 +366,7 @@ pipeline:
                         dockerfile: Episode-10/src/adservice/Dockerfile
                         context: Episode-10/src/adservice
                         caching: true # Docker Layer Caching — Gradle deps cached
+                        remoteCacheRepo: cache # Remote Cache — stores layers in ECR 'cache' repo
                         resources:
                           limits:
                             memory: 4Gi # 4 GB RAM limit for this build step
@@ -375,6 +385,7 @@ pipeline:
                         dockerfile: Episode-10/src/loadgenerator/Dockerfile
                         context: Episode-10/src/loadgenerator
                         caching: true # Docker Layer Caching — pip install cached
+                        remoteCacheRepo: cache # Remote Cache — stores layers in ECR 'cache' repo
                         resources:
                           limits:
                             memory: 2Gi # Python build memory limit
