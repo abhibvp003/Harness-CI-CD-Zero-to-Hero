@@ -121,12 +121,12 @@ pipeline:
 
     # ============================================
     # STAGE 1b: Build & Push to ECR (Docker Layer Caching enabled — 10x faster on repeat builds)
-    # Remote Cache (remoteCacheRepo) â kaniko caches layers in ECR, no Docker daemon needed
+    # Remote Cache (remoteCacheRepo) - kaniko caches layers in ECR, no Docker daemon needed
     # ============================================
     - stage:
         name: build-and-push
         identifier: build_and_push
-        description: "Build 11 microservice images and push to ECR (Docker Layer Caching enabled)"
+        description: "Build 11 microservice images and push to ECR (Remote Cache enabled)"
         type: CI
         spec:
           cloneCodebase: true
