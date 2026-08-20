@@ -129,6 +129,12 @@ pipeline:
         type: CI
         spec:
           cloneCodebase: true
+          # sharedPaths — required for S3 cache to access directories outside /harness workspace
+          sharedPaths:
+            - /root/.cache/go-build
+            - /root/go/pkg/mod
+            - /root/.npm
+            - /root/.gradle/caches
           infrastructure:
             type: KubernetesDirect
             spec:
@@ -161,6 +167,7 @@ pipeline:
                     bucket: <+variable.ci_cache_bucket>
                     key: ep10-build-cache
                     archiveFormat: Tar
+                    pathStyle: false
                     failIfKeyNotFound: false
               # 2 builds run in parallel on t3a.xlarge (16GB). Memory limits prevent OOMKilled.
               # Batch 1: Frontend(4Gi) + CartService(4Gi) = 8GB at same time → finishes
@@ -387,6 +394,8 @@ pipeline:
                       - /root/.npm
                       - /root/.gradle/caches
                     archiveFormat: Tar
+                    pathStyle: false
+                    override: true
 
     # ============================================
     # STAGE 1c: Post-Build Image Security Scan (Trivy scans final Docker images for OS/runtime CVEs)
