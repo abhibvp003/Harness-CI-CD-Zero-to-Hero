@@ -84,7 +84,7 @@ pipeline:
                           apk add --no-cache curl
                           curl -sSfL https://github.com/google/osv-scanner/releases/latest/download/osv-scanner_linux_amd64 -o /usr/local/bin/osv-scanner
                           chmod +x /usr/local/bin/osv-scanner
-                          osv-scanner --recursive --format table /harness/Episode-10/src/ ; exit 0
+                          (osv-scanner --recursive --format table /harness/Episode-10/src/ || true)
 
                   - step:
                       type: Run
