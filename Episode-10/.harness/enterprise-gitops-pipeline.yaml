@@ -121,7 +121,7 @@ pipeline:
 
     # ============================================
     # STAGE 1b: Build & Push to ECR (Docker Layer Caching enabled — 10x faster on repeat builds)
-    # DLC (caching: true)
+    # Remote Cache (remoteCacheRepo) â kaniko caches layers in ECR, no Docker daemon needed
     # ============================================
     - stage:
         name: build-and-push
@@ -188,7 +188,6 @@ pipeline:
                           - v<+pipeline.sequenceId>
                         dockerfile: Episode-10/src/frontend/Dockerfile
                         context: Episode-10/src/frontend
-                        caching: true # Docker Layer Caching — reuses unchanged layers
                         remoteCacheRepo: cache # Remote Cache — stores layers in ECR 'cache' repo
                         resources:
                           limits:
@@ -207,7 +206,6 @@ pipeline:
                           - v<+pipeline.sequenceId>
                         dockerfile: Episode-10/src/cartservice/src/Dockerfile
                         context: Episode-10/src/cartservice/src
-                        caching: true # Docker Layer Caching — .NET restore cached
                         remoteCacheRepo: cache # Remote Cache — stores layers in ECR 'cache' repo
                         resources:
                           limits:
@@ -226,7 +224,6 @@ pipeline:
                           - v<+pipeline.sequenceId>
                         dockerfile: Episode-10/src/checkoutservice/Dockerfile
                         context: Episode-10/src/checkoutservice
-                        caching: true # Docker Layer Caching — go mod download cached
                         remoteCacheRepo: cache # Remote Cache — stores layers in ECR 'cache' repo
                         resources:
                           limits:
@@ -247,7 +244,6 @@ pipeline:
                           - v<+pipeline.sequenceId>
                         dockerfile: Episode-10/src/productcatalogservice/Dockerfile
                         context: Episode-10/src/productcatalogservice
-                        caching: true # Docker Layer Caching — go mod download cached
                         remoteCacheRepo: cache # Remote Cache — stores layers in ECR 'cache' repo
                         resources:
                           limits:
@@ -266,7 +262,6 @@ pipeline:
                           - v<+pipeline.sequenceId>
                         dockerfile: Episode-10/src/currencyservice/Dockerfile
                         context: Episode-10/src/currencyservice
-                        caching: true # Docker Layer Caching — npm install cached
                         remoteCacheRepo: cache # Remote Cache — stores layers in ECR 'cache' repo
                         resources:
                           limits:
@@ -285,7 +280,6 @@ pipeline:
                           - v<+pipeline.sequenceId>
                         dockerfile: Episode-10/src/emailservice/Dockerfile
                         context: Episode-10/src/emailservice
-                        caching: true # Docker Layer Caching — pip install cached
                         remoteCacheRepo: cache # Remote Cache — stores layers in ECR 'cache' repo
                         resources:
                           limits:
@@ -306,7 +300,6 @@ pipeline:
                           - v<+pipeline.sequenceId>
                         dockerfile: Episode-10/src/paymentservice/Dockerfile
                         context: Episode-10/src/paymentservice
-                        caching: true # Docker Layer Caching — npm install cached
                         remoteCacheRepo: cache # Remote Cache — stores layers in ECR 'cache' repo
                         resources:
                           limits:
@@ -325,7 +318,6 @@ pipeline:
                           - v<+pipeline.sequenceId>
                         dockerfile: Episode-10/src/recommendationservice/Dockerfile
                         context: Episode-10/src/recommendationservice
-                        caching: true # Docker Layer Caching — pip install cached
                         remoteCacheRepo: cache # Remote Cache — stores layers in ECR 'cache' repo
                         resources:
                           limits:
@@ -344,7 +336,6 @@ pipeline:
                           - v<+pipeline.sequenceId>
                         dockerfile: Episode-10/src/shippingservice/Dockerfile
                         context: Episode-10/src/shippingservice
-                        caching: true # Docker Layer Caching — go mod download cached
                         remoteCacheRepo: cache # Remote Cache — stores layers in ECR 'cache' repo
                         resources:
                           limits:
@@ -365,7 +356,6 @@ pipeline:
                           - v<+pipeline.sequenceId>
                         dockerfile: Episode-10/src/adservice/Dockerfile
                         context: Episode-10/src/adservice
-                        caching: true # Docker Layer Caching — Gradle deps cached
                         remoteCacheRepo: cache # Remote Cache — stores layers in ECR 'cache' repo
                         resources:
                           limits:
@@ -384,7 +374,6 @@ pipeline:
                           - v<+pipeline.sequenceId>
                         dockerfile: Episode-10/src/loadgenerator/Dockerfile
                         context: Episode-10/src/loadgenerator
-                        caching: true # Docker Layer Caching — pip install cached
                         remoteCacheRepo: cache # Remote Cache — stores layers in ECR 'cache' repo
                         resources:
                           limits:
