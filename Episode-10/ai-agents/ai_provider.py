@@ -28,6 +28,14 @@ def get_ai_response(prompt, model="auto"):
     openai_key = os.environ.get("OPENAI_API_KEY", "")
     gemini_key = os.environ.get("GEMINI_API_KEY", "")
 
+    # Auto-detect from AI_API_KEY (single secret — works for both providers)
+    ai_key = os.environ.get("AI_API_KEY", "")
+    if ai_key and not openai_key and not gemini_key:
+        if ai_key.startswith("sk-"):
+            openai_key = ai_key
+        else:
+            gemini_key = ai_key
+
     if model == "auto":
         if openai_key:
             model = "openai"

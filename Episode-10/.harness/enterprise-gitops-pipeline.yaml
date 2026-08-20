@@ -444,7 +444,7 @@ pipeline:
                         shell: Sh
                         image: python:3.11-slim
                         envVariables:
-                          OPENAI_API_KEY: <+secrets.getValue("openai_api_key")>
+                          AI_API_KEY: <+secrets.getValue("ai_api_key")>
                         command: |-
                           cd Episode-10/ai-agents
                           python security_agent.py || true
@@ -458,7 +458,7 @@ pipeline:
                         shell: Sh
                         image: python:3.11-slim
                         envVariables:
-                          OPENAI_API_KEY: <+secrets.getValue("openai_api_key")>
+                          AI_API_KEY: <+secrets.getValue("ai_api_key")>
                         command: |-
                           cd Episode-10/ai-agents
                           python code_review_agent.py || true
@@ -472,7 +472,7 @@ pipeline:
                         shell: Sh
                         image: python:3.11-slim
                         envVariables:
-                          OPENAI_API_KEY: <+secrets.getValue("openai_api_key")>
+                          AI_API_KEY: <+secrets.getValue("ai_api_key")>
                         command: |-
                           cd Episode-10/ai-agents
                           python release_notes_agent.py --commits 10 || true
@@ -512,7 +512,7 @@ pipeline:
                         shell: Sh
                         image: python:3.11-slim
                         envVariables:
-                          OPENAI_API_KEY: <+secrets.getValue("openai_api_key")>
+                          AI_API_KEY: <+secrets.getValue("ai_api_key")>
                         command: |-
                           cd Episode-10/ai-agents
                           python deployment_risk_agent.py \
@@ -532,7 +532,7 @@ pipeline:
                         shell: Sh
                         image: python:3.11-slim
                         envVariables:
-                          OPENAI_API_KEY: <+secrets.getValue("openai_api_key")>
+                          AI_API_KEY: <+secrets.getValue("ai_api_key")>
                         command: |-
                           cd Episode-10/ai-agents
                           dmesg > /tmp/system.log 2>/dev/null || echo "No system logs" > /tmp/system.log
