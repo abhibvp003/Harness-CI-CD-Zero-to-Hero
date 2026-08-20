@@ -26,11 +26,6 @@ resource "harness_platform_gitops_agent" "agent" {
     high_availability = true
   }
 
-  # Prevent re-registration on re-runs (invalidates server-side token → agent disconnects)
-  lifecycle {
-    ignore_changes = all
-  }
-
   depends_on = [kubernetes_namespace.gitops]
 }
 
@@ -53,8 +48,7 @@ resource "local_file" "gitops_agent_yaml" {
 # Step 5: Apply the YAML to cluster + wait for agent to connect
 resource "null_resource" "install_gitops_agent" {
   triggers = {
-    agent_id  = harness_platform_gitops_agent.agent.identifier
-    yaml_hash = md5(data.harness_platform_gitops_agent_deploy_yaml.agent_yaml.yaml)
+    agent_id = harness_platform_gitops_agent.agent.identifier
   }
 
   provisioner "local-exec" {
