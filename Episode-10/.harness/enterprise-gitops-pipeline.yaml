@@ -120,12 +120,13 @@ pipeline:
                           checkov --directory /harness/Episode-10/k8s --framework kubernetes --output cli --config-file /harness/Episode-10/.checkov.yaml
 
     # ============================================
-    # STAGE 1b: Build & Push to ECR (separate stage — smaller pod fits on existing nodes)
+    # STAGE 1b: Build & Push to ECR (Docker Layer Caching enabled — 10x faster on repeat builds)
+    # DLC (caching: true)
     # ============================================
     - stage:
         name: build-and-push
         identifier: build_and_push
-        description: "Build 11 microservice images and push to ECR"
+        description: "Build 11 microservice images and push to ECR (Docker Layer Caching enabled)"
         type: CI
         spec:
           cloneCodebase: true
@@ -150,12 +151,6 @@ pipeline:
                   effect: NoSchedule
           execution:
             steps:
-              # Build and push all microservices (2 per batch — fits on t3a.xlarge 16GB)
-              ###########################################################
-              # 2 parallel × 4Gi = 8GB used → fits in 16GB node
-              # If 3 parallel: 3 × 4Gi = 12GB → fits but tight (OS + kubelet + delegate also need RAM)
-              # If 4 parallel: 4 × 4Gi = 16GB → OOMKilled, node has no RAM left for system processes ❌
-              ################################################################
               # Restore cached build dependencies from S3 (Go modules, npm packages, Gradle deps)
               - step:
                   type: RestoreCacheS3
@@ -169,8 +164,16 @@ pipeline:
                     archiveFormat: Tar
                     pathStyle: false
                     failIfKeyNotFound: false
-              # 2 builds run in parallel on t3a.xlarge (16GB). Memory limits prevent OOMKilled.
-              # Batch 1: Frontend(4Gi) + CartService(4Gi) = 8GB at same time → finishes
+              # Build and push all microservices (4 per batch — fits on t3a.xlarge 16GB)
+              ###########################################################################################
+              # 3 parallel × 3Gi = 9GB used → fits in 16GB node comfortably
+              # 3 parallel × 4Gi = 12GB used → fits but tight (OS + kubelet + delegate also need RAM)
+              # 4 parallel × 4Gi = 16GB → all 16GB used, no RAM left for OS/kubelet → OOMKilled ❌
+
+              # - First run: full build (populates cache). Second run onwards: ~30s per service
+              # - Requires: Harness Account Settings → Default Settings → Object Store = S3 bucket
+              #############################################################################################
+              # Batch 1: Frontend(Go) + CartService(.NET) + CheckoutService(Go)
               - parallel:
                   - step:
                       type: BuildAndPushECR
@@ -185,9 +188,10 @@ pipeline:
                           - v<+pipeline.sequenceId>
                         dockerfile: Episode-10/src/frontend/Dockerfile
                         context: Episode-10/src/frontend
-                        resources: # Memory limit prevents out-of-memory during parallel Docker builds
+                        caching: true # Docker Layer Caching — reuses unchanged layers
+                        resources:
                           limits:
-                            memory: 4Gi # 4 GB RAM limit for this build step
+                            memory: 4Gi # Go multi-stage build needs 4 GB RAM
 
                   - step:
                       type: BuildAndPushECR
@@ -202,12 +206,11 @@ pipeline:
                           - v<+pipeline.sequenceId>
                         dockerfile: Episode-10/src/cartservice/src/Dockerfile
                         context: Episode-10/src/cartservice/src
-                        resources: # .NET compilation needs more memory
+                        caching: true # Docker Layer Caching — .NET restore cached
+                        resources:
                           limits:
                             memory: 4Gi # 4 GB RAM limit for this build step
 
-                            # Batch 2: Checkout(3Gi) + ProductCatalog(3Gi) = 6GB at same time → finishes
-              - parallel:
                   - step:
                       type: BuildAndPushECR
                       name: Push CheckoutService
@@ -221,10 +224,13 @@ pipeline:
                           - v<+pipeline.sequenceId>
                         dockerfile: Episode-10/src/checkoutservice/Dockerfile
                         context: Episode-10/src/checkoutservice
-                        resources: # Go compilation memory limit
+                        caching: true # Docker Layer Caching — go mod download cached
+                        resources:
                           limits:
                             memory: 3Gi # 3 GB RAM limit for this build step
 
+              # Batch 2: ProductCatalog(Go) + CurrencyService(Node.js) + EmailService(Python)
+              - parallel:
                   - step:
                       type: BuildAndPushECR
                       name: Push ProductCatalog
@@ -238,12 +244,11 @@ pipeline:
                           - v<+pipeline.sequenceId>
                         dockerfile: Episode-10/src/productcatalogservice/Dockerfile
                         context: Episode-10/src/productcatalogservice
-                        resources: # Go compilation memory limit
+                        caching: true # Docker Layer Caching — go mod download cached
+                        resources:
                           limits:
                             memory: 3Gi # 3 GB RAM limit for this build step
 
-              #Batch 3: Currency(2Gi) + Email(2Gi) = 4GB at same time → finishes
-              - parallel:
                   - step:
                       type: BuildAndPushECR
                       name: Push CurrencyService
@@ -257,9 +262,10 @@ pipeline:
                           - v<+pipeline.sequenceId>
                         dockerfile: Episode-10/src/currencyservice/Dockerfile
                         context: Episode-10/src/currencyservice
-                        resources: # Node.js build memory limit
+                        caching: true # Docker Layer Caching — npm install cached
+                        resources:
                           limits:
-                            memory: 2Gi # 2 GB RAM limit for this build step
+                            memory: 2Gi # Node.js build 2 GB RAM  limit
 
                   - step:
                       type: BuildAndPushECR
@@ -274,11 +280,12 @@ pipeline:
                           - v<+pipeline.sequenceId>
                         dockerfile: Episode-10/src/emailservice/Dockerfile
                         context: Episode-10/src/emailservice
-                        resources: # Python build memory limit
+                        caching: true # Docker Layer Caching — pip install cached
+                        resources:
                           limits:
-                            memory: 2Gi # 2 GB RAM limit for this build step
+                            memory: 2Gi # Python build memory limit
 
-                #Batch 4: Payment(2Gi) + Recommendation(2Gi) = 4GB at same time → finishesSS
+              # Batch 3: PaymentService(Node.js) + RecommendationService(Python) + ShippingService(Go)
               - parallel:
                   - step:
                       type: BuildAndPushECR
@@ -293,7 +300,8 @@ pipeline:
                           - v<+pipeline.sequenceId>
                         dockerfile: Episode-10/src/paymentservice/Dockerfile
                         context: Episode-10/src/paymentservice
-                        resources: # 2Gi — Node.js npm install + small image, lightweight build
+                        caching: true # Docker Layer Caching — npm install cached
+                        resources:
                           limits:
                             memory: 2Gi # 2 GB RAM limit for this build step
 
@@ -310,12 +318,11 @@ pipeline:
                           - v<+pipeline.sequenceId>
                         dockerfile: Episode-10/src/recommendationservice/Dockerfile
                         context: Episode-10/src/recommendationservice
-                        resources: # Python build memory limit
+                        caching: true # Docker Layer Caching — pip install cached
+                        resources:
                           limits:
                             memory: 2Gi # 2 GB RAM limit for this build step
 
-              #Batch 5: Shipping(3Gi) + AdService(4Gi) = 7GB at same time → finishes
-              - parallel:
                   - step:
                       type: BuildAndPushECR
                       name: Push ShippingService
@@ -329,10 +336,13 @@ pipeline:
                           - v<+pipeline.sequenceId>
                         dockerfile: Episode-10/src/shippingservice/Dockerfile
                         context: Episode-10/src/shippingservice
-                        resources: # Go compilation memory limit
+                        caching: true # Docker Layer Caching — go mod download cached
+                        resources:
                           limits:
                             memory: 3Gi # 3 GB RAM limit for this build step
 
+              # Batch 4: AdService(Java/Gradle) + LoadGenerator(Python)
+              - parallel:
                   - step:
                       type: BuildAndPushECR
                       name: Push AdService
@@ -346,27 +356,28 @@ pipeline:
                           - v<+pipeline.sequenceId>
                         dockerfile: Episode-10/src/adservice/Dockerfile
                         context: Episode-10/src/adservice
-                        resources: # Java/Gradle compilation needs more memory
+                        caching: true # Docker Layer Caching — Gradle deps cached
+                        resources:
                           limits:
                             memory: 4Gi # 4 GB RAM limit for this build step
 
-              #Batch 6: LoadGenerator(2Gi) = 2GB alone → finishes
-              - step:
-                  type: BuildAndPushECR
-                  name: Push LoadGenerator
-                  identifier: push_loadgenerator
-                  spec:
-                    connectorRef: account.aws_account
-                    region: <+variable.aws_region>
-                    account: <+variable.aws_account_id>
-                    imageName: loadgenerator
-                    tags:
-                      - v<+pipeline.sequenceId>
-                    dockerfile: Episode-10/src/loadgenerator/Dockerfile
-                    context: Episode-10/src/loadgenerator
-                    resources: # Python build memory limit
-                      limits:
-                        memory: 2Gi # 2 GB RAM limit for this build step
+                  - step:
+                      type: BuildAndPushECR
+                      name: Push LoadGenerator
+                      identifier: push_loadgenerator
+                      spec:
+                        connectorRef: account.aws_account
+                        region: <+variable.aws_region>
+                        account: <+variable.aws_account_id>
+                        imageName: loadgenerator
+                        tags:
+                          - v<+pipeline.sequenceId>
+                        dockerfile: Episode-10/src/loadgenerator/Dockerfile
+                        context: Episode-10/src/loadgenerator
+                        caching: true # Docker Layer Caching — pip install cached
+                        resources:
+                          limits:
+                            memory: 2Gi # Python build memory limit
 
               # Save build dependencies to S3 cache (next pipeline run will be faster)
               - step:
