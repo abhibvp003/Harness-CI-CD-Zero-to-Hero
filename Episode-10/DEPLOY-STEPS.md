@@ -407,7 +407,7 @@ aws eks list-addons --cluster-name ep10-enterprise-cluster --region us-east-1
 
 | # | Secret Name (ID) | Value | Where to Get |
 |---|-----------------|-------|-------------|
-| 1 | `openai_api_key` | `sk-proj-...` | https://platform.openai.com/api-keys → + Create new secret key |
+| 1 | `ai_api_key` | `sk-proj-...` OR `AIzaSy...` | OpenAI: https://platform.openai.com/api-keys OR Gemini: https://aistudio.google.com/apikey (either one works) |
 | 2 | `slack_webhook_url` | `https://hooks.slack.com/services/T.../B.../xxx` | Slack App → Incoming Webhooks → Add to channel → Copy URL |
 | 3 | `sonar_token` | `squ_xxx...` | http://BASTION-IP:9000 → Login (admin/admin) → My Account → Security → Generate Token |
 
