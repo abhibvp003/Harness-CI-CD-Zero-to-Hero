@@ -304,11 +304,6 @@ resource "harness_platform_monitored_service" "online_boutique" {
   project_id = var.project_id
   depends_on = [time_sleep.wait_for_monitored_service_delete]
 
-  # NOTE: ignore_changes temporarily removed to allow Elasticsearch health source to be added.
-  # After successful apply, restore: lifecycle { ignore_changes = [request] }
-  # lifecycle {
-  #   ignore_changes = [request]
-  # }
 
   request {
     name            = "online-boutique-production"
