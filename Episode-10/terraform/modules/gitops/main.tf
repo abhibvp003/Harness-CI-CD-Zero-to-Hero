@@ -130,9 +130,6 @@ resource "null_resource" "install_gitops_agent" {
   depends_on = [local_file.gitops_agent_yaml]
 }
 
-# Step 5a: ArgoCD uses "default" project (agent auto-maps it, no ambiguity)
-# The environment_clusters_mapping in harness-platform module handles pipeline cluster selection
-
 # Step 5b: Create GitOps repository
 resource "harness_platform_gitops_repository" "repo" {
   identifier = "repo"
