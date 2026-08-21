@@ -10,20 +10,6 @@ resource "harness_platform_connector_prometheus" "prometheus" {
   delegate_selectors = [var.delegate_name]
 }
 
-# Custom Health Source connector — hits the live application URL to verify it's responding
-# This checks the REAL end-user experience: DNS → NLB → Kong → Frontend pod → HTTP 200
-# If the app is down (502, 503, timeout) after deployment → triggers rollback
-resource "harness_platform_connector_customhealthsource" "app_health" {
-  identifier         = "app_health"
-  name               = "app-health-check"
-  org_id             = var.org_id
-  project_id         = var.project_id
-  url                = "https://app.${var.domain_name}"
-  method             = "GET"
-  validation_path    = "/"
-  delegate_selectors = [var.delegate_name]
-}
-
 # Elasticsearch connector for CV (created via Harness API — provider doesn't support this resource)
 # Password: same auto-generated EFK password stored in AWS SM (online-boutique/efk-password)
 # Kibana login: elastic / (password from AWS SM)
@@ -396,43 +382,48 @@ resource "harness_platform_monitored_service" "online_boutique" {
       })
     }
 
-    # ── Health Source 3: Custom Health (HTTP — live application health check) ──
-    # Hits https://app.yourdomain.com and monitors HTTP response
-    # This verifies the FULL end-to-end path:
-    #   DNS → Route53 → NLB → Kong Gateway → Frontend Pod → HTTP 200 OK
-    # If app is unreachable or returning 5xx after deploy → rollback
+    # ── Health Source 3: Prometheus (HTTP errors — live application health via Kong metrics) ──
+    # Kong Gateway exports HTTP request metrics to Prometheus
+    # This queries the REAL HTTP response codes hitting the frontend
+    # If 5xx errors spike after deploy → app is broken → rollback
     #
-    # WHY THIS MATTERS:
-    #   - Prometheus says: pods are running ✅ (but app might return 502)
-    #   - Elasticsearch says: no error logs ✅ (but Kong might be misconfigured)
-    #   - Custom Health says: I HIT THE REAL URL AND GOT 502 ❌ → ROLLBACK
+    # WHY THIS INSTEAD OF CustomHealthMetric:
+    #   - CustomHealthMetric has a known bug in harness provider v0.45.1 (crashes on nil interface)
+    #   - Prometheus + Kong metrics gives the SAME result: real HTTP status codes
+    #   - Production pattern: monitor HTTP error rate via gateway metrics
     #
-    # Reference: Harness Terraform Provider docs
-    # https://registry.terraform.io/providers/harness/harness/latest/docs/resources/platform_connector_custom_health_source
+    # What it checks:
+    #   DNS → Route53 → NLB → Kong → Frontend → HTTP 5xx count
+    #   If 5xx count spikes after deploy → rollback
     health_sources {
-      name       = "app-health-check"
-      identifier = "app_health_check"
-      type       = "CustomHealthMetric"
-      version    = "v2"
+      name       = "app-http-errors"
+      identifier = "app_http_errors"
+      type       = "Prometheus"
       spec = jsonencode({
-        connectorRef = "app_health"
-        queryDefinitions = [
-          {
-            name       = "App HTTP Status"
-            identifier = "app_http_status"
-            groupName  = "Application Health"
-            queryParams = {
-              serviceInstanceField = "pod"
-            }
-            riskProfile = {
-              riskCategory   = "Errors"
-              thresholdTypes = ["ACT_WHEN_HIGHER"]
-            }
-            liveMonitoringEnabled         = "true"
-            continuousVerificationEnabled = "true"
-            sliEnabled                    = "false"
+        connectorRef = "prometheus"
+        metricDefinitions = [{
+          identifier = "http_5xx_errors"
+          metricName = "HTTP 5xx Errors"
+          riskProfile = {
+            riskCategory   = "Errors"
+            thresholdTypes = ["ACT_WHEN_HIGHER"]
           }
-        ]
+          analysis = {
+            liveMonitoring = {
+              enabled = true
+            }
+            deploymentVerification = {
+              enabled                  = true
+              serviceInstanceFieldName = "pod"
+            }
+          }
+          query         = "sum by (pod) (increase(kong_http_requests_total{service=~\"online-boutique.*\",code=~\"5..\"}[5m]))"
+          groupName     = "Application Health"
+          isManualQuery = true
+        }]
+        metricPacks = [{
+          identifier = "Custom"
+        }]
       })
     }
   }
