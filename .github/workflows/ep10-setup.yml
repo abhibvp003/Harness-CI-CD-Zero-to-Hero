@@ -421,9 +421,24 @@ jobs:
           terraform state rm "module.harness_platform.harness_platform_environment_clusters_mapping.development" 2>/dev/null || true
           terraform state rm "module.gitops.harness_platform_gitops_applications.app" 2>/dev/null || true
           terraform state rm "module.gitops.harness_platform_gitops_app_project_mapping.project" 2>/dev/null || true
+          terraform state rm "module.gitops.harness_platform_gitops_repository.repo" 2>/dev/null || true
+          terraform state rm "module.gitops.harness_platform_gitops_cluster.cluster" 2>/dev/null || true
+          terraform state rm "module.gitops.harness_platform_gitops_agent.agent" 2>/dev/null || true
           terraform state rm "module.harness_platform.harness_platform_service.online_boutique" 2>/dev/null || true
           terraform state rm "module.harness_platform.harness_platform_environment.production" 2>/dev/null || true
           terraform state rm "module.harness_platform.harness_platform_environment.development" 2>/dev/null || true
+          terraform state rm "module.harness_platform.harness_platform_connector_prometheus.prometheus" 2>/dev/null || true
+          terraform state rm "module.harness_platform.harness_platform_connector_kubernetes.k8s" 2>/dev/null || true
+          terraform state rm "module.harness_platform.harness_platform_policy.production_governance" 2>/dev/null || true
+          terraform state rm "module.harness_platform.harness_platform_policyset.production" 2>/dev/null || true
+          terraform state rm "module.harness_platform.harness_platform_variables.ci_cache_bucket" 2>/dev/null || true
+          terraform state rm "module.harness_platform.harness_platform_variables.domain_name" 2>/dev/null || true
+          terraform state rm "module.harness_platform.harness_platform_variables.sonar_host_url" 2>/dev/null || true
+          # Remove ALL Harness/GitOps resources that may have circular dependencies
+          terraform state list 2>/dev/null | grep -E '^module\.(harness_platform|gitops|monitoring|logging|tracing|falco)\.' | while read -r resource; do
+            echo "  Removing from state: $resource"
+            terraform state rm "$resource" 2>/dev/null || true
+          done || true
 
           terraform destroy -auto-approve -no-color \
             -var="harness_account_id=${{ vars.HARNESS_ACCOUNT_ID }}" \
