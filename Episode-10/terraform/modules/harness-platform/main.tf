@@ -10,6 +10,17 @@ resource "harness_platform_connector_prometheus" "prometheus" {
   delegate_selectors = [var.delegate_name]
 }
 
+# Connector to query Elasticsearch logs for continuous verification
+resource "harness_platform_connector_elk" "elasticsearch" {
+  identifier         = "elasticsearch"
+  name               = "elasticsearch"
+  org_id             = var.org_id
+  project_id         = var.project_id
+  url                = "http://elasticsearch-master.logging.svc.cluster.local:9200"
+  delegate_selectors = [var.delegate_name]
+  no_authentication {}
+}
+
 # Kubernetes connector that uses the delegate to talk to the cluster
 resource "harness_platform_connector_kubernetes" "k8s" {
   identifier = "k8sdelegate"
@@ -215,6 +226,10 @@ resource "time_sleep" "wait_for_monitored_service_delete" {
 }
 
 # Monitored service that tracks error rate for continuous verification
+# Pod Restarts — if pods crash-loop after deploy → rollback
+# CPU Usage — if CPU spikes abnormally → rollback
+# Memory Usage — if memory leaks detected → rollback
+# Pods Not Ready — if pods fail readiness probes → rollback
 resource "harness_platform_monitored_service" "online_boutique" {
   identifier = "online_boutique_production"
   org_id     = var.org_id
@@ -326,6 +341,24 @@ resource "harness_platform_monitored_service" "online_boutique" {
             }
           }
         ]
+      })
+    }
+    health_sources {
+      name       = "elasticsearch"
+      identifier = "elasticsearch"
+      type       = "ElasticSearch"
+      spec = jsonencode({
+        connectorRef = harness_platform_connector_elk.elasticsearch.identifier
+        feature      = "ELK Logs"
+        queries = [{
+          name                 = "Error Logs"
+          query                = "level:error AND kubernetes.namespace_name:online-boutique"
+          index                = "fluentd*"
+          serviceInstanceField = "kubernetes.pod_name.keyword"
+          timeStampIdentifier  = "@timestamp"
+          timeStampFormat      = ""
+          messageIdentifier    = "log"
+        }]
       })
     }
   }
