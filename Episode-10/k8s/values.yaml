@@ -1,31 +1,18 @@
-# ═══════════════════════════════════════════════════════════════════
-# values.yaml — GitOpsUpdateReleaseRepo updates these via PR
-# Contains ACTUAL image URLs (ArgoCD reads from Git, not Harness runtime)
-# First deploy: use placeholder tag v1, pipeline updates to v<sequenceId>
-# ═══════════════════════════════════════════════════════════════════
-
-# Microservice images (GitOpsUpdateReleaseRepo updates these)
-frontendImage: ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/frontend:v1
-cartserviceImage: ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/cartservice:v1
-checkoutserviceImage: ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/checkoutservice:v1
-productcatalogserviceImage: ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/productcatalogservice:v1
-currencyserviceImage: ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/currencyservice:v1
-emailserviceImage: ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/emailservice:v1
-paymentserviceImage: ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/paymentservice:v1
-recommendationserviceImage: ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/recommendationservice:v1
-shippingserviceImage: ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/shippingservice:v1
-adserviceImage: ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/adservice:v1
-loadgeneratorImage: ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/loadgenerator:v1
-
-# Configuration
+frontendImage: 713939171080.dkr.ecr.us-east-1.amazonaws.com/frontend:v25
+cartserviceImage: 713939171080.dkr.ecr.us-east-1.amazonaws.com/cartservice:v25
+checkoutserviceImage: 713939171080.dkr.ecr.us-east-1.amazonaws.com/checkoutservice:v25
+productcatalogserviceImage: 713939171080.dkr.ecr.us-east-1.amazonaws.com/productcatalogservice:v25
+currencyserviceImage: 713939171080.dkr.ecr.us-east-1.amazonaws.com/currencyservice:v25
+emailserviceImage: 713939171080.dkr.ecr.us-east-1.amazonaws.com/emailservice:v25
+paymentserviceImage: 713939171080.dkr.ecr.us-east-1.amazonaws.com/paymentservice:v25
+recommendationserviceImage: 713939171080.dkr.ecr.us-east-1.amazonaws.com/recommendationservice:v25
+shippingserviceImage: 713939171080.dkr.ecr.us-east-1.amazonaws.com/shippingservice:v25
+adserviceImage: 713939171080.dkr.ecr.us-east-1.amazonaws.com/adservice:v25
+loadgeneratorImage: 713939171080.dkr.ecr.us-east-1.amazonaws.com/loadgenerator:v25
 namespace: online-boutique
 replicas: 2
-domain: CHANGE-TO-YOUR-DOMAIN.com # temporary value - ArgoCD overrides this at sync time via helm.parameters (from Terraform var.domain_name → GitHub Variable DOMAIN_NAME). Never edit this manually.
-
-# Tracing (OpenTelemetry → OTel Collector → Jaeger)
-enableTracing: "1"
-collectorServiceAddr: "otel-collector.tracing.svc.cluster.local:4317"
-
-# Load Generator (traffic volume for testing + Prometheus metrics)
-loadgeneratorUsers: "10"
-loadgeneratorSpawnRate: "1"
+domain: CHANGE-TO-YOUR-DOMAIN.com
+enableTracing: '1'
+collectorServiceAddr: otel-collector.tracing.svc.cluster.local:4317
+loadgeneratorUsers: '10'
+loadgeneratorSpawnRate: '1'
