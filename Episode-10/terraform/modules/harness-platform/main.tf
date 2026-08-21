@@ -386,12 +386,6 @@ resource "harness_platform_monitored_service" "online_boutique" {
     # Kong Gateway exports HTTP request metrics to Prometheus
     # This queries the REAL HTTP response codes hitting the frontend
     # If 5xx errors spike after deploy → app is broken → rollback
-    #
-    # WHY THIS INSTEAD OF CustomHealthMetric:
-    #   - CustomHealthMetric has a known bug in harness provider v0.45.1 (crashes on nil interface)
-    #   - Prometheus + Kong metrics gives the SAME result: real HTTP status codes
-    #   - Production pattern: monitor HTTP error rate via gateway metrics
-    #
     # What it checks:
     #   DNS → Route53 → NLB → Kong → Frontend → HTTP 5xx count
     #   If 5xx count spikes after deploy → rollback
