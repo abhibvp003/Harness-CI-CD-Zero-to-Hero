@@ -280,11 +280,24 @@ resource "time_sleep" "wait_for_monitored_service_delete" {
   destroy_duration = "10s"
 }
 
-# Monitored service that tracks error rate for continuous verification
-# Pod Restarts — if pods crash-loop after deploy → rollback
-# CPU Usage — if CPU spikes abnormally → rollback
-# Memory Usage — if memory leaks detected → rollback
-# Pods Not Ready — if pods fail readiness probes → rollback
+# Monitored service that tracks BOTH metrics AND logs for continuous verification
+# ═══════════════════════════════════════════════════════════════════
+# WHY BOTH Prometheus + Elasticsearch?
+# ─────────────────────────────────────
+# Prometheus (Metrics): Detects infrastructure issues
+#   → Pod Restarts, CPU spikes, memory leaks, pods not ready
+#   → Problem: If pods are Running but the APPLICATION is broken
+#     (returning 500s, null responses, logic errors), metrics look healthy!
+#
+# Elasticsearch (Logs): Detects application-level issues
+#   → Error logs, exceptions, stack traces, timeout messages
+#   → Catches: App returning errors, DB connection failures,
+#     null pointer exceptions, third-party API failures
+#   → Even when pods are Running/Ready, logs reveal the real health
+#
+# Together: Infrastructure health (Prometheus) + Application health (EFK)
+#           = Complete verification. Rollback on ANY degradation.
+# ═══════════════════════════════════════════════════════════════════
 resource "harness_platform_monitored_service" "online_boutique" {
   identifier = "online_boutique_production"
   org_id     = var.org_id
@@ -301,6 +314,8 @@ resource "harness_platform_monitored_service" "online_boutique" {
     type            = "Application"
     service_ref     = harness_platform_service.online_boutique.identifier
     environment_ref = harness_platform_environment.production.identifier
+
+    # ── Health Source 1: Prometheus (Metrics — infrastructure health) ──
     health_sources {
       name       = "prometheus"
       identifier = "prometheus"
@@ -330,6 +345,39 @@ resource "harness_platform_monitored_service" "online_boutique" {
         metricPacks = [{
           identifier = "Custom"
         }]
+      })
+    }
+
+    # ── Health Source 2: Elasticsearch (Logs — application health) ──
+    # Queries container logs from the online-boutique namespace
+    # Harness ML analyzes log patterns: if new error patterns or error spike
+    # detected after deployment → triggers automatic rollback
+    #
+    # Reference: Harness Terraform Provider docs — "Sample template for Elastic Search Log Health Source"
+    # https://registry.terraform.io/providers/harness/harness/latest/docs/resources/platform_monitored_service
+    health_sources {
+      name       = "elasticsearch"
+      identifier = "elasticsearch"
+      type       = "ElasticSearch"
+      version    = "v2"
+      spec = jsonencode({
+        connectorRef = "elasticsearch"
+        queryDefinitions = [
+          {
+            name       = "Error Logs"
+            identifier = "error_logs"
+            query      = "kubernetes.namespace_name:online-boutique AND (level:error OR level:ERROR OR severity:ERROR OR log:*error* OR log:*Error* OR log:*exception* OR log:*Exception*)"
+            index      = "fluentd-*"
+            groupName  = "Logs_Group"
+            queryParams = {
+              index                = "fluentd-*"
+              serviceInstanceField = "kubernetes.pod_name"
+              timeStampIdentifier  = "@timestamp"
+              timeStampFormat      = ""
+              messageIdentifier    = "log"
+            }
+          }
+        ]
       })
     }
   }
