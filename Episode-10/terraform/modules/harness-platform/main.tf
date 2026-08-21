@@ -256,6 +256,12 @@ resource "harness_platform_environment_clusters_mapping" "production" {
     scope            = "PROJECT"
   }
   depends_on = [harness_platform_environment.production]
+
+  # Ensure cluster mapping is destroyed before the environment
+  # (Harness won't delete env if cluster mapping still references it)
+  lifecycle {
+    create_before_destroy = false
+  }
 }
 
 resource "harness_platform_environment_clusters_mapping" "development" {
@@ -270,14 +276,19 @@ resource "harness_platform_environment_clusters_mapping" "development" {
     scope            = "PROJECT"
   }
   depends_on = [harness_platform_environment.development]
+
+  lifecycle {
+    create_before_destroy = false
+  }
 }
 
 # ── Monitored Service (CV) ──
 
 # Delay between monitored service deletion and service/environment deletion (Harness API eventual consistency)
+# On destroy: monitored service + cluster mappings delete first → wait 15s → then service/environment delete
 resource "time_sleep" "wait_for_monitored_service_delete" {
   depends_on       = [harness_platform_service.online_boutique, harness_platform_environment.production]
-  destroy_duration = "10s"
+  destroy_duration = "15s"
 }
 
 # Monitored service that tracks BOTH metrics AND logs for continuous verification
