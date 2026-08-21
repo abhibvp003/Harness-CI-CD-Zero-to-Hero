@@ -302,6 +302,11 @@ resource "harness_platform_monitored_service" "online_boutique" {
     ignore_changes = [request]
   }
 
+  timeouts {
+    create = "10m"
+    delete = "5m"
+  }
+
   request {
     name            = "online-boutique-production"
     type            = "Application"
