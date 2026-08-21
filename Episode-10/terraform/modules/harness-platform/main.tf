@@ -289,7 +289,7 @@ resource "harness_platform_monitored_service" "online_boutique" {
   identifier = "online_boutique_production"
   org_id     = var.org_id
   project_id = var.project_id
-  depends_on = [time_sleep.wait_for_monitored_service_delete, time_sleep.wait_for_elasticsearch]
+  depends_on = [time_sleep.wait_for_monitored_service_delete]
 
   # Don't re-validate on re-runs (connectors must be reachable for validation)
   lifecycle {
