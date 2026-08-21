@@ -193,6 +193,19 @@ resource "harness_platform_environment_clusters_mapping" "production" {
   }
 }
 
+resource "harness_platform_environment_clusters_mapping" "development" {
+  identifier = "development"
+  org_id     = var.org_id
+  project_id = var.project_id
+  env_id     = harness_platform_environment.development.identifier
+  clusters {
+    identifier = "incluster"
+    name       = "incluster"
+    agent_id   = var.gitops_agent_id
+    scope      = "PROJECT"
+  }
+}
+
 # ── Monitored Service (CV) ──
 
 # Delay between monitored service deletion and service/environment deletion (Harness API eventual consistency)
