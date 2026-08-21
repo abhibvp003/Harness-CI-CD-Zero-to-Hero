@@ -130,6 +130,17 @@ resource "null_resource" "install_gitops_agent" {
   depends_on = [local_file.gitops_agent_yaml]
 }
 
+# Step 5-auto: Enable AUTO CREATE project mapping (links GitOps cluster to Harness project)
+resource "harness_platform_gitops_app_project_mapping" "project" {
+  account_id              = var.harness_account_id
+  org_id                  = var.harness_org_id
+  project_id              = var.harness_project_id
+  agent_id                = var.agent_identifier
+  argo_project_name       = "*"
+  auto_create_service_env = true
+  depends_on              = [null_resource.install_gitops_agent]
+}
+
 # Step 5a: Create ArgoCD AppProject (defines what apps can deploy where)
 resource "kubectl_manifest" "argocd_default_project" {
   yaml_body = yamlencode({
