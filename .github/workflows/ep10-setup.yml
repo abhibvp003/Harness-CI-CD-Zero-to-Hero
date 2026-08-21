@@ -434,10 +434,16 @@ jobs:
         run: |
           echo "First destroy attempt failed. Cleaning up..."
 
-          # Force-remove Harness monitored service + cluster mappings (blocks service/env deletion)
+          # Force-remove Harness monitored service + cluster mappings + GitOps app (blocks service/env deletion)
           terraform state rm "module.harness_platform.harness_platform_monitored_service.online_boutique" 2>/dev/null || true
           terraform state rm "module.harness_platform.harness_platform_environment_clusters_mapping.production" 2>/dev/null || true
           terraform state rm "module.harness_platform.harness_platform_environment_clusters_mapping.development" 2>/dev/null || true
+          terraform state rm "module.gitops.harness_platform_gitops_applications.app" 2>/dev/null || true
+          terraform state rm "module.gitops.harness_platform_gitops_app_project_mapping.project" 2>/dev/null || true
+          # Also remove service and environment from state if they can't be deleted (reference stuck in Harness API)
+          terraform state rm "module.harness_platform.harness_platform_service.online_boutique" 2>/dev/null || true
+          terraform state rm "module.harness_platform.harness_platform_environment.production" 2>/dev/null || true
+          terraform state rm "module.harness_platform.harness_platform_environment.development" 2>/dev/null || true
 
           # If cluster is gone, remove all K8s resources from state
           CLUSTER_NAME=$(terraform output -raw eks_cluster_name 2>/dev/null || echo "ep10-enterprise-cluster")
