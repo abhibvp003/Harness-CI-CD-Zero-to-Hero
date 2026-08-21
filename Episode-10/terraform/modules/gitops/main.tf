@@ -131,6 +131,7 @@ resource "null_resource" "install_gitops_agent" {
 }
 
 # Step 5-auto: Enable AUTO CREATE project mapping (links GitOps cluster to Harness project)
+# Created AFTER the app to avoid "ambiguous project mapping" error
 resource "harness_platform_gitops_app_project_mapping" "project" {
   account_id              = var.harness_account_id
   org_id                  = var.harness_org_id
@@ -138,7 +139,7 @@ resource "harness_platform_gitops_app_project_mapping" "project" {
   agent_id                = var.agent_identifier
   argo_project_name       = "online-boutique"
   auto_create_service_env = true
-  depends_on              = [null_resource.install_gitops_agent]
+  depends_on              = [harness_platform_gitops_applications.app]
 }
 
 # Step 5a: Create ArgoCD AppProject (defines what apps can deploy where)
