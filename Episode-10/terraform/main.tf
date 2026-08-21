@@ -188,7 +188,8 @@ module "harness_platform" {
   harness_api_key    = var.harness_api_key
   opa_policy_rego    = file("${path.module}/../policies/production-governance.rego")
   gitops_agent_id    = module.gitops.agent_identifier
-  depends_on         = [module.delegate, module.gitops]
+  efk_password       = module.logging.efk_password
+  depends_on         = [module.delegate, module.gitops, module.logging]
 }
 
 # ── Monitoring (Prometheus + Grafana) ──

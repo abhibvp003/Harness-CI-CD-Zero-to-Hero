@@ -10,16 +10,68 @@ resource "harness_platform_connector_prometheus" "prometheus" {
   delegate_selectors = [var.delegate_name]
 }
 
-# Connector to query Elasticsearch logs for continuous verification
-# (Enable after ES is confirmed healthy — requires discovery.type: single-node to pass readiness)
-resource "harness_platform_connector_elk" "elasticsearch" {
-  identifier         = "elasticsearch"
-  name               = "elasticsearch"
-  org_id             = var.org_id
-  project_id         = var.project_id
-  url                = "http://elasticsearch-master.logging.svc.cluster.local:9200"
-  delegate_selectors = [var.delegate_name]
-  no_authentication {}
+# Elasticsearch connector for CV (created via Harness API — provider doesn't support this resource)
+# Password: same auto-generated EFK password stored in AWS SM (online-boutique/efk-password)
+# Kibana login: elastic / (password from AWS SM)
+# This connector enables log-based verification in the Verify Deployment step
+resource "null_resource" "elk_connector" {
+  provisioner "local-exec" {
+    interpreter = ["/bin/bash", "-c"]
+    command     = <<-EOT
+      # Step 1: Create Harness secret for ES password (delete first if exists)
+      curl -s -X DELETE \
+        "https://app.harness.io/gateway/ng/api/v2/secrets/elk_password?accountIdentifier=${var.harness_account_id}&orgIdentifier=${var.org_id}&projectIdentifier=${var.project_id}" \
+        -H "x-api-key: ${var.harness_api_key}" 2>/dev/null || true
+      sleep 2
+      curl -s -X POST \
+        "https://app.harness.io/gateway/ng/api/v2/secrets?accountIdentifier=${var.harness_account_id}&orgIdentifier=${var.org_id}&projectIdentifier=${var.project_id}" \
+        -H "x-api-key: ${var.harness_api_key}" \
+        -H "Content-Type: application/json" \
+        -d '{
+          "secret": {
+            "type": "SecretText",
+            "name": "elk_password",
+            "identifier": "elk_password",
+            "orgIdentifier": "${var.org_id}",
+            "projectIdentifier": "${var.project_id}",
+            "spec": {
+              "secretManagerIdentifier": "harnessSecretManager",
+              "valueType": "Inline",
+              "value": "${var.efk_password}"
+            }
+          }
+        }' 2>/dev/null
+
+      sleep 2
+
+      # Step 2: Create ELK connector (delete first if exists)
+      curl -s -X DELETE \
+        "https://app.harness.io/gateway/ng/api/connectors/elasticsearch?accountIdentifier=${var.harness_account_id}&orgIdentifier=${var.org_id}&projectIdentifier=${var.project_id}" \
+        -H "x-api-key: ${var.harness_api_key}" 2>/dev/null || true
+      sleep 2
+      curl -s -X POST \
+        "https://app.harness.io/gateway/ng/api/connectors?accountIdentifier=${var.harness_account_id}" \
+        -H "x-api-key: ${var.harness_api_key}" \
+        -H "Content-Type: application/json" \
+        -d '{
+          "connector": {
+            "name": "elasticsearch",
+            "identifier": "elasticsearch",
+            "orgIdentifier": "${var.org_id}",
+            "projectIdentifier": "${var.project_id}",
+            "type": "ElasticSearch",
+            "spec": {
+              "url": "http://elasticsearch-master.logging.svc.cluster.local:9200",
+              "delegateSelectors": ["${var.delegate_name}"],
+              "authType": "UsernamePassword",
+              "username": "elastic",
+              "passwordRef": "${var.org_id}.${var.project_id}.elk_password"
+            }
+          }
+        }' 2>/dev/null || true
+    EOT
+  }
+  depends_on = [harness_platform_connector_prometheus.prometheus]
 }
 
 # Kubernetes connector that uses the delegate to talk to the cluster
@@ -344,9 +396,8 @@ resource "harness_platform_monitored_service" "online_boutique" {
         ]
       })
     }
-    # Elasticsearch log health source (enabled — requires ES connector to be healthy)
-    # Monitors error log spikes after deployment — triggers rollback if error volume increases
     health_sources {
+      # Elasticsearch logs — triggers rollback if error log volume spikes after deployment
       name       = "elasticsearch"
       identifier = "elasticsearch"
       type       = "ElasticSearch"

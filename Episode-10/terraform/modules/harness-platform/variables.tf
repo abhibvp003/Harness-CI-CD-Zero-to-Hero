@@ -71,3 +71,9 @@ variable "harness_api_key" {
 variable "gitops_agent_id" {
   type = string
 }
+
+# EFK password for Elasticsearch connector (auto-generated, passed from logging module)
+variable "efk_password" {
+  type      = string
+  sensitive = true
+}
