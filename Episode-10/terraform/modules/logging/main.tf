@@ -92,10 +92,6 @@ resource "harness_platform_gitops_applications" "elasticsearch" {
             value = "1"
           }
           parameters {
-            name  = "clusterInitialMasterNodes"
-            value = ""
-          }
-          parameters {
             name  = "volumeClaimTemplate.resources.requests.storage"
             value = "10Gi"
           }
@@ -129,7 +125,7 @@ resource "harness_platform_gitops_applications" "elasticsearch" {
           }
           parameters {
             name  = "esConfig.elasticsearch\\.yml"
-            value = "xpack.security.enabled: true\nxpack.license.self_generated.type: trial\nxpack.security.transport.ssl.enabled: false\ndiscovery.type: single-node\n"
+            value = "xpack.security.enabled: true\nxpack.license.self_generated.type: trial\nxpack.security.transport.ssl.enabled: false\n"
           }
         }
       }
