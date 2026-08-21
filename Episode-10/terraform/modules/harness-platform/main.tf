@@ -11,6 +11,7 @@ resource "harness_platform_connector_prometheus" "prometheus" {
 }
 
 # Connector to query Elasticsearch logs for continuous verification
+# (Enable after ES is confirmed healthy — requires discovery.type: single-node to pass readiness)
 resource "harness_platform_connector_elk" "elasticsearch" {
   identifier         = "elasticsearch"
   name               = "elasticsearch"
@@ -343,12 +344,14 @@ resource "harness_platform_monitored_service" "online_boutique" {
         ]
       })
     }
+    # Elasticsearch log health source (enabled — requires ES connector to be healthy)
+    # Monitors error log spikes after deployment — triggers rollback if error volume increases
     health_sources {
       name       = "elasticsearch"
       identifier = "elasticsearch"
       type       = "ElasticSearch"
       spec = jsonencode({
-        connectorRef = harness_platform_connector_elk.elasticsearch.identifier
+        connectorRef = "elasticsearch"
         feature      = "ELK Logs"
         queries = [{
           name                 = "Error Logs"
