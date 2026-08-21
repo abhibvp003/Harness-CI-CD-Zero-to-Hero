@@ -394,11 +394,12 @@ jobs:
             done
           fi
 
-          # Force-delete Harness monitored service + cluster mappings first (they block service+environment deletion)
+          # Force-delete Harness monitored service + cluster mappings + GitOps app first (they block service+environment deletion)
           terraform destroy -auto-approve -no-color \
             -target="module.harness_platform.harness_platform_monitored_service.online_boutique" \
             -target="module.harness_platform.harness_platform_environment_clusters_mapping.production" \
             -target="module.harness_platform.harness_platform_environment_clusters_mapping.development" \
+            -target="module.gitops.harness_platform_gitops_applications.app" \
             -var="harness_account_id=${{ vars.HARNESS_ACCOUNT_ID }}" \
             -var="harness_api_key=${{ secrets.HARNESS_API_KEY }}" \
             -var="harness_delegate_token=${{ secrets.HARNESS_DELEGATE_TOKEN }}" \
