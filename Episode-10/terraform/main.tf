@@ -189,7 +189,7 @@ module "harness_platform" {
   opa_policy_rego    = file("${path.module}/../policies/production-governance.rego")
   gitops_agent_id    = module.gitops.agent_identifier
   efk_password       = module.logging.efk_password
-  depends_on         = [module.delegate, module.gitops, module.logging]
+  depends_on         = [module.delegate, module.gitops, module.logging, module.monitoring]
 }
 
 # ── Monitoring (Prometheus + Grafana) ──

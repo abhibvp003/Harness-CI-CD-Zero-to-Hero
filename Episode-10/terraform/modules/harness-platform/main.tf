@@ -65,7 +65,7 @@ resource "null_resource" "elk_connector" {
               "delegateSelectors": ["${var.delegate_name}"],
               "authType": "UsernamePassword",
               "username": "elastic",
-              "passwordRef": "${var.org_id}.${var.project_id}.elk_password"
+              "passwordRef": "elk_password"
             }
           }
         }' 2>/dev/null || true
@@ -287,7 +287,12 @@ resource "harness_platform_monitored_service" "online_boutique" {
   identifier = "online_boutique_production"
   org_id     = var.org_id
   project_id = var.project_id
-  depends_on = [time_sleep.wait_for_monitored_service_delete]
+  depends_on = [time_sleep.wait_for_monitored_service_delete, null_resource.elk_connector]
+
+  # Don't re-validate on re-runs (Prometheus must be reachable for validation)
+  lifecycle {
+    ignore_changes = [request]
+  }
 
   request {
     name            = "online-boutique-production"
@@ -396,8 +401,24 @@ resource "harness_platform_monitored_service" "online_boutique" {
         ]
       })
     }
-    # Elasticsearch health source — add after ES is healthy (discovery.type: single-node synced)
-    # Connector: elasticsearch (created via null_resource.elk_connector)
-    # To enable: uncomment below after running terraform apply once with ES healthy
+    health_sources {
+      # Elasticsearch logs — triggers rollback if error log volume spikes after deployment
+      name       = "elasticsearch"
+      identifier = "elasticsearch"
+      type       = "ElasticSearch"
+      spec = jsonencode({
+        connectorRef = "elasticsearch"
+        feature      = "ELK Logs"
+        queries = [{
+          name                 = "Error Logs"
+          query                = "level:error AND kubernetes.namespace_name:online-boutique"
+          index                = "fluentd*"
+          serviceInstanceField = "kubernetes.pod_name.keyword"
+          timeStampIdentifier  = "@timestamp"
+          timeStampFormat      = ""
+          messageIdentifier    = "log"
+        }]
+      })
+    }
   }
 }
