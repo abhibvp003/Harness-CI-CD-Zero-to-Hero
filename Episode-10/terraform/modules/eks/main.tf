@@ -399,6 +399,7 @@ resource "helm_release" "aws_lb_controller" {
   version    = "1.7.2"
   wait       = true
   timeout    = 300
+  replace    = true
 
   values = [
     yamlencode({
@@ -482,6 +483,7 @@ resource "helm_release" "cluster_autoscaler" {
   version    = "9.37.0"
   wait       = true
   timeout    = 300
+  replace    = true
 
   values = [
     yamlencode({
