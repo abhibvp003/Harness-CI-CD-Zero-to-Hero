@@ -66,3 +66,8 @@ variable "harness_api_key" {
   type      = string
   sensitive = true
 }
+
+# GitOps agent identifier for cluster-environment mapping
+variable "gitops_agent_id" {
+  type = string
+}

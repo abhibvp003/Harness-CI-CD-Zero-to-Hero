@@ -179,6 +179,20 @@ resource "harness_platform_variables" "sonar_host_url" {
   depends_on = [null_resource.delete_existing_sonar_var]
 }
 
+# ── GitOps Cluster → Environment Mapping (links cluster to production environment) ──
+resource "harness_platform_environment_clusters_mapping" "production" {
+  identifier = "production"
+  org_id     = var.org_id
+  project_id = var.project_id
+  env_id     = harness_platform_environment.production.identifier
+  clusters {
+    identifier = "incluster"
+    name       = "incluster"
+    agent_id   = var.gitops_agent_id
+    scope      = "PROJECT"
+  }
+}
+
 # ── Monitored Service (CV) ──
 
 # Delay between monitored service deletion and service/environment deletion (Harness API eventual consistency)
