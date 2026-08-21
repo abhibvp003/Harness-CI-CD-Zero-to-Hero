@@ -413,7 +413,17 @@ jobs:
             -var="harness_project_id=${{ vars.HARNESS_PROJECT_ID }}" \
             -var="harness_org_id=${{ vars.HARNESS_ORG_ID }}" \
             -var="aws_region=${{ vars.AWS_REGION }}" 2>/dev/null || true
-          sleep 5
+          sleep 10
+
+          # If targeted destroy didn't fully clear references, force-remove blocking resources from state
+          terraform state rm "module.harness_platform.harness_platform_monitored_service.online_boutique" 2>/dev/null || true
+          terraform state rm "module.harness_platform.harness_platform_environment_clusters_mapping.production" 2>/dev/null || true
+          terraform state rm "module.harness_platform.harness_platform_environment_clusters_mapping.development" 2>/dev/null || true
+          terraform state rm "module.gitops.harness_platform_gitops_applications.app" 2>/dev/null || true
+          terraform state rm "module.gitops.harness_platform_gitops_app_project_mapping.project" 2>/dev/null || true
+          terraform state rm "module.harness_platform.harness_platform_service.online_boutique" 2>/dev/null || true
+          terraform state rm "module.harness_platform.harness_platform_environment.production" 2>/dev/null || true
+          terraform state rm "module.harness_platform.harness_platform_environment.development" 2>/dev/null || true
 
           terraform destroy -auto-approve -no-color \
             -var="harness_account_id=${{ vars.HARNESS_ACCOUNT_ID }}" \
