@@ -136,7 +136,7 @@ resource "harness_platform_gitops_app_project_mapping" "project" {
   org_id                  = var.harness_org_id
   project_id              = var.harness_project_id
   agent_id                = var.agent_identifier
-  argo_project_name       = "*"
+  argo_project_name       = "online-boutique"
   auto_create_service_env = true
   depends_on              = [null_resource.install_gitops_agent]
 }
