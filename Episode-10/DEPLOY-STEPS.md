@@ -21,7 +21,7 @@
 │  ┌─────────────┐  ┌──────────────┐  ┌────────────┐  ┌────────────┐  │
 │  │ Connectors  │  │ OPA Policy   │  │ Monitored  │  │Kong Gateway│  │
 │  │Prometheus   │  │ + PolicySet  │  │ Service    │  │ 3.9 OSS    │  │
-│  │K8s, AWS SM  │  │ (On Run)     │  │ (CV)       │  │NLB + ACM   │  │
+│  │K8s, ELK     │  │ (On Run)     │  │(CV — 3 HS) │  │NLB + ACM   │  │
 │  └─────────────┘  └──────────────┘  └────────────┘  └────────────┘  │
 │                                                                       │
 ├──────────────────────────────────────────────────────────────────────┤
@@ -92,6 +92,29 @@
 │         No hardcoded IDs  │ Must use KubernetesDirect               │
 │                                                                       │
 ├──────────────────────────────────────────────────────────────────────┤
+│  CONTINUOUS VERIFICATION (3 Health Sources — auto-rollback)           │
+│                                                                       │
+│  Monitored Service: online-boutique-production                       │
+│                                                                       │
+│  ┌─────────────────────────────────────────────────────────────────┐ │
+│  │ Health Source 1: Prometheus (Metrics — infrastructure)           │ │
+│  │   Query: kube_pod_container_status_restarts_total                │ │
+│  │   Detects: Pod crash-loops, restarts after deploy                │ │
+│  ├─────────────────────────────────────────────────────────────────┤ │
+│  │ Health Source 2: Prometheus (Metrics — HTTP 5xx via Kong)        │ │
+│  │   Query: kong_http_requests_total{code=~"5.."}                   │ │
+│  │   Detects: App returning 502/503/500 to real users               │ │
+│  ├─────────────────────────────────────────────────────────────────┤ │
+│  │ Health Source 3: Elasticsearch (Logs — application errors)       │ │
+│  │   Index: fluentd-*  Query: namespace:online-boutique AND error   │ │
+│  │   Detects: Exceptions, stack traces, error log spikes            │ │
+│  └─────────────────────────────────────────────────────────────────┘ │
+│                                                                       │
+│  Verify Step (5 min, MEDIUM sensitivity):                            │
+│    Compares pre-deploy vs post-deploy for ALL 3 health sources       │
+│    ANY anomaly detected → automatic rollback (RevertPR → Sync)       │
+│                                                                       │
+├──────────────────────────────────────────────────────────────────────┤
 │  NOTIFICATIONS                                                        │
 │                                                                       │
 │  Slack: Pipeline success/failure                                     │
@@ -121,7 +144,7 @@
 | 20 | Merge PR | MergePR | Merges PR into main, deletes source branch |
 | 21 | Sync Application | GitOpsSync | Triggers ArgoCD sync immediately |
 | 22 | Get App Status | GitOpsGetAppDetails | Returns health: Synced/Healthy/Degraded |
-| 23 | Verify Deployment | Verify | Continuous Verification — compares Prometheus metrics |
+| 23 | Verify Deployment | Verify | Continuous Verification — 3 health sources (Prometheus metrics + Kong HTTP 5xx + Elasticsearch logs). ANY anomaly → auto-rollback |
 | **Rollback** | | **Auto on failure** | **Reverts Git → ArgoCD syncs old version** |
 | R1 | Revert PR | RevertPR | Reverts the commit from step 18 |
 | R2 | Merge Revert PR | MergePR | Merges revert into main |
