@@ -396,24 +396,8 @@ resource "harness_platform_monitored_service" "online_boutique" {
         ]
       })
     }
-    health_sources {
-      # Elasticsearch logs — triggers rollback if error log volume spikes after deployment
-      name       = "elasticsearch"
-      identifier = "elasticsearch"
-      type       = "ElasticSearch"
-      spec = jsonencode({
-        connectorRef = "elasticsearch"
-        feature      = "ELK Logs"
-        queries = [{
-          name                 = "Error Logs"
-          query                = "level:error AND kubernetes.namespace_name:online-boutique"
-          index                = "fluentd*"
-          serviceInstanceField = "kubernetes.pod_name.keyword"
-          timeStampIdentifier  = "@timestamp"
-          timeStampFormat      = ""
-          messageIdentifier    = "log"
-        }]
-      })
-    }
+    # Elasticsearch health source — add after ES is healthy (discovery.type: single-node synced)
+    # Connector: elasticsearch (created via null_resource.elk_connector)
+    # To enable: uncomment below after running terraform apply once with ES healthy
   }
 }
