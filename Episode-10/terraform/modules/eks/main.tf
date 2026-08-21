@@ -392,14 +392,15 @@ resource "aws_iam_role_policy_attachment" "lb_controller" {
 }
 
 resource "helm_release" "aws_lb_controller" {
-  name       = "aws-load-balancer-controller"
-  repository = "https://aws.github.io/eks-charts"
-  chart      = "aws-load-balancer-controller"
-  namespace  = "kube-system"
-  version    = "1.7.2"
-  wait       = true
-  timeout    = 300
-  replace    = true
+  name         = "aws-load-balancer-controller"
+  repository   = "https://aws.github.io/eks-charts"
+  chart        = "aws-load-balancer-controller"
+  namespace    = "kube-system"
+  version      = "1.7.2"
+  wait         = true
+  timeout      = 300
+  replace      = true
+  force_update = true
 
   values = [
     yamlencode({
@@ -476,14 +477,15 @@ resource "aws_iam_role_policy_attachment" "cluster_autoscaler" {
 }
 
 resource "helm_release" "cluster_autoscaler" {
-  name       = "cluster-autoscaler"
-  repository = "https://kubernetes.github.io/autoscaler"
-  chart      = "cluster-autoscaler"
-  namespace  = "kube-system"
-  version    = "9.37.0"
-  wait       = true
-  timeout    = 300
-  replace    = true
+  name         = "cluster-autoscaler"
+  repository   = "https://kubernetes.github.io/autoscaler"
+  chart        = "cluster-autoscaler"
+  namespace    = "kube-system"
+  version      = "9.37.0"
+  wait         = true
+  timeout      = 300
+  replace      = true
+  force_update = true
 
   values = [
     yamlencode({
