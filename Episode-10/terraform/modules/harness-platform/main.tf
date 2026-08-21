@@ -306,101 +306,30 @@ resource "harness_platform_monitored_service" "online_boutique" {
       identifier = "prometheus"
       type       = "Prometheus"
       spec = jsonencode({
-        connectorRef = harness_platform_connector_prometheus.prometheus.identifier
-        metricDefinitions = [
-          {
-            identifier              = "pod_restarts"
-            metricName              = "Pod Restarts"
-            riskCategory            = "Errors"
-            higherBaselineDeviation = true
-            groupName               = "Pod Health"
-            query                   = "sum by (pod) (increase(kube_pod_container_status_restarts_total{namespace=\"online-boutique\"}[5m]))"
-            serviceInstanceField    = "pod"
-            isManualQuery           = true
-            analysis = {
-              deploymentVerification = {
-                enabled                  = true
-                serviceInstanceFieldName = "pod"
-              }
-              liveMonitoring = {
-                enabled = true
-              }
-              riskProfile = {
-                riskCategory   = "Errors"
-                thresholdTypes = ["ACT_WHEN_HIGHER"]
-              }
+        connectorRef = "prometheus"
+        metricDefinitions = [{
+          identifier = "pod_restarts"
+          metricName = "Pod Restarts"
+          riskProfile = {
+            riskCategory   = "Errors"
+            thresholdTypes = ["ACT_WHEN_HIGHER"]
+          }
+          analysis = {
+            liveMonitoring = {
+              enabled = true
             }
-          },
-          {
-            identifier              = "cpu_usage"
-            metricName              = "CPU Usage"
-            riskCategory            = "Performance"
-            higherBaselineDeviation = true
-            groupName               = "Infrastructure"
-            query                   = "sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"online-boutique\",container!=\"\"}[5m]))"
-            serviceInstanceField    = "pod"
-            isManualQuery           = true
-            analysis = {
-              deploymentVerification = {
-                enabled                  = true
-                serviceInstanceFieldName = "pod"
-              }
-              liveMonitoring = {
-                enabled = true
-              }
-              riskProfile = {
-                riskCategory   = "Performance"
-                thresholdTypes = ["ACT_WHEN_HIGHER"]
-              }
-            }
-          },
-          {
-            identifier              = "memory_usage"
-            metricName              = "Memory Usage"
-            riskCategory            = "Performance"
-            higherBaselineDeviation = true
-            groupName               = "Infrastructure"
-            query                   = "sum by (pod) (container_memory_working_set_bytes{namespace=\"online-boutique\",container!=\"\"})"
-            serviceInstanceField    = "pod"
-            isManualQuery           = true
-            analysis = {
-              deploymentVerification = {
-                enabled                  = true
-                serviceInstanceFieldName = "pod"
-              }
-              liveMonitoring = {
-                enabled = true
-              }
-              riskProfile = {
-                riskCategory   = "Performance"
-                thresholdTypes = ["ACT_WHEN_HIGHER"]
-              }
-            }
-          },
-          {
-            identifier              = "pod_not_ready"
-            metricName              = "Pods Not Ready"
-            riskCategory            = "Errors"
-            higherBaselineDeviation = true
-            groupName               = "Pod Health"
-            query                   = "sum by (pod) (kube_pod_status_ready{namespace=\"online-boutique\",condition=\"false\"})"
-            serviceInstanceField    = "pod"
-            isManualQuery           = true
-            analysis = {
-              deploymentVerification = {
-                enabled                  = true
-                serviceInstanceFieldName = "pod"
-              }
-              liveMonitoring = {
-                enabled = true
-              }
-              riskProfile = {
-                riskCategory   = "Errors"
-                thresholdTypes = ["ACT_WHEN_HIGHER"]
-              }
+            deploymentVerification = {
+              enabled                  = true
+              serviceInstanceFieldName = "pod"
             }
           }
-        ]
+          query         = "sum by (pod) (increase(kube_pod_container_status_restarts_total{namespace=\"online-boutique\"}[5m]))"
+          groupName     = "Pod Health"
+          isManualQuery = true
+        }]
+        metricPacks = [{
+          identifier = "Custom"
+        }]
       })
     }
   }
