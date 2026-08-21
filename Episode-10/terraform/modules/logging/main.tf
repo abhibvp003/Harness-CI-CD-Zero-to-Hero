@@ -92,6 +92,10 @@ resource "harness_platform_gitops_applications" "elasticsearch" {
             value = "1"
           }
           parameters {
+            name  = "clusterInitialMasterNodes"
+            value = ""
+          }
+          parameters {
             name  = "volumeClaimTemplate.resources.requests.storage"
             value = "10Gi"
           }

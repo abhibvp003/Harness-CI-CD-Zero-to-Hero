@@ -280,6 +280,12 @@ resource "time_sleep" "wait_for_monitored_service_delete" {
   destroy_duration = "10s"
 }
 
+# Wait for Elasticsearch to be healthy (ES takes ~5 min to start, connector must validate before monitored service creates)
+resource "time_sleep" "wait_for_elasticsearch" {
+  depends_on      = [null_resource.elk_connector]
+  create_duration = "300s"
+}
+
 # Monitored service that tracks error rate for continuous verification
 # Pod Restarts — if pods crash-loop after deploy → rollback
 # CPU Usage — if CPU spikes abnormally → rollback
@@ -289,7 +295,7 @@ resource "harness_platform_monitored_service" "online_boutique" {
   identifier = "online_boutique_production"
   org_id     = var.org_id
   project_id = var.project_id
-  depends_on = [time_sleep.wait_for_monitored_service_delete, null_resource.elk_connector]
+  depends_on = [time_sleep.wait_for_monitored_service_delete, null_resource.elk_connector, time_sleep.wait_for_elasticsearch]
 
   # Don't re-validate on re-runs (Prometheus must be reachable for validation)
   lifecycle {
