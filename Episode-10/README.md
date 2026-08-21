@@ -16,7 +16,7 @@ Networking:           Kong Gateway (API Gateway + Ingress) → ExternalDNS (auto
 Security:             External Secrets Operator → AWS Secrets Manager
 CI/CD:                K8s Delegate (HA) → GitOps Agent (HA) → Harness Platform Resources
 Observability:        Prometheus + Grafana → EFK → Jaeger + OTel Collector
-Governance:           OPA Policies → Continuous Verification → Auto-Rollback
+Governance:           OPA Policies → Continuous Verification (3 Health Sources) → Auto-Rollback
 AI:                   Security Agent → Code Review → Deployment Risk Assessment
 ```
 
@@ -42,7 +42,7 @@ Episode-10/
 │       ├── external-dns/               ← Auto Route53 records from Ingress (Pod Identity)
 │       ├── external-secrets/           ← ESO + ClusterSecretStore (Pod Identity)
 │       ├── gitops/                     ← GitOps Agent + Repo + Cluster + App
-│       ├── harness-platform/           ← Service, Envs, Connectors, OPA, CV
+│       ├── harness-platform/           ← Service, Envs, Connectors, OPA, CV (3 health sources)
 │       ├── monitoring/                 ← Prometheus + Grafana (Helm via ArgoCD)
 │       ├── logging/                    ← EFK Stack — ES 7.17 (xpack trial auth) + Kibana + Fluentd
 │       └── tracing/                    ← Jaeger 3.1.1 + OTel Collector (ArgoCD)
@@ -91,7 +91,10 @@ Stage 4: GitOps Deploy
   ├── MergePR → main
   ├── GitOpsSync → ArgoCD syncs cluster
   ├── GetAppDetails → Healthy ✅
-  └── Verify → Prometheus CV (auto-rollback if degraded)
+  └── Verify → 3 Health Sources CV (auto-rollback if ANY degraded)
+        ├── Prometheus: pod restarts (infrastructure)
+        ├── Prometheus: HTTP 5xx via Kong (end-to-end)
+        └── Elasticsearch: error logs (application)
 
 Rollback: RevertPR → MergePR → GitOpsSync (old version back)
 Notifications: Slack on success/failure
@@ -110,7 +113,23 @@ Notifications: Slack on success/failure
 | 5 | OPA Policies | On Pipeline Run |
 | 6 | Approval Gates | GitOps CD |
 | 7 | Kong Gateway | Runtime (rate limit, WAF, bot detection) |
-| 8 | Continuous Verification | Post-deploy (Prometheus metrics) |
+| 8 | Continuous Verification | Post-deploy (3 health sources — metrics + HTTP + logs) |
+
+---
+
+## 🔍 Continuous Verification (3 Health Sources)
+
+| # | Health Source | Type | What It Monitors | Rollback When |
+|---|---|---|---|---|
+| 1 | `prometheus` | Prometheus Metrics | Pod restart count | Pods crash-looping after deploy |
+| 2 | `app-http-errors` | Prometheus Metrics | HTTP 5xx errors via Kong Gateway | App returning 502/503/500 to users |
+| 3 | `elasticsearch` | Elasticsearch Logs | Error logs, exceptions, stack traces | New error patterns or error spike |
+
+**How it works:**
+- After GitOps deploys the new version, the **Verify step** runs for 5 minutes
+- Harness ML compares pre-deploy baseline vs post-deploy metrics/logs
+- If **ANY** of the 3 health sources detects anomaly → **automatic rollback**
+- Rollback = RevertPR → MergePR → GitOpsSync (old version restored in seconds)
 
 ---
 
@@ -165,6 +184,7 @@ Quick start:
 | **Secrets** | AWS Secrets Manager + External Secrets Operator |
 | **Monitoring** | Prometheus, Grafana (auto-dashboards) |
 | **Logging** | Elasticsearch, Fluentd, Kibana (EFK) |
+| **Continuous Verification** | Harness CV (Prometheus metrics + Elasticsearch logs + HTTP 5xx) |
 | **Tracing** | OpenTelemetry, Jaeger |
 | **DNS** | Route53 + ExternalDNS (automatic) |
 | **TLS** | ACM Certificate (auto-discovery) |
