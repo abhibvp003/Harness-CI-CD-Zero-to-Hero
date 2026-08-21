@@ -394,29 +394,96 @@ jobs:
             done
           fi
 
-          # Force-delete Harness monitored service + cluster mappings + GitOps app first (they block service+environment deletion)
-          terraform destroy -auto-approve -no-color \
-            -target="module.harness_platform.harness_platform_monitored_service.online_boutique" \
-            -target="module.harness_platform.harness_platform_environment_clusters_mapping.production" \
-            -target="module.harness_platform.harness_platform_environment_clusters_mapping.development" \
-            -target="module.gitops.harness_platform_gitops_applications.app" \
-            -target="module.gitops.harness_platform_gitops_app_project_mapping.project" \
-            -var="harness_account_id=${{ vars.HARNESS_ACCOUNT_ID }}" \
-            -var="harness_api_key=${{ secrets.HARNESS_API_KEY }}" \
-            -var="harness_delegate_token=${{ secrets.HARNESS_DELEGATE_TOKEN }}" \
-            -var="github_username=${{ github.repository_owner }}" \
-            -var="github_repo=${{ github.event.repository.name }}" \
-            -var="github_branch=${{ vars.GIT_BRANCH }}" \
-            -var="github_pat=${{ secrets.GH_PAT }}" \
-            -var="domain_name=${{ vars.DOMAIN_NAME }}" \
-            -var="cluster_name=${{ vars.CLUSTER_NAME }}" \
-            -var="harness_project_id=${{ vars.HARNESS_PROJECT_ID }}" \
-            -var="harness_org_id=${{ vars.HARNESS_ORG_ID }}" \
-            -var="aws_region=${{ vars.AWS_REGION }}" 2>/dev/null || true
-          sleep 10
+          # ════════════════════════════════════════════════════════════════
+          # DELETE ALL HARNESS RESOURCES VIA API (no manual cleanup needed)
+          # Order: monitored service → cluster mappings → GitOps app → GitOps repo → service → environment → connectors → policies → variables → GitOps agent
+          # ════════════════════════════════════════════════════════════════
+          HARNESS_API="https://app.harness.io/gateway/ng/api"
+          GITOPS_API="https://app.harness.io/gateway/gitops/api/v1"
+          ACCT="${{ vars.HARNESS_ACCOUNT_ID }}"
+          ORG="${{ vars.HARNESS_ORG_ID }}"
+          PROJ="${{ vars.HARNESS_PROJECT_ID }}"
+          API_KEY="${{ secrets.HARNESS_API_KEY }}"
+          AGENT="ep10gitopsagent"
 
-          # Remove ALL Harness/GitOps resources from state (they have circular API references that block deletion)
-          # On next apply, these get recreated fresh. This ensures AWS infra destroy succeeds cleanly.
+          echo "=== Deleting ALL Harness resources via API ==="
+
+          # 1. Delete Monitored Service
+          echo "  Deleting monitored service..."
+          curl -s -X DELETE "${HARNESS_API}/cv/monitored-service/online_boutique_production?accountId=${ACCT}&orgIdentifier=${ORG}&projectIdentifier=${PROJ}" \
+            -H "x-api-key: ${API_KEY}" 2>/dev/null || true
+
+          # 2. Delete Cluster Mappings
+          echo "  Deleting cluster mappings..."
+          curl -s -X DELETE "${HARNESS_API}/environmentsV2/production/clusters?accountIdentifier=${ACCT}&orgIdentifier=${ORG}&projectIdentifier=${PROJ}" \
+            -H "x-api-key: ${API_KEY}" 2>/dev/null || true
+          curl -s -X DELETE "${HARNESS_API}/environmentsV2/development/clusters?accountIdentifier=${ACCT}&orgIdentifier=${ORG}&projectIdentifier=${PROJ}" \
+            -H "x-api-key: ${API_KEY}" 2>/dev/null || true
+
+          # 3. Delete GitOps Applications (online-boutique + falco + monitoring + logging + tracing)
+          echo "  Deleting GitOps applications..."
+          for APP_NAME in online-boutique falco monitoring logging tracing otel-collector; do
+            curl -s -X DELETE "${GITOPS_API}/agents/${AGENT}/applications/${APP_NAME}?accountIdentifier=${ACCT}&orgIdentifier=${ORG}&projectIdentifier=${PROJ}" \
+              -H "x-api-key: ${API_KEY}" 2>/dev/null || true
+          done
+
+          # 4. Delete GitOps Repository
+          echo "  Deleting GitOps repository..."
+          curl -s -X DELETE "${GITOPS_API}/agents/${AGENT}/repositories/repo?accountIdentifier=${ACCT}&orgIdentifier=${ORG}&projectIdentifier=${PROJ}" \
+            -H "x-api-key: ${API_KEY}" 2>/dev/null || true
+
+          # 5. Delete GitOps Cluster
+          echo "  Deleting GitOps cluster..."
+          curl -s -X DELETE "${GITOPS_API}/agents/${AGENT}/clusters/incluster?accountIdentifier=${ACCT}&orgIdentifier=${ORG}&projectIdentifier=${PROJ}" \
+            -H "x-api-key: ${API_KEY}" 2>/dev/null || true
+
+          # 6. Delete Service
+          echo "  Deleting service..."
+          curl -s -X DELETE "${HARNESS_API}/servicesV2/online_boutique?accountIdentifier=${ACCT}&orgIdentifier=${ORG}&projectIdentifier=${PROJ}" \
+            -H "x-api-key: ${API_KEY}" 2>/dev/null || true
+
+          # 7. Delete Environments
+          echo "  Deleting environments..."
+          curl -s -X DELETE "${HARNESS_API}/environmentsV2/production?accountIdentifier=${ACCT}&orgIdentifier=${ORG}&projectIdentifier=${PROJ}" \
+            -H "x-api-key: ${API_KEY}" 2>/dev/null || true
+          curl -s -X DELETE "${HARNESS_API}/environmentsV2/development?accountIdentifier=${ACCT}&orgIdentifier=${ORG}&projectIdentifier=${PROJ}" \
+            -H "x-api-key: ${API_KEY}" 2>/dev/null || true
+
+          # 8. Delete Connectors
+          echo "  Deleting connectors..."
+          for CONN in prometheus elasticsearch k8sdelegate; do
+            curl -s -X DELETE "${HARNESS_API}/connectors/${CONN}?accountIdentifier=${ACCT}&orgIdentifier=${ORG}&projectIdentifier=${PROJ}" \
+              -H "x-api-key: ${API_KEY}" 2>/dev/null || true
+          done
+
+          # 9. Delete OPA Policy + PolicySet
+          echo "  Deleting policies..."
+          curl -s -X DELETE "${HARNESS_API}/v1/orgs/${ORG}/projects/${PROJ}/policysets/production_policy_set?accountIdentifier=${ACCT}" \
+            -H "x-api-key: ${API_KEY}" 2>/dev/null || true
+          curl -s -X DELETE "${HARNESS_API}/v1/orgs/${ORG}/projects/${PROJ}/policies/production_governance?accountIdentifier=${ACCT}" \
+            -H "x-api-key: ${API_KEY}" 2>/dev/null || true
+
+          # 10. Delete Variables
+          echo "  Deleting variables..."
+          for VAR in ci_cache_bucket domain_name sonar_host_url; do
+            curl -s -X DELETE "${HARNESS_API}/variables/${VAR}?accountIdentifier=${ACCT}&orgIdentifier=${ORG}&projectIdentifier=${PROJ}" \
+              -H "x-api-key: ${API_KEY}" 2>/dev/null || true
+          done
+
+          # 11. Delete Secrets (elk_password)
+          echo "  Deleting secrets..."
+          curl -s -X DELETE "${HARNESS_API}/v2/secrets/elk_password?accountIdentifier=${ACCT}&orgIdentifier=${ORG}&projectIdentifier=${PROJ}" \
+            -H "x-api-key: ${API_KEY}" 2>/dev/null || true
+
+          # 12. Delete GitOps Agent
+          echo "  Deleting GitOps agent..."
+          curl -s -X DELETE "${GITOPS_API}/agents/${AGENT}?accountIdentifier=${ACCT}&orgIdentifier=${ORG}&projectIdentifier=${PROJ}" \
+            -H "x-api-key: ${API_KEY}" 2>/dev/null || true
+
+          echo "=== All Harness resources deleted via API ==="
+          sleep 5
+
+          # Remove all Harness/GitOps modules from Terraform state (already deleted via API above)
           terraform state list 2>/dev/null | grep -E '^module\.(harness_platform|gitops|monitoring|logging|tracing|falco)\.' | while read -r resource; do
             terraform state rm "$resource" 2>/dev/null || true
           done || true
