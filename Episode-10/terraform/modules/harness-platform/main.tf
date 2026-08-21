@@ -374,7 +374,7 @@ resource "harness_platform_monitored_service" "online_boutique" {
               index                = "fluentd-*"
               serviceInstanceField = "kubernetes.pod_name"
               timeStampIdentifier  = "@timestamp"
-              timeStampFormat      = ""
+              timeStampFormat      = "yyyy-MM-dd'T'HH:mm:ss.SSSZ"
               messageIdentifier    = "log"
             }
           }
