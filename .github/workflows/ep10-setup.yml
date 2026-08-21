@@ -400,6 +400,7 @@ jobs:
             -target="module.harness_platform.harness_platform_environment_clusters_mapping.production" \
             -target="module.harness_platform.harness_platform_environment_clusters_mapping.development" \
             -target="module.gitops.harness_platform_gitops_applications.app" \
+            -target="module.gitops.harness_platform_gitops_app_project_mapping.project" \
             -var="harness_account_id=${{ vars.HARNESS_ACCOUNT_ID }}" \
             -var="harness_api_key=${{ secrets.HARNESS_API_KEY }}" \
             -var="harness_delegate_token=${{ secrets.HARNESS_DELEGATE_TOKEN }}" \
