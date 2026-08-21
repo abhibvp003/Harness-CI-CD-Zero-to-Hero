@@ -130,42 +130,8 @@ resource "null_resource" "install_gitops_agent" {
   depends_on = [local_file.gitops_agent_yaml]
 }
 
-# Step 5-auto: Enable AUTO CREATE project mapping (links GitOps cluster to Harness project)
-# Created AFTER the app to avoid "ambiguous project mapping" error
-resource "harness_platform_gitops_app_project_mapping" "project" {
-  account_id              = var.harness_account_id
-  org_id                  = var.harness_org_id
-  project_id              = var.harness_project_id
-  agent_id                = var.agent_identifier
-  argo_project_name       = "online-boutique"
-  auto_create_service_env = true
-  depends_on              = [harness_platform_gitops_applications.app]
-}
-
-# Step 5a: Create ArgoCD AppProject (defines what apps can deploy where)
-resource "kubectl_manifest" "argocd_default_project" {
-  yaml_body = yamlencode({
-    apiVersion = "argoproj.io/v1alpha1"
-    kind       = "AppProject"
-    metadata = {
-      name      = "online-boutique"
-      namespace = "gitops"
-    }
-    spec = {
-      description = "Online Boutique enterprise project"
-      sourceRepos = ["*"]
-      destinations = [{
-        namespace = "*"
-        server    = "*"
-      }]
-      clusterResourceWhitelist = [{
-        group = "*"
-        kind  = "*"
-      }]
-    }
-  })
-  depends_on = [null_resource.install_gitops_agent]
-}
+# Step 5a: ArgoCD uses "default" project (agent auto-maps it, no ambiguity)
+# The environment_clusters_mapping in harness-platform module handles pipeline cluster selection
 
 # Step 5b: Create GitOps repository
 resource "harness_platform_gitops_repository" "repo" {
@@ -188,11 +154,7 @@ resource "harness_platform_gitops_repository" "repo" {
   depends_on = [null_resource.install_gitops_agent]
 }
 
-
-# Step 6: ArgoCD auto-registers in-cluster when agent installs — no manual cluster resource needed
-# The cluster "incluster" is created automatically by the deploy YAML (kubectl apply)
-
-# Step 7: Create ArgoCD Application (syncs Helm chart from Git to cluster)
+# Step 6: Create ArgoCD Application (syncs Helm chart from Git to cluster)
 resource "harness_platform_gitops_applications" "app" {
   identifier = var.app_identifier
   account_id = var.harness_account_id
