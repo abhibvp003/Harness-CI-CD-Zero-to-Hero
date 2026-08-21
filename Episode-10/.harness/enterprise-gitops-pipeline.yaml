@@ -410,12 +410,12 @@ pipeline:
               # Results: AWS Console -> ECR -> Repositories -> Image -> Vulnerabilities tab
 
     # ============================================
-    # STAGE 2: AI Security Agent
+    # STAGE 2: AI Agents (5 agents - security, code review, release notes, risk, logs)
     # ============================================
     - stage:
-        name: ai-security-analysis
-        identifier: ai_security_analysis
-        description: "AI agents analyze security, code quality, and generate release notes"
+        name: ai-agents
+        identifier: ai_agents
+        description: "5 AI agents analyze security, code, risk, logs, and generate release notes"
         type: CI
         spec:
           cloneCodebase: true
@@ -434,6 +434,7 @@ pipeline:
                   effect: NoSchedule
           execution:
             steps:
+              # Parallel 1: Security + Code Review + Release Notes
               - parallel:
                   - step:
                       type: Run
@@ -477,31 +478,7 @@ pipeline:
                           cd Episode-10/ai-agents
                           python release_notes_agent.py --commits 10 || true
 
-    # ============================================
-    # STAGE 3: AI Deployment Risk Agent
-    # ============================================
-    - stage:
-        name: ai-deployment-risk
-        identifier: ai_deployment_risk
-        description: "AI agents assess deployment risk and analyze logs"
-        type: CI
-        spec:
-          cloneCodebase: true
-          infrastructure:
-            type: KubernetesDirect
-            spec:
-              connectorRef: k8sdelegate
-              namespace: harness-delegate-ng
-              automountServiceAccountToken: true
-              os: Linux
-              nodeSelector:
-                purpose: ci-builds
-              tolerations:
-                - key: dedicated
-                  value: ci-builds
-                  effect: NoSchedule
-          execution:
-            steps:
+              # Parallel 2: Deployment Risk + Log Analysis
               - parallel:
                   - step:
                       type: Run
@@ -539,7 +516,7 @@ pipeline:
                           python log_analysis_agent.py --logs /tmp/system.log --type system || true
 
     # ============================================
-    # STAGE 4: GitOps Deploy (PR → Approve → Merge → Sync → Verify)
+    # STAGE 3: GitOps Deploy (PR -> Approve -> Merge -> Sync -> Verify)
     # This is the MNC production deployment pattern
     # ============================================
     - stage:
