@@ -186,10 +186,10 @@ resource "harness_platform_environment_clusters_mapping" "production" {
   project_id = var.project_id
   env_id     = harness_platform_environment.production.identifier
   clusters {
-    identifier = "incluster"
-    name       = "incluster"
-    agent_id   = var.gitops_agent_id
-    scope      = "PROJECT"
+    identifier       = "incluster"
+    name             = "incluster"
+    agent_identifier = var.gitops_agent_id
+    scope            = "PROJECT"
   }
 }
 
@@ -199,10 +199,10 @@ resource "harness_platform_environment_clusters_mapping" "development" {
   project_id = var.project_id
   env_id     = harness_platform_environment.development.identifier
   clusters {
-    identifier = "incluster"
-    name       = "incluster"
-    agent_id   = var.gitops_agent_id
-    scope      = "PROJECT"
+    identifier       = "incluster"
+    name             = "incluster"
+    agent_identifier = var.gitops_agent_id
+    scope            = "PROJECT"
   }
 }
 
