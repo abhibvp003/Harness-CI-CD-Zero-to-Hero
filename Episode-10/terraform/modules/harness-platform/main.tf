@@ -13,7 +13,7 @@ resource "harness_platform_connector_prometheus" "prometheus" {
 # Custom Health Source connector — hits the live application URL to verify it's responding
 # This checks the REAL end-user experience: DNS → NLB → Kong → Frontend pod → HTTP 200
 # If the app is down (502, 503, timeout) after deployment → triggers rollback
-resource "harness_platform_connector_custom_health_source" "app_health" {
+resource "harness_platform_connector_customhealthsource" "app_health" {
   identifier         = "app_health"
   name               = "app-health-check"
   org_id             = var.org_id
