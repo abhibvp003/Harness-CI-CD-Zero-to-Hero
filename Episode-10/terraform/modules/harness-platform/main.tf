@@ -255,6 +255,7 @@ resource "harness_platform_environment_clusters_mapping" "production" {
     agent_identifier = var.gitops_agent_id
     scope            = "PROJECT"
   }
+  depends_on = [harness_platform_environment.production]
 }
 
 resource "harness_platform_environment_clusters_mapping" "development" {
@@ -268,6 +269,7 @@ resource "harness_platform_environment_clusters_mapping" "development" {
     agent_identifier = var.gitops_agent_id
     scope            = "PROJECT"
   }
+  depends_on = [harness_platform_environment.development]
 }
 
 # ── Monitored Service (CV) ──
