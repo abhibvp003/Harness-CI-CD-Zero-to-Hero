@@ -10,6 +10,20 @@ resource "harness_platform_connector_prometheus" "prometheus" {
   delegate_selectors = [var.delegate_name]
 }
 
+# Custom Health Source connector — hits the live application URL to verify it's responding
+# This checks the REAL end-user experience: DNS → NLB → Kong → Frontend pod → HTTP 200
+# If the app is down (502, 503, timeout) after deployment → triggers rollback
+resource "harness_platform_connector_custom_health_source" "app_health" {
+  identifier         = "app_health"
+  name               = "app-health-check"
+  org_id             = var.org_id
+  project_id         = var.project_id
+  url                = "https://app.${var.domain_name}"
+  method             = "GET"
+  validation_path    = "/"
+  delegate_selectors = [var.delegate_name]
+}
+
 # Elasticsearch connector for CV (created via Harness API — provider doesn't support this resource)
 # Password: same auto-generated EFK password stored in AWS SM (online-boutique/efk-password)
 # Kibana login: elastic / (password from AWS SM)
@@ -377,6 +391,46 @@ resource "harness_platform_monitored_service" "online_boutique" {
               timeStampFormat      = "yyyy-MM-dd'T'HH:mm:ss.SSSZ"
               messageIdentifier    = "log"
             }
+          }
+        ]
+      })
+    }
+
+    # ── Health Source 3: Custom Health (HTTP — live application health check) ──
+    # Hits https://app.yourdomain.com and monitors HTTP response
+    # This verifies the FULL end-to-end path:
+    #   DNS → Route53 → NLB → Kong Gateway → Frontend Pod → HTTP 200 OK
+    # If app is unreachable or returning 5xx after deploy → rollback
+    #
+    # WHY THIS MATTERS:
+    #   - Prometheus says: pods are running ✅ (but app might return 502)
+    #   - Elasticsearch says: no error logs ✅ (but Kong might be misconfigured)
+    #   - Custom Health says: I HIT THE REAL URL AND GOT 502 ❌ → ROLLBACK
+    #
+    # Reference: Harness Terraform Provider docs
+    # https://registry.terraform.io/providers/harness/harness/latest/docs/resources/platform_connector_custom_health_source
+    health_sources {
+      name       = "app-health-check"
+      identifier = "app_health_check"
+      type       = "CustomHealthMetric"
+      version    = "v2"
+      spec = jsonencode({
+        connectorRef = "app_health"
+        queryDefinitions = [
+          {
+            name       = "App HTTP Status"
+            identifier = "app_http_status"
+            groupName  = "Application Health"
+            queryParams = {
+              serviceInstanceField = "pod"
+            }
+            riskProfile = {
+              riskCategory   = "Errors"
+              thresholdTypes = ["ACT_WHEN_HIGHER"]
+            }
+            liveMonitoringEnabled         = "true"
+            continuousVerificationEnabled = "true"
+            sliEnabled                    = "false"
           }
         ]
       })
