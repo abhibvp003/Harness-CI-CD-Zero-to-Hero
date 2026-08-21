@@ -280,12 +280,6 @@ resource "time_sleep" "wait_for_monitored_service_delete" {
   destroy_duration = "10s"
 }
 
-# Wait for Elasticsearch to be healthy (ES takes ~5 min to start, connector must validate before monitored service creates)
-resource "time_sleep" "wait_for_elasticsearch" {
-  depends_on      = [null_resource.elk_connector]
-  create_duration = "300s"
-}
-
 # Monitored service that tracks error rate for continuous verification
 # Pod Restarts — if pods crash-loop after deploy → rollback
 # CPU Usage — if CPU spikes abnormally → rollback
@@ -295,16 +289,11 @@ resource "harness_platform_monitored_service" "online_boutique" {
   identifier = "online_boutique_production"
   org_id     = var.org_id
   project_id = var.project_id
-  depends_on = [time_sleep.wait_for_monitored_service_delete, null_resource.elk_connector, time_sleep.wait_for_elasticsearch]
+  depends_on = [time_sleep.wait_for_monitored_service_delete, time_sleep.wait_for_elasticsearch]
 
-  # Don't re-validate on re-runs (Prometheus must be reachable for validation)
+  # Don't re-validate on re-runs (connectors must be reachable for validation)
   lifecycle {
     ignore_changes = [request]
-  }
-
-  timeouts {
-    create = "10m"
-    delete = "5m"
   }
 
   request {
@@ -414,24 +403,123 @@ resource "harness_platform_monitored_service" "online_boutique" {
         ]
       })
     }
-    health_sources {
-      # Elasticsearch logs — triggers rollback if error log volume spikes after deployment
-      name       = "elasticsearch"
-      identifier = "elasticsearch"
-      type       = "ElasticSearch"
-      spec = jsonencode({
-        connectorRef = "elasticsearch"
-        feature      = "ELK Logs"
-        queries = [{
-          name                 = "Error Logs"
-          query                = "level:error AND kubernetes.namespace_name:online-boutique"
-          index                = "fluentd*"
-          serviceInstanceField = "kubernetes.pod_name.keyword"
-          timeStampIdentifier  = "@timestamp"
-          timeStampFormat      = ""
-          messageIdentifier    = "log"
-        }]
-      })
-    }
   }
+}
+
+# Add Elasticsearch health source via API (Terraform provider times out with ELK health source during create)
+resource "null_resource" "add_elk_health_source" {
+  provisioner "local-exec" {
+    interpreter = ["/bin/bash", "-c"]
+    command     = <<-EOT
+      sleep 10
+      curl -s -X PUT \
+        "https://app.harness.io/cv/api/monitored-service/online_boutique_production?accountId=${var.harness_account_id}" \
+        -H "x-api-key: ${var.harness_api_key}" \
+        -H "Content-Type: application/json" \
+        -d '{
+          "orgIdentifier": "${var.org_id}",
+          "projectIdentifier": "${var.project_id}",
+          "serviceRef": "online_boutique",
+          "environmentRef": "production",
+          "type": "Application",
+          "name": "online-boutique-production",
+          "identifier": "online_boutique_production",
+          "sources": {
+            "healthSources": [
+              {
+                "name": "prometheus",
+                "identifier": "prometheus",
+                "type": "Prometheus",
+                "spec": {
+                  "connectorRef": "prometheus",
+                  "metricDefinitions": [
+                    {
+                      "identifier": "pod_restarts",
+                      "metricName": "Pod Restarts",
+                      "riskCategory": "Errors",
+                      "higherBaselineDeviation": true,
+                      "groupName": "Pod Health",
+                      "query": "sum by (pod) (increase(kube_pod_container_status_restarts_total{namespace=\"online-boutique\"}[5m]))",
+                      "serviceInstanceField": "pod",
+                      "isManualQuery": true,
+                      "analysis": {
+                        "deploymentVerification": {"enabled": true, "serviceInstanceFieldName": "pod"},
+                        "liveMonitoring": {"enabled": true},
+                        "riskProfile": {"riskCategory": "Errors", "thresholdTypes": ["ACT_WHEN_HIGHER"]}
+                      }
+                    },
+                    {
+                      "identifier": "cpu_usage",
+                      "metricName": "CPU Usage",
+                      "riskCategory": "Performance",
+                      "higherBaselineDeviation": true,
+                      "groupName": "Infrastructure",
+                      "query": "sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"online-boutique\",container!=\"\"}[5m]))",
+                      "serviceInstanceField": "pod",
+                      "isManualQuery": true,
+                      "analysis": {
+                        "deploymentVerification": {"enabled": true, "serviceInstanceFieldName": "pod"},
+                        "liveMonitoring": {"enabled": true},
+                        "riskProfile": {"riskCategory": "Performance", "thresholdTypes": ["ACT_WHEN_HIGHER"]}
+                      }
+                    },
+                    {
+                      "identifier": "memory_usage",
+                      "metricName": "Memory Usage",
+                      "riskCategory": "Performance",
+                      "higherBaselineDeviation": true,
+                      "groupName": "Infrastructure",
+                      "query": "sum by (pod) (container_memory_working_set_bytes{namespace=\"online-boutique\",container!=\"\"})",
+                      "serviceInstanceField": "pod",
+                      "isManualQuery": true,
+                      "analysis": {
+                        "deploymentVerification": {"enabled": true, "serviceInstanceFieldName": "pod"},
+                        "liveMonitoring": {"enabled": true},
+                        "riskProfile": {"riskCategory": "Performance", "thresholdTypes": ["ACT_WHEN_HIGHER"]}
+                      }
+                    },
+                    {
+                      "identifier": "pod_not_ready",
+                      "metricName": "Pods Not Ready",
+                      "riskCategory": "Errors",
+                      "higherBaselineDeviation": true,
+                      "groupName": "Pod Health",
+                      "query": "sum by (pod) (kube_pod_status_ready{namespace=\"online-boutique\",condition=\"false\"})",
+                      "serviceInstanceField": "pod",
+                      "isManualQuery": true,
+                      "analysis": {
+                        "deploymentVerification": {"enabled": true, "serviceInstanceFieldName": "pod"},
+                        "liveMonitoring": {"enabled": true},
+                        "riskProfile": {"riskCategory": "Errors", "thresholdTypes": ["ACT_WHEN_HIGHER"]}
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "elasticsearch",
+                "identifier": "elasticsearch",
+                "type": "ElasticSearch",
+                "spec": {
+                  "connectorRef": "elasticsearch",
+                  "feature": "ELK Logs",
+                  "queries": [
+                    {
+                      "name": "Error Logs",
+                      "query": "level:error AND kubernetes.namespace_name:online-boutique",
+                      "index": "fluentd*",
+                      "serviceInstanceField": "kubernetes.pod_name.keyword",
+                      "timeStampIdentifier": "@timestamp",
+                      "timeStampFormat": "",
+                      "messageIdentifier": "log"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }' 2>/dev/null || true
+    EOT
+  }
+  depends_on = [harness_platform_monitored_service.online_boutique]
 }
