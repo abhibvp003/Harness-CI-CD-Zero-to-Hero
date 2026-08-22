@@ -270,134 +270,17 @@ jobs:
         id: terraform_destroy
         continue-on-error: true
         run: |
-          # Pre-destroy: Clean Kubernetes resources first (LoadBalancers create AWS resources outside Terraform)
-          CLUSTER_NAME=$(terraform output -raw eks_cluster_name 2>/dev/null || echo "ep10-enterprise-cluster")
-          CLUSTER_STATUS=$(aws eks describe-cluster --name "${CLUSTER_NAME}" --region "${{ env.AWS_REGION_VALUE }}" --query 'cluster.status' --output text 2>/dev/null || echo "NOT_FOUND")
-
-          if [ "$CLUSTER_STATUS" == "ACTIVE" ]; then
-            echo "EKS cluster ACTIVE. Cleaning Kubernetes resources before destroy..."
-            curl -sLO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-            chmod +x kubectl && sudo mv kubectl /usr/local/bin/
-
-            aws eks update-kubeconfig --region "${{ env.AWS_REGION_VALUE }}" --name "${CLUSTER_NAME}"
-
-            # Remove validating/mutating webhooks (they block resource deletion after their service is gone)
-            kubectl delete validatingwebhookconfiguration --all --ignore-not-found=true 2>/dev/null || true
-            kubectl delete mutatingwebhookconfiguration --all --ignore-not-found=true 2>/dev/null || true
-
-            # Remove ArgoCD Application finalizers (they block namespace deletion)
-            for app in $(kubectl get applications -n gitops -o name 2>/dev/null); do
-              kubectl patch "$app" -n gitops --type json -p='[{"op":"remove","path":"/metadata/finalizers"}]' 2>/dev/null || true
-            done
-
-            # Remove finalizers from all namespaces (prevents stuck deletion)
-            for ns in $(kubectl get ns --no-headers 2>/dev/null | awk '{print $1}'); do
-              case "$ns" in kube-system|kube-public|kube-node-lease|default) continue;; esac
-              kubectl patch ns "$ns" --type json -p='[{"op":"remove","path":"/metadata/finalizers"}]' 2>/dev/null || true
-              kubectl patch ns "$ns" --type json -p='[{"op":"replace","path":"/spec/finalizers","value":[]}]' 2>/dev/null || true
-            done
-
-            # Delete LoadBalancer services (they create AWS LBs outside Terraform)
-            kubectl get svc -A -o jsonpath='{range .items[?(@.spec.type=="LoadBalancer")]}{.metadata.namespace}{" "}{.metadata.name}{"\n"}{end}' 2>/dev/null | while read -r NS SVC; do
-              [ -z "$NS" ] && continue
-              kubectl delete svc "$SVC" -n "$NS" --ignore-not-found=true || true
-            done
-
-            # Delete PVCs (they create EBS volumes)
-            kubectl get pvc -A --no-headers 2>/dev/null | while read -r NS PVC _; do
-              [ -z "$NS" ] && continue
-              kubectl delete pvc "$PVC" -n "$NS" --ignore-not-found=true --timeout=30s || true
-            done
-
-            # Delete non-system namespaces (now without finalizers, they'll delete instantly)
-            for ns in $(kubectl get ns --no-headers 2>/dev/null | awk '{print $1}'); do
-              case "$ns" in kube-system|kube-public|kube-node-lease|default) continue;; esac
-              kubectl delete namespace "$ns" --ignore-not-found=true --wait=false --timeout=30s || true
-            done
-
-            echo "Waiting 90s for AWS resources (LBs, ENIs) to release..."
-            sleep 90
-
-            # Final force-delete gitops namespace (ArgoCD may re-add finalizers during wait)
-            if kubectl get ns gitops >/dev/null 2>&1; then
-              for app in $(kubectl get applications -n gitops -o name 2>/dev/null); do
-                kubectl patch "$app" -n gitops --type json -p='[{"op":"remove","path":"/metadata/finalizers"}]' 2>/dev/null || true
-                kubectl delete "$app" -n gitops --force --grace-period=0 2>/dev/null || true
-              done
-              kubectl patch ns gitops --type json -p='[{"op":"replace","path":"/spec/finalizers","value":[]}]' 2>/dev/null || true
-              kubectl delete ns gitops --force --grace-period=0 --timeout=30s 2>/dev/null || true
-            fi
-          else
-            echo "EKS cluster not ACTIVE (status: ${CLUSTER_STATUS}). Removing K8s resources from Terraform state..."
-            # Cluster is gone — remove all kubernetes/helm/kubectl resources from state
-            # so Terraform doesn't try to connect to a dead cluster
-            terraform state list 2>/dev/null | grep -E '^(kubernetes_|module\..+\.kubernetes_|module\..+\.helm_|module\..+\.kubectl_)' | while read -r resource; do
-              echo "  Removing from state: $resource"
-              terraform state rm "$resource" 2>/dev/null || true
-            done || true
-            # Also remove the storage class
-            terraform state rm "kubernetes_storage_class.ebs" 2>/dev/null || true
-          fi
-
-          # Delete orphaned CloudWatch log group (EKS auto-creates it, survives cluster deletion)
-          aws logs delete-log-group --log-group-name "/aws/eks/${CLUSTER_NAME}/cluster" --region "${{ env.AWS_REGION_VALUE }}" 2>/dev/null || true
-
-          # Delete orphaned Route53 records created by External DNS (only records with _externaldns ownership)
-          DOMAIN="${{ vars.DOMAIN_NAME }}"
-          if [ -n "$DOMAIN" ]; then
-            ZONE_ID=$(aws route53 list-hosted-zones-by-name --dns-name "$DOMAIN" --query "HostedZones[0].Id" --output text 2>/dev/null | sed 's|/hostedzone/||')
-            if [ -n "$ZONE_ID" ] && [ "$ZONE_ID" != "None" ]; then
-              echo "Cleaning External DNS records for ${DOMAIN}..."
-              # Only delete records that have _externaldns TXT ownership prefix (External DNS created these)
-              aws route53 list-resource-record-sets --hosted-zone-id "$ZONE_ID" --query "ResourceRecordSets[?starts_with(Name,'_externaldns.')].Name" --output text 2>/dev/null | tr '\t' '\n' | while read -r TXT_NAME; do
-                [ -z "$TXT_NAME" ] && continue
-                # Get the actual record name (strip _externaldns. prefix)
-                REAL_NAME=$(echo "$TXT_NAME" | sed 's/^_externaldns\.//')
-                # Delete both the A/CNAME record and the TXT ownership record
-                for TYPE in A CNAME TXT; do
-                  RECORD=$(aws route53 list-resource-record-sets --hosted-zone-id "$ZONE_ID" --query "ResourceRecordSets[?Name=='${REAL_NAME}' && Type=='${TYPE}'].[{Name:Name,Type:Type,TTL:TTL,ResourceRecords:ResourceRecords,AliasTarget:AliasTarget}]" --output json 2>/dev/null | jq -c '.[0]' 2>/dev/null)
-                  [ "$RECORD" = "null" ] || [ -z "$RECORD" ] && continue
-                  echo "  Deleting: ${REAL_NAME} (${TYPE})"
-                  aws route53 change-resource-record-sets --hosted-zone-id "$ZONE_ID" --change-batch "{\"Changes\":[{\"Action\":\"DELETE\",\"ResourceRecordSet\":${RECORD}}]}" 2>/dev/null || true
-                done
-                # Delete the _externaldns TXT record itself
-                TXT_RECORD=$(aws route53 list-resource-record-sets --hosted-zone-id "$ZONE_ID" --query "ResourceRecordSets[?Name=='${TXT_NAME}' && Type=='TXT'].[{Name:Name,Type:Type,TTL:TTL,ResourceRecords:ResourceRecords}]" --output json 2>/dev/null | jq -c '.[0]' 2>/dev/null)
-                [ "$TXT_RECORD" != "null" ] && [ -n "$TXT_RECORD" ] && \
-                  aws route53 change-resource-record-sets --hosted-zone-id "$ZONE_ID" --change-batch "{\"Changes\":[{\"Action\":\"DELETE\",\"ResourceRecordSet\":${TXT_RECORD}}]}" 2>/dev/null || true
-              done
-            fi
-          fi
-
-          # Count resources before destroy (real data)
-          RESOURCES_BEFORE=$(terraform state list 2>/dev/null | grep -c '.' || echo "0")
-          echo "RESOURCES_BEFORE=${RESOURCES_BEFORE}" >> "$GITHUB_ENV"
-
-          # Release Elastic IPs associated with VPC (prevents IGW detach failure)
-          VPC_ID="$(terraform output -raw vpc_id 2>/dev/null || true)"
-          if [ -n "$VPC_ID" ]; then
-            echo "Releasing Elastic IPs associated with VPC ${VPC_ID}..."
-            # Disassociate and release EIPs attached to NAT Gateways in this VPC
-            for nat in $(aws ec2 describe-nat-gateways --region "${{ env.AWS_REGION_VALUE }}" \
-              --filter "Name=vpc-id,Values=${VPC_ID}" "Name=state,Values=available,pending" \
-              --query 'NatGateways[].NatGatewayId' --output text 2>/dev/null); do
-              echo "  Deleting NAT Gateway: $nat"
-              aws ec2 delete-nat-gateway --region "${{ env.AWS_REGION_VALUE }}" --nat-gateway-id "$nat" 2>/dev/null || true
-            done
-            # Wait for NAT Gateways to fully delete (releases EIPs)
-            echo "Waiting 60s for NAT Gateways to release EIPs..."
-            sleep 60
-            # Release any remaining unassociated EIPs in the account
-            for alloc in $(aws ec2 describe-addresses --region "${{ env.AWS_REGION_VALUE }}" \
-              --query 'Addresses[?AssociationId==null].AllocationId' --output text 2>/dev/null); do
-              echo "  Releasing EIP: $alloc"
-              aws ec2 release-address --region "${{ env.AWS_REGION_VALUE }}" --allocation-id "$alloc" 2>/dev/null || true
-            done
-          fi
-
           # ════════════════════════════════════════════════════════════════
-          # DELETE ALL HARNESS RESOURCES VIA API (no manual cleanup needed)
-          # Order: monitored service → cluster mappings → GitOps app → GitOps repo → service → environment → connectors → policies → variables → GitOps agent
+          # DESTROY STRATEGY:
+          # 1. Delete Harness resources via API (fast, no Terraform dependency)
+          # 2. Run terraform destroy (Terraform handles cleanup order):
+          #    a) Destroys K8s modules (helm, kubectl resources)
+          #    b) Runs null_resource.pre_destroy_cleanup (cleans NLBs, ENIs)
+          #    c) Destroys EKS cluster
+          #    d) Destroys VPC (subnets clean → no DependencyViolation)
           # ════════════════════════════════════════════════════════════════
+
+          # ── Delete Harness resources via API (independent of Terraform) ──
           HARNESS_API="https://app.harness.io/gateway/ng/api"
           GITOPS_API="https://app.harness.io/gateway/gitops/api/v1"
           ACCT="${{ vars.HARNESS_ACCOUNT_ID }}"
@@ -406,113 +289,110 @@ jobs:
           API_KEY="${{ secrets.HARNESS_API_KEY }}"
           AGENT="ep10gitopsagent"
 
-          echo "=== Deleting ALL Harness resources via API ==="
+          echo "=== Deleting Harness resources via API ==="
 
-          # 1. Delete Monitored Service
-          echo "  Deleting monitored service..."
+          # Monitored Service
           curl -s -X DELETE "${HARNESS_API}/cv/monitored-service/online_boutique_production?accountId=${ACCT}&orgIdentifier=${ORG}&projectIdentifier=${PROJ}" \
             -H "x-api-key: ${API_KEY}" 2>/dev/null || true
 
-          # 2. Delete Cluster Mappings
-          echo "  Deleting cluster mappings..."
-          curl -s -X DELETE "${HARNESS_API}/environmentsV2/production/clusters?accountIdentifier=${ACCT}&orgIdentifier=${ORG}&projectIdentifier=${PROJ}" \
-            -H "x-api-key: ${API_KEY}" 2>/dev/null || true
-          curl -s -X DELETE "${HARNESS_API}/environmentsV2/development/clusters?accountIdentifier=${ACCT}&orgIdentifier=${ORG}&projectIdentifier=${PROJ}" \
-            -H "x-api-key: ${API_KEY}" 2>/dev/null || true
+          # Cluster Mappings
+          for ENV in production development; do
+            curl -s -X DELETE "${HARNESS_API}/environmentsV2/${ENV}/clusters?accountIdentifier=${ACCT}&orgIdentifier=${ORG}&projectIdentifier=${PROJ}" \
+              -H "x-api-key: ${API_KEY}" 2>/dev/null || true
+          done
 
-          # 3. Delete GitOps Applications (online-boutique + falco + monitoring + logging + tracing)
-          echo "  Deleting GitOps applications..."
-          for APP_NAME in online-boutique falco monitoring logging tracing otel-collector; do
+          # GitOps Applications (use ArgoCD app names, not Harness identifiers)
+          for APP_NAME in online-boutique falco monitoring elasticsearch kibana fluentd jaeger otel-collector; do
             curl -s -X DELETE "${GITOPS_API}/agents/${AGENT}/applications/${APP_NAME}?accountIdentifier=${ACCT}&orgIdentifier=${ORG}&projectIdentifier=${PROJ}" \
               -H "x-api-key: ${API_KEY}" 2>/dev/null || true
           done
 
-          # 4. Delete GitOps Repository
-          echo "  Deleting GitOps repository..."
-          curl -s -X DELETE "${GITOPS_API}/agents/${AGENT}/repositories/repo?accountIdentifier=${ACCT}&orgIdentifier=${ORG}&projectIdentifier=${PROJ}" \
-            -H "x-api-key: ${API_KEY}" 2>/dev/null || true
-
-          # 5. Delete GitOps Cluster
-          echo "  Deleting GitOps cluster..."
+          # GitOps Repositories (main repo + all Helm chart repos)
+          for REPO_ID in repo helm_prometheus helm_elastic helm_fluent helm_jaeger helm_otel helm_falco; do
+            curl -s -X DELETE "${GITOPS_API}/agents/${AGENT}/repositories/${REPO_ID}?accountIdentifier=${ACCT}&orgIdentifier=${ORG}&projectIdentifier=${PROJ}" \
+              -H "x-api-key: ${API_KEY}" 2>/dev/null || true
+          done
           curl -s -X DELETE "${GITOPS_API}/agents/${AGENT}/clusters/incluster?accountIdentifier=${ACCT}&orgIdentifier=${ORG}&projectIdentifier=${PROJ}" \
             -H "x-api-key: ${API_KEY}" 2>/dev/null || true
 
-          # 6. Delete Service
-          echo "  Deleting service..."
+          # Service
           curl -s -X DELETE "${HARNESS_API}/servicesV2/online_boutique?accountIdentifier=${ACCT}&orgIdentifier=${ORG}&projectIdentifier=${PROJ}" \
             -H "x-api-key: ${API_KEY}" 2>/dev/null || true
 
-          # 7. Delete Environments
-          echo "  Deleting environments..."
-          curl -s -X DELETE "${HARNESS_API}/environmentsV2/production?accountIdentifier=${ACCT}&orgIdentifier=${ORG}&projectIdentifier=${PROJ}" \
-            -H "x-api-key: ${API_KEY}" 2>/dev/null || true
-          curl -s -X DELETE "${HARNESS_API}/environmentsV2/development?accountIdentifier=${ACCT}&orgIdentifier=${ORG}&projectIdentifier=${PROJ}" \
-            -H "x-api-key: ${API_KEY}" 2>/dev/null || true
+          # Environments
+          for ENV in production development; do
+            curl -s -X DELETE "${HARNESS_API}/environmentsV2/${ENV}?accountIdentifier=${ACCT}&orgIdentifier=${ORG}&projectIdentifier=${PROJ}" \
+              -H "x-api-key: ${API_KEY}" 2>/dev/null || true
+          done
 
-          # 8. Delete Connectors
-          echo "  Deleting connectors..."
+          # Connectors
           for CONN in prometheus elasticsearch k8sdelegate; do
             curl -s -X DELETE "${HARNESS_API}/connectors/${CONN}?accountIdentifier=${ACCT}&orgIdentifier=${ORG}&projectIdentifier=${PROJ}" \
               -H "x-api-key: ${API_KEY}" 2>/dev/null || true
           done
 
-          # 9. Delete OPA Policy + PolicySet
-          echo "  Deleting policies..."
+          # OPA Policy + PolicySet
           curl -s -X DELETE "${HARNESS_API}/v1/orgs/${ORG}/projects/${PROJ}/policysets/production_policy_set?accountIdentifier=${ACCT}" \
             -H "x-api-key: ${API_KEY}" 2>/dev/null || true
           curl -s -X DELETE "${HARNESS_API}/v1/orgs/${ORG}/projects/${PROJ}/policies/production_governance?accountIdentifier=${ACCT}" \
             -H "x-api-key: ${API_KEY}" 2>/dev/null || true
 
-          # 10. Delete Variables
-          echo "  Deleting variables..."
+          # Variables
           for VAR in ci_cache_bucket domain_name sonar_host_url; do
             curl -s -X DELETE "${HARNESS_API}/variables/${VAR}?accountIdentifier=${ACCT}&orgIdentifier=${ORG}&projectIdentifier=${PROJ}" \
               -H "x-api-key: ${API_KEY}" 2>/dev/null || true
           done
 
-          # 11. Delete Secrets (elk_password)
-          echo "  Deleting secrets..."
+          # Secrets
           curl -s -X DELETE "${HARNESS_API}/v2/secrets/elk_password?accountIdentifier=${ACCT}&orgIdentifier=${ORG}&projectIdentifier=${PROJ}" \
             -H "x-api-key: ${API_KEY}" 2>/dev/null || true
 
-          # 12. Delete GitOps Agent
-          echo "  Deleting GitOps agent..."
+          # GitOps Agent
           curl -s -X DELETE "${GITOPS_API}/agents/${AGENT}?accountIdentifier=${ACCT}&orgIdentifier=${ORG}&projectIdentifier=${PROJ}" \
             -H "x-api-key: ${API_KEY}" 2>/dev/null || true
 
-          echo "=== All Harness resources deleted via API ==="
-          sleep 5
+          echo "=== Harness API cleanup done ==="
 
-          # Remove all Harness/GitOps modules from Terraform state (already deleted via API above)
+          # ── Remove Harness resources from Terraform state (already deleted via API) ──
           terraform state list 2>/dev/null | grep -E '^module\.(harness_platform|gitops|monitoring|logging|tracing|falco)\.' | while read -r resource; do
             terraform state rm "$resource" 2>/dev/null || true
           done || true
 
-          # Clean orphaned ENIs in VPC BEFORE destroy (prevents subnet deletion timeout)
-          VPC_ID="$(terraform output -raw vpc_id 2>/dev/null || true)"
-          if [ -n "$VPC_ID" ]; then
-            echo "Pre-destroy: Cleaning ENIs in VPC ${VPC_ID}..."
-            aws ec2 describe-network-interfaces --region "${{ env.AWS_REGION_VALUE }}" \
-              --filters "Name=vpc-id,Values=${VPC_ID}" \
-              --query 'NetworkInterfaces[].[NetworkInterfaceId,Attachment.AttachmentId,Status]' --output text 2>/dev/null | \
-              while read -r eni attach status; do
-                [ -z "$eni" ] && continue
-                if [ "$status" = "in-use" ] && [ -n "$attach" ] && [ "$attach" != "None" ]; then
-                  aws ec2 detach-network-interface --region "${{ env.AWS_REGION_VALUE }}" --attachment-id "$attach" --force 2>/dev/null || true
-                fi
+          # ── Delete CloudWatch log group (EKS auto-creates it outside Terraform) ──
+          CLUSTER_NAME=$(terraform output -raw eks_cluster_name 2>/dev/null || echo "${{ vars.CLUSTER_NAME }}")
+          aws logs delete-log-group --log-group-name "/aws/eks/${CLUSTER_NAME}/cluster" --region "${{ env.AWS_REGION_VALUE }}" 2>/dev/null || true
+
+          # ── Delete External DNS records ──
+          DOMAIN="${{ vars.DOMAIN_NAME }}"
+          if [ -n "$DOMAIN" ]; then
+            ZONE_ID=$(aws route53 list-hosted-zones-by-name --dns-name "$DOMAIN" --query "HostedZones[0].Id" --output text 2>/dev/null | sed 's|/hostedzone/||')
+            if [ -n "$ZONE_ID" ] && [ "$ZONE_ID" != "None" ]; then
+              echo "Cleaning External DNS records..."
+              aws route53 list-resource-record-sets --hosted-zone-id "$ZONE_ID" --query "ResourceRecordSets[?starts_with(Name,'_externaldns.')].Name" --output text 2>/dev/null | tr '\t' '\n' | while read -r TXT_NAME; do
+                [ -z "$TXT_NAME" ] && continue
+                REAL_NAME=$(echo "$TXT_NAME" | sed 's/^_externaldns\.//')
+                for TYPE in A CNAME TXT; do
+                  RECORD=$(aws route53 list-resource-record-sets --hosted-zone-id "$ZONE_ID" --query "ResourceRecordSets[?Name=='${REAL_NAME}' && Type=='${TYPE}'].[{Name:Name,Type:Type,TTL:TTL,ResourceRecords:ResourceRecords,AliasTarget:AliasTarget}]" --output json 2>/dev/null | jq -c '.[0]' 2>/dev/null)
+                  [ "$RECORD" = "null" ] || [ -z "$RECORD" ] && continue
+                  aws route53 change-resource-record-sets --hosted-zone-id "$ZONE_ID" --change-batch "{\"Changes\":[{\"Action\":\"DELETE\",\"ResourceRecordSet\":${RECORD}}]}" 2>/dev/null || true
+                done
+                TXT_RECORD=$(aws route53 list-resource-record-sets --hosted-zone-id "$ZONE_ID" --query "ResourceRecordSets[?Name=='${TXT_NAME}' && Type=='TXT'].[{Name:Name,Type:Type,TTL:TTL,ResourceRecords:ResourceRecords}]" --output json 2>/dev/null | jq -c '.[0]' 2>/dev/null)
+                [ "$TXT_RECORD" != "null" ] && [ -n "$TXT_RECORD" ] && \
+                  aws route53 change-resource-record-sets --hosted-zone-id "$ZONE_ID" --change-batch "{\"Changes\":[{\"Action\":\"DELETE\",\"ResourceRecordSet\":${TXT_RECORD}}]}" 2>/dev/null || true
               done
-            sleep 10
-            aws ec2 describe-network-interfaces --region "${{ env.AWS_REGION_VALUE }}" \
-              --filters "Name=vpc-id,Values=${VPC_ID}" \
-              --query 'NetworkInterfaces[].NetworkInterfaceId' --output text 2>/dev/null | \
-              tr '\t' '\n' | while read -r eni; do
-                [ -z "$eni" ] && continue
-                aws ec2 delete-network-interface --region "${{ env.AWS_REGION_VALUE }}" --network-interface-id "$eni" || true
-              done
-            echo "ENI cleanup done."
+            fi
           fi
 
-          terraform destroy -auto-approve -no-color \
+          # ── Count resources before destroy ──
+          RESOURCES_BEFORE=$(terraform state list 2>/dev/null | grep -c '.' || echo "0")
+          echo "RESOURCES_BEFORE=${RESOURCES_BEFORE}" >> "$GITHUB_ENV"
+
+          # ══════════════════════════════════════════════════════════════
+          # TERRAFORM DESTROY — The null_resource.pre_destroy_cleanup
+          # handles all NLB/ENI/NAT cleanup INSIDE Terraform's destroy
+          # order. No more DependencyViolation errors.
+          # ══════════════════════════════════════════════════════════════
+          terraform destroy -auto-approve -no-color -parallelism=20 \
             -var="harness_account_id=${{ vars.HARNESS_ACCOUNT_ID }}" \
             -var="harness_api_key=${{ secrets.HARNESS_API_KEY }}" \
             -var="harness_delegate_token=${{ secrets.HARNESS_DELEGATE_TOKEN }}" \
@@ -529,18 +409,30 @@ jobs:
       - name: Terraform Destroy Retry (if first attempt failed)
         if: github.event.inputs.action == 'destroy' && steps.terraform_destroy.outcome == 'failure'
         run: |
-          echo "First destroy attempt failed. Cleaning up..."
+          echo "First destroy attempt failed. Running force cleanup..."
 
-          # Remove ALL Harness/GitOps/K8s resources from state (already deleted via API or cluster gone)
-          terraform state list 2>/dev/null | grep -E '^(kubernetes_|module\.(harness_platform|gitops|monitoring|logging|tracing|falco)|module\..+\.(kubernetes_|helm_|kubectl_))' | while read -r resource; do
+          # Remove ALL K8s/Helm/Kubectl/null_resource from state (cluster may be partially deleted)
+          terraform state list 2>/dev/null | grep -E '^(kubernetes_|null_resource\.|module\.(harness_platform|gitops|monitoring|logging|tracing|falco)|module\..+\.(kubernetes_|helm_|kubectl_))' | while read -r resource; do
             terraform state rm "$resource" 2>/dev/null || true
           done || true
           terraform state rm "kubernetes_storage_class.ebs" 2>/dev/null || true
 
-          # Clean ALL orphaned AWS networking resources in VPC
+          # Force-clean VPC networking (nuclear option — AWS API direct)
           VPC_ID="$(terraform output -raw vpc_id 2>/dev/null || true)"
           if [ -n "$VPC_ID" ]; then
-            echo "Cleaning VPC ${VPC_ID}..."
+            echo "Force-cleaning VPC ${VPC_ID}..."
+
+            # Delete Load Balancers
+            for arn in $(aws elbv2 describe-load-balancers --region "${{ env.AWS_REGION_VALUE }}" \
+              --query "LoadBalancers[?VpcId=='${VPC_ID}'].LoadBalancerArn" --output text 2>/dev/null); do
+              [ -z "$arn" ] || [ "$arn" = "None" ] && continue
+              aws elbv2 delete-load-balancer --region "${{ env.AWS_REGION_VALUE }}" --load-balancer-arn "$arn" 2>/dev/null || true
+            done
+            for elb in $(aws elb describe-load-balancers --region "${{ env.AWS_REGION_VALUE }}" \
+              --query "LoadBalancerDescriptions[?VPCId=='${VPC_ID}'].LoadBalancerName" --output text 2>/dev/null); do
+              [ -z "$elb" ] || [ "$elb" = "None" ] && continue
+              aws elb delete-load-balancer --region "${{ env.AWS_REGION_VALUE }}" --load-balancer-name "$elb" 2>/dev/null || true
+            done
 
             # Delete NAT Gateways
             for nat in $(aws ec2 describe-nat-gateways --region "${{ env.AWS_REGION_VALUE }}" \
@@ -549,7 +441,8 @@ jobs:
               [ -z "$nat" ] && continue
               aws ec2 delete-nat-gateway --region "${{ env.AWS_REGION_VALUE }}" --nat-gateway-id "$nat" 2>/dev/null || true
             done
-            sleep 60
+            echo "Waiting 90s for NAT GW + LB ENI release..."
+            sleep 90
 
             # Release Elastic IPs
             for alloc in $(aws ec2 describe-addresses --region "${{ env.AWS_REGION_VALUE }}" \
@@ -577,25 +470,26 @@ jobs:
                 aws ec2 delete-network-interface --region "${{ env.AWS_REGION_VALUE }}" --network-interface-id "$eni" || true
               done
 
-            # Delete security groups
-            aws ec2 describe-security-groups --region "${{ env.AWS_REGION_VALUE }}" \
+            # Delete security groups (remove cross-references first)
+            for sg in $(aws ec2 describe-security-groups --region "${{ env.AWS_REGION_VALUE }}" \
               --filters "Name=vpc-id,Values=${VPC_ID}" \
-              --query "SecurityGroups[?GroupName!='default'].GroupId" --output text 2>/dev/null | \
-              tr '\t' '\n' | while read -r sg; do
-                [ -z "$sg" ] && continue
-                aws ec2 delete-security-group --region "${{ env.AWS_REGION_VALUE }}" --group-id "$sg" || true
-              done
+              --query "SecurityGroups[?GroupName!='default'].GroupId" --output text 2>/dev/null | tr '\t' '\n'); do
+              [ -z "$sg" ] && continue
+              aws ec2 revoke-security-group-ingress --region "${{ env.AWS_REGION_VALUE }}" --group-id "$sg" \
+                --security-group-rule-ids $(aws ec2 describe-security-group-rules --region "${{ env.AWS_REGION_VALUE }}" \
+                --filters "Name=group-id,Values=$sg" --query 'SecurityGroupRules[?ReferencedGroupInfo!=null].SecurityGroupRuleId' --output text 2>/dev/null) 2>/dev/null || true
+              aws ec2 delete-security-group --region "${{ env.AWS_REGION_VALUE }}" --group-id "$sg" || true
+            done
 
             # Delete subnets
-            aws ec2 describe-subnets --region "${{ env.AWS_REGION_VALUE }}" \
+            for sub in $(aws ec2 describe-subnets --region "${{ env.AWS_REGION_VALUE }}" \
               --filters "Name=vpc-id,Values=${VPC_ID}" \
-              --query 'Subnets[].SubnetId' --output text 2>/dev/null | \
-              tr '\t' '\n' | while read -r sub; do
-                [ -z "$sub" ] && continue
-                aws ec2 delete-subnet --region "${{ env.AWS_REGION_VALUE }}" --subnet-id "$sub" || true
-              done
+              --query 'Subnets[].SubnetId' --output text 2>/dev/null | tr '\t' '\n'); do
+              [ -z "$sub" ] && continue
+              aws ec2 delete-subnet --region "${{ env.AWS_REGION_VALUE }}" --subnet-id "$sub" || true
+            done
 
-            # Detach and delete internet gateway
+            # Detach + delete IGW
             for igw in $(aws ec2 describe-internet-gateways --region "${{ env.AWS_REGION_VALUE }}" \
               --filters "Name=attachment.vpc-id,Values=${VPC_ID}" \
               --query 'InternetGateways[].InternetGatewayId' --output text 2>/dev/null); do
@@ -605,19 +499,18 @@ jobs:
             done
 
             # Delete route tables (non-main)
-            aws ec2 describe-route-tables --region "${{ env.AWS_REGION_VALUE }}" \
+            for rt in $(aws ec2 describe-route-tables --region "${{ env.AWS_REGION_VALUE }}" \
               --filters "Name=vpc-id,Values=${VPC_ID}" \
-              --query 'RouteTables[?Associations[0].Main!=`true`].RouteTableId' --output text 2>/dev/null | \
-              tr '\t' '\n' | while read -r rt; do
-                [ -z "$rt" ] && continue
-                aws ec2 delete-route-table --region "${{ env.AWS_REGION_VALUE }}" --route-table-id "$rt" || true
-              done
+              --query 'RouteTables[?Associations[0].Main!=`true`].RouteTableId' --output text 2>/dev/null | tr '\t' '\n'); do
+              [ -z "$rt" ] && continue
+              aws ec2 delete-route-table --region "${{ env.AWS_REGION_VALUE }}" --route-table-id "$rt" || true
+            done
 
             # Delete VPC
             aws ec2 delete-vpc --region "${{ env.AWS_REGION_VALUE }}" --vpc-id "$VPC_ID" || true
           fi
 
-          # Final terraform destroy (should find nothing or very little left)
+          # Final terraform destroy (should have nothing or very little left)
           terraform destroy -auto-approve -no-color \
             -var="harness_account_id=${{ vars.HARNESS_ACCOUNT_ID }}" \
             -var="harness_api_key=${{ secrets.HARNESS_API_KEY }}" \

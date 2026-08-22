@@ -20,6 +20,170 @@ locals {
 
 data "aws_availability_zones" "available" {}
 
+# ═══════════════════════════════════════════════════════════════════
+# PRE-DESTROY CLEANUP — Runs BEFORE Terraform destroys EKS/VPC
+# 
+# HOW IT WORKS (Terraform destroy order):
+#   1. Terraform destroys Kong, Monitoring, Logging, Tracing, Falco, etc.
+#      (they depend on this null_resource → destroyed FIRST)
+#   2. Terraform destroys THIS null_resource → destroy provisioner runs
+#      (cleans NLBs, ENIs, NAT GWs — everything blocking subnet deletion)
+#   3. Terraform destroys EKS cluster (node groups, addons, cluster)
+#   4. Terraform destroys VPC (subnets now have zero dependencies → instant)
+#
+# This is the standard pattern used by AWS EKS Blueprints and enterprise
+# Terraform modules. The cleanup lives in Terraform, not in the pipeline.
+# ═══════════════════════════════════════════════════════════════════
+resource "null_resource" "pre_destroy_cleanup" {
+  triggers = {
+    cluster_name = var.cluster_name
+    region       = var.aws_region
+    vpc_id       = module.vpc.vpc_id
+  }
+
+  provisioner "local-exec" {
+    when    = destroy
+    command = <<-EOT
+      #!/bin/bash
+      set -x
+      CLUSTER="${self.triggers.cluster_name}"
+      REGION="${self.triggers.region}"
+      VPC_ID="${self.triggers.vpc_id}"
+
+      echo "═══════════════════════════════════════════════════════════════"
+      echo "  PRE-DESTROY: Cleaning K8s-created AWS resources"
+      echo "  Cluster: $CLUSTER | Region: $REGION | VPC: $VPC_ID"
+      echo "═══════════════════════════════════════════════════════════════"
+
+      # ─── Step 1: K8s cleanup (if cluster is still accessible) ───
+      if aws eks describe-cluster --name "$CLUSTER" --region "$REGION" >/dev/null 2>&1; then
+        aws eks update-kubeconfig --region "$REGION" --name "$CLUSTER" 2>/dev/null
+
+        echo "[1/8] Removing webhooks..."
+        kubectl delete validatingwebhookconfiguration --all --ignore-not-found=true 2>/dev/null || true
+        kubectl delete mutatingwebhookconfiguration --all --ignore-not-found=true 2>/dev/null || true
+
+        echo "[2/8] Removing ArgoCD finalizers..."
+        for app in $(kubectl get applications -n gitops -o name 2>/dev/null); do
+          kubectl patch "$app" -n gitops --type json -p='[{"op":"remove","path":"/metadata/finalizers"}]' 2>/dev/null || true
+        done
+
+        echo "[3/8] Deleting LoadBalancer services (releases NLBs/ALBs)..."
+        kubectl get svc -A -o jsonpath='{range .items[?(@.spec.type=="LoadBalancer")]}{.metadata.namespace}{" "}{.metadata.name}{"\n"}{end}' 2>/dev/null | while read -r NS SVC; do
+          [ -z "$NS" ] && continue
+          echo "  Deleting: $NS/$SVC"
+          kubectl delete svc "$SVC" -n "$NS" --ignore-not-found=true --timeout=60s 2>/dev/null || true
+        done
+
+        echo "[4/8] Deleting PVCs (releases EBS volumes)..."
+        kubectl get pvc -A --no-headers 2>/dev/null | while read -r NS PVC _; do
+          [ -z "$NS" ] && continue
+          kubectl delete pvc "$PVC" -n "$NS" --ignore-not-found=true --timeout=30s 2>/dev/null || true
+        done
+
+        echo "[5/8] Cleaning namespaces..."
+        for ns in $(kubectl get ns --no-headers 2>/dev/null | awk '{print $1}'); do
+          case "$ns" in kube-system|kube-public|kube-node-lease|default) continue;; esac
+          kubectl patch ns "$ns" --type json -p='[{"op":"remove","path":"/metadata/finalizers"}]' 2>/dev/null || true
+          kubectl patch ns "$ns" --type json -p='[{"op":"replace","path":"/spec/finalizers","value":[]}]' 2>/dev/null || true
+          kubectl delete namespace "$ns" --ignore-not-found=true --wait=false --timeout=30s 2>/dev/null || true
+        done
+
+        echo "[6/8] Waiting 60s for AWS to release ENIs..."
+        sleep 60
+      else
+        echo "EKS cluster not accessible. Skipping K8s cleanup."
+      fi
+
+      # ─── Step 2: AWS-level cleanup (works even if cluster is gone) ───
+      if [ -n "$VPC_ID" ]; then
+        echo "[7/8] Deleting Load Balancers in VPC..."
+        for arn in $(aws elbv2 describe-load-balancers --region "$REGION" \
+          --query "LoadBalancers[?VpcId=='$VPC_ID'].LoadBalancerArn" --output text 2>/dev/null); do
+          [ -z "$arn" ] || [ "$arn" = "None" ] && continue
+          echo "  Deleting LB: $arn"
+          # First delete target groups associated with this LB
+          for tg in $(aws elbv2 describe-target-groups --region "$REGION" --load-balancer-arn "$arn" \
+            --query 'TargetGroups[].TargetGroupArn' --output text 2>/dev/null); do
+            [ -z "$tg" ] || [ "$tg" = "None" ] && continue
+            aws elbv2 delete-target-group --region "$REGION" --target-group-arn "$tg" 2>/dev/null || true
+          done
+          aws elbv2 delete-load-balancer --region "$REGION" --load-balancer-arn "$arn" 2>/dev/null || true
+        done
+        # Classic ELBs
+        for elb in $(aws elb describe-load-balancers --region "$REGION" \
+          --query "LoadBalancerDescriptions[?VPCId=='$VPC_ID'].LoadBalancerName" --output text 2>/dev/null); do
+          [ -z "$elb" ] || [ "$elb" = "None" ] && continue
+          aws elb delete-load-balancer --region "$REGION" --load-balancer-name "$elb" 2>/dev/null || true
+        done
+
+        # Wait for LB ENIs to release
+        sleep 30
+
+        # Delete NAT Gateways
+        for nat in $(aws ec2 describe-nat-gateways --region "$REGION" \
+          --filter "Name=vpc-id,Values=$VPC_ID" "Name=state,Values=available,pending,deleting" \
+          --query 'NatGateways[?State!=`deleted`].NatGatewayId' --output text 2>/dev/null); do
+          [ -z "$nat" ] || [ "$nat" = "None" ] && continue
+          echo "  Deleting NAT GW: $nat"
+          aws ec2 delete-nat-gateway --region "$REGION" --nat-gateway-id "$nat" 2>/dev/null || true
+        done
+
+        # Wait for NAT GW ENIs to release (NAT GWs take ~60s to fully delete)
+        echo "Waiting 60s for NAT Gateway ENI release..."
+        sleep 60
+
+        echo "[8/8] Force-cleaning ENIs..."
+        # Detach all ENIs
+        aws ec2 describe-network-interfaces --region "$REGION" \
+          --filters "Name=vpc-id,Values=$VPC_ID" \
+          --query 'NetworkInterfaces[].[NetworkInterfaceId,Attachment.AttachmentId,Status]' --output text 2>/dev/null | \
+          while read -r eni attach status; do
+            [ -z "$eni" ] || [ "$eni" = "None" ] && continue
+            if [ "$status" = "in-use" ] && [ -n "$attach" ] && [ "$attach" != "None" ]; then
+              echo "  Detaching: $eni"
+              aws ec2 detach-network-interface --region "$REGION" --attachment-id "$attach" --force 2>/dev/null || true
+            fi
+          done
+
+        sleep 15
+
+        # Delete all ENIs
+        aws ec2 describe-network-interfaces --region "$REGION" \
+          --filters "Name=vpc-id,Values=$VPC_ID" \
+          --query 'NetworkInterfaces[].NetworkInterfaceId' --output text 2>/dev/null | \
+          tr '\t' '\n' | while read -r eni; do
+            [ -z "$eni" ] || [ "$eni" = "None" ] && continue
+            echo "  Deleting: $eni"
+            aws ec2 delete-network-interface --region "$REGION" --network-interface-id "$eni" 2>/dev/null || true
+          done
+
+        # Release unassociated Elastic IPs
+        for alloc in $(aws ec2 describe-addresses --region "$REGION" \
+          --query 'Addresses[?AssociationId==null].AllocationId' --output text 2>/dev/null); do
+          [ -z "$alloc" ] || [ "$alloc" = "None" ] && continue
+          echo "  Releasing EIP: $alloc"
+          aws ec2 release-address --region "$REGION" --allocation-id "$alloc" 2>/dev/null || true
+        done
+
+        # Delete orphaned target groups (leftover from deleted LBs)
+        for tg in $(aws elbv2 describe-target-groups --region "$REGION" \
+          --query "TargetGroups[?VpcId=='$VPC_ID' && length(LoadBalancerArns)==\`0\`].TargetGroupArn" --output text 2>/dev/null); do
+          [ -z "$tg" ] || [ "$tg" = "None" ] && continue
+          echo "  Deleting orphaned TG: $tg"
+          aws elbv2 delete-target-group --region "$REGION" --target-group-arn "$tg" 2>/dev/null || true
+        done
+      fi
+
+      echo "═══════════════════════════════════════════════════════════════"
+      echo "  PRE-DESTROY CLEANUP COMPLETE — Terraform can now delete VPC"
+      echo "═══════════════════════════════════════════════════════════════"
+    EOT
+  }
+
+  depends_on = [module.eks, module.vpc]
+}
+
 # ── VPC ──
 module "vpc" {
   source             = "./modules/vpc"
@@ -52,7 +216,7 @@ resource "kubernetes_storage_class" "ebs" {
   volume_binding_mode    = "WaitForFirstConsumer"
   allow_volume_expansion = true
   parameters             = { type = "gp3", encrypted = "true" }
-  depends_on             = [module.eks]
+  depends_on             = [module.eks, null_resource.pre_destroy_cleanup]
 }
 
 # ── Bastion ──
@@ -114,14 +278,14 @@ module "delegate" {
   replicas         = var.delegate_replicas
   image_tag        = var.delegate_image_tag
   eks_cluster_name = module.eks.cluster_name
-  depends_on       = [kubernetes_storage_class.ebs]
+  depends_on       = [kubernetes_storage_class.ebs, null_resource.pre_destroy_cleanup]
 }
 
 # ── Kong Gateway (API Gateway + Ingress Controller) ──
 module "kong_gateway" {
   source      = "./modules/kong-gateway"
   domain_name = var.domain_name
-  depends_on  = [module.eks, module.external_secrets]
+  depends_on  = [module.eks, module.external_secrets, null_resource.pre_destroy_cleanup]
 }
 
 # ── ExternalDNS (Auto-creates Route53 records from Ingress) ──
@@ -132,7 +296,7 @@ module "external_dns" {
   cluster_name      = var.cluster_name
   oidc_provider_arn = module.eks.oidc_provider_arn
   oidc_provider_url = module.eks.oidc_provider_url
-  depends_on        = [module.kong_gateway]
+  depends_on        = [module.kong_gateway, null_resource.pre_destroy_cleanup]
 }
 
 # ── External Secrets Operator ──
@@ -144,7 +308,7 @@ module "external_secrets" {
   oidc_provider_url = module.eks.oidc_provider_url
   secret_name       = "online-boutique/app-secrets"
   tags              = local.common_tags
-  depends_on        = [module.eks]
+  depends_on        = [module.eks, null_resource.pre_destroy_cleanup]
 }
 
 # ── GitOps Agent ──
@@ -168,7 +332,7 @@ module "gitops" {
   app_path           = "Episode-10/k8s"
   app_namespace      = "online-boutique"
   service_identifier = "online_boutique"
-  depends_on         = [module.delegate]
+  depends_on         = [module.delegate, null_resource.pre_destroy_cleanup]
 }
 
 # ── Harness Platform Resources ──
@@ -204,7 +368,7 @@ module "monitoring" {
   harness_project_id = var.harness_project_id
   gitops_agent_id    = module.gitops.agent_identifier
   gitops_cluster_id  = module.gitops.cluster_identifier
-  depends_on         = [module.gitops, module.external_secrets]
+  depends_on         = [module.gitops, module.external_secrets, null_resource.pre_destroy_cleanup]
 }
 
 # ── Logging (EFK — Elasticsearch + Fluentd + Kibana) ──
@@ -219,7 +383,7 @@ module "logging" {
   harness_project_id = var.harness_project_id
   gitops_agent_id    = module.gitops.agent_identifier
   gitops_cluster_id  = module.gitops.cluster_identifier
-  depends_on         = [module.gitops, module.external_secrets]
+  depends_on         = [module.gitops, module.external_secrets, null_resource.pre_destroy_cleanup]
 }
 
 # ── Tracing (Jaeger + OTel Collector) ──
@@ -234,7 +398,7 @@ module "tracing" {
   harness_project_id = var.harness_project_id
   gitops_agent_id    = module.gitops.agent_identifier
   gitops_cluster_id  = module.gitops.cluster_identifier
-  depends_on         = [module.gitops]
+  depends_on         = [module.gitops, null_resource.pre_destroy_cleanup]
 }
 
 # ── Falco (Runtime Security — detects suspicious container behavior) ──
@@ -246,5 +410,5 @@ module "falco" {
   harness_project_id = var.harness_project_id
   gitops_agent_id    = module.gitops.agent_identifier
   gitops_cluster_id  = module.gitops.cluster_identifier
-  depends_on         = [module.gitops]
+  depends_on         = [module.gitops, null_resource.pre_destroy_cleanup]
 }
