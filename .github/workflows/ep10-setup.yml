@@ -488,6 +488,30 @@ jobs:
             terraform state rm "$resource" 2>/dev/null || true
           done || true
 
+          # Clean orphaned ENIs in VPC BEFORE destroy (prevents subnet deletion timeout)
+          VPC_ID="$(terraform output -raw vpc_id 2>/dev/null || true)"
+          if [ -n "$VPC_ID" ]; then
+            echo "Pre-destroy: Cleaning ENIs in VPC ${VPC_ID}..."
+            aws ec2 describe-network-interfaces --region "${{ env.AWS_REGION_VALUE }}" \
+              --filters "Name=vpc-id,Values=${VPC_ID}" \
+              --query 'NetworkInterfaces[].[NetworkInterfaceId,Attachment.AttachmentId,Status]' --output text 2>/dev/null | \
+              while read -r eni attach status; do
+                [ -z "$eni" ] && continue
+                if [ "$status" = "in-use" ] && [ -n "$attach" ] && [ "$attach" != "None" ]; then
+                  aws ec2 detach-network-interface --region "${{ env.AWS_REGION_VALUE }}" --attachment-id "$attach" --force 2>/dev/null || true
+                fi
+              done
+            sleep 10
+            aws ec2 describe-network-interfaces --region "${{ env.AWS_REGION_VALUE }}" \
+              --filters "Name=vpc-id,Values=${VPC_ID}" \
+              --query 'NetworkInterfaces[].NetworkInterfaceId' --output text 2>/dev/null | \
+              tr '\t' '\n' | while read -r eni; do
+                [ -z "$eni" ] && continue
+                aws ec2 delete-network-interface --region "${{ env.AWS_REGION_VALUE }}" --network-interface-id "$eni" || true
+              done
+            echo "ENI cleanup done."
+          fi
+
           terraform destroy -auto-approve -no-color \
             -var="harness_account_id=${{ vars.HARNESS_ACCOUNT_ID }}" \
             -var="harness_api_key=${{ secrets.HARNESS_API_KEY }}" \
@@ -550,8 +574,28 @@ jobs:
             done
 
             echo "Cleaning orphaned ENIs in VPC ${VPC_ID}..."
+            # Delete available ENIs
             aws ec2 describe-network-interfaces --region "${{ env.AWS_REGION_VALUE }}" \
               --filters "Name=vpc-id,Values=${VPC_ID}" "Name=status,Values=available" \
+              --query 'NetworkInterfaces[].NetworkInterfaceId' --output text 2>/dev/null | \
+              tr '\t' '\n' | while read -r eni; do
+                [ -z "$eni" ] && continue
+                aws ec2 delete-network-interface --region "${{ env.AWS_REGION_VALUE }}" --network-interface-id "$eni" || true
+              done
+            # Force-detach and delete in-use ENIs (leftover from NLB/EKS)
+            aws ec2 describe-network-interfaces --region "${{ env.AWS_REGION_VALUE }}" \
+              --filters "Name=vpc-id,Values=${VPC_ID}" "Name=status,Values=in-use" \
+              --query 'NetworkInterfaces[].[NetworkInterfaceId,Attachment.AttachmentId]' --output text 2>/dev/null | \
+              while read -r eni attach; do
+                [ -z "$eni" ] && continue
+                if [ -n "$attach" ] && [ "$attach" != "None" ]; then
+                  aws ec2 detach-network-interface --region "${{ env.AWS_REGION_VALUE }}" --attachment-id "$attach" --force 2>/dev/null || true
+                fi
+              done
+            sleep 10
+            # Now delete all ENIs (they should be available after detach)
+            aws ec2 describe-network-interfaces --region "${{ env.AWS_REGION_VALUE }}" \
+              --filters "Name=vpc-id,Values=${VPC_ID}" \
               --query 'NetworkInterfaces[].NetworkInterfaceId' --output text 2>/dev/null | \
               tr '\t' '\n' | while read -r eni; do
                 [ -z "$eni" ] && continue
