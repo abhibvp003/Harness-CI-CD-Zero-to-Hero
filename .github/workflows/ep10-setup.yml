@@ -291,10 +291,13 @@ jobs:
 
           echo "=== Deleting Harness resources via API ==="
 
-          # Monitored Service (must be deleted FIRST — references service + environment)
-          curl -s -X DELETE "${HARNESS_API}/cv/monitored-service/online_boutique_production?accountIdentifier=${ACCT}&orgIdentifier=${ORG}&projectIdentifier=${PROJ}" \
+          # Monitored Service (CV API uses accountId, not accountIdentifier)
+          curl -s -X DELETE "${HARNESS_API}/cv/api/monitored-service/online_boutique_production?accountId=${ACCT}&orgIdentifier=${ORG}&projectIdentifier=${PROJ}" \
             -H "x-api-key: ${API_KEY}" 2>/dev/null || true
-          sleep 3
+          # Also try the /cv/monitored-service endpoint (different API versions)
+          curl -s -X DELETE "https://app.harness.io/cv/api/monitored-service/online_boutique_production?accountId=${ACCT}&orgIdentifier=${ORG}&projectIdentifier=${PROJ}" \
+            -H "x-api-key: ${API_KEY}" 2>/dev/null || true
+          sleep 5
 
           # Cluster Mappings (must be deleted before environments)
           for ENV in production development; do
@@ -364,6 +367,11 @@ jobs:
           # ── Delete CloudWatch log group (EKS auto-creates it outside Terraform) ──
           CLUSTER_NAME=$(terraform output -raw eks_cluster_name 2>/dev/null || echo "${{ vars.CLUSTER_NAME }}")
           aws logs delete-log-group --log-group-name "/aws/eks/${CLUSTER_NAME}/cluster" --region "${{ env.AWS_REGION_VALUE }}" 2>/dev/null || true
+
+          # ── Force-delete AWS Secrets Manager secrets (Terraform uses recovery_window=0 but verify) ──
+          for SECRET in online-boutique/efk-password online-boutique/falco-password online-boutique/grafana-password online-boutique/kong-admin-password online-boutique/jwt-secret online-boutique/db-credentials online-boutique/app-secrets; do
+            aws secretsmanager delete-secret --secret-id "$SECRET" --force-delete-without-recovery --region "${{ env.AWS_REGION_VALUE }}" 2>/dev/null || true
+          done
 
           # ── Delete External DNS records ──
           DOMAIN="${{ vars.DOMAIN_NAME }}"

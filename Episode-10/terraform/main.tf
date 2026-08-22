@@ -135,28 +135,47 @@ resource "null_resource" "pre_destroy_cleanup" {
 
         echo "[8/8] Force-cleaning ENIs..."
         # Detach all ENIs
-        aws ec2 describe-network-interfaces --region "$REGION" \
+        ENI_LIST=$(aws ec2 describe-network-interfaces --region "$REGION" \
           --filters "Name=vpc-id,Values=$VPC_ID" \
-          --query 'NetworkInterfaces[].[NetworkInterfaceId,Attachment.AttachmentId,Status]' --output text 2>/dev/null | \
-          while read -r eni attach status; do
-            [ -z "$eni" ] || [ "$eni" = "None" ] && continue
-            if [ "$status" = "in-use" ] && [ -n "$attach" ] && [ "$attach" != "None" ]; then
-              echo "  Detaching: $eni"
-              aws ec2 detach-network-interface --region "$REGION" --attachment-id "$attach" --force 2>/dev/null || true
-            fi
-          done
+          --query 'NetworkInterfaces[].[NetworkInterfaceId,Attachment.AttachmentId,Status]' --output text 2>/dev/null || true)
+        
+        echo "$ENI_LIST" | while read -r eni attach status; do
+          [ -z "$eni" ] || [ "$eni" = "None" ] && continue
+          if [ "$status" = "in-use" ] && [ -n "$attach" ] && [ "$attach" != "None" ]; then
+            echo "  Detaching: $eni"
+            aws ec2 detach-network-interface --region "$REGION" --attachment-id "$attach" --force 2>/dev/null || true
+          fi
+        done
 
-        sleep 15
+        echo "Waiting 20s for detach to complete..."
+        sleep 20
 
-        # Delete all ENIs
-        aws ec2 describe-network-interfaces --region "$REGION" \
+        # Delete all ENIs (re-query to get current state after detach)
+        ENI_IDS=$(aws ec2 describe-network-interfaces --region "$REGION" \
           --filters "Name=vpc-id,Values=$VPC_ID" \
-          --query 'NetworkInterfaces[].NetworkInterfaceId' --output text 2>/dev/null | \
-          tr '\t' '\n' | while read -r eni; do
-            [ -z "$eni" ] || [ "$eni" = "None" ] && continue
-            echo "  Deleting: $eni"
-            aws ec2 delete-network-interface --region "$REGION" --network-interface-id "$eni" 2>/dev/null || true
-          done
+          --query 'NetworkInterfaces[].NetworkInterfaceId' --output text 2>/dev/null || true)
+        
+        for eni in $ENI_IDS; do
+          [ -z "$eni" ] || [ "$eni" = "None" ] && continue
+          echo "  Deleting ENI: $eni"
+          aws ec2 delete-network-interface --region "$REGION" --network-interface-id "$eni" 2>/dev/null || true
+        done
+
+        # Final check — if any ENIs still exist, wait and retry once more
+        sleep 10
+        REMAINING_ENIS=$(aws ec2 describe-network-interfaces --region "$REGION" \
+          --filters "Name=vpc-id,Values=$VPC_ID" \
+          --query 'NetworkInterfaces[].NetworkInterfaceId' --output text 2>/dev/null || true)
+        
+        for eni in $REMAINING_ENIS; do
+          [ -z "$eni" ] || [ "$eni" = "None" ] && continue
+          echo "  RETRY deleting ENI: $eni"
+          aws ec2 detach-network-interface --region "$REGION" --attachment-id \
+            $(aws ec2 describe-network-interfaces --region "$REGION" --network-interface-ids "$eni" \
+              --query 'NetworkInterfaces[0].Attachment.AttachmentId' --output text 2>/dev/null) --force 2>/dev/null || true
+          sleep 5
+          aws ec2 delete-network-interface --region "$REGION" --network-interface-id "$eni" 2>/dev/null || true
+        done
 
         # Release unassociated Elastic IPs
         for alloc in $(aws ec2 describe-addresses --region "$REGION" \
