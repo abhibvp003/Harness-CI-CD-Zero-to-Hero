@@ -357,6 +357,13 @@ jobs:
           curl -s -X DELETE "${GITOPS_API}/agents/${AGENT}?accountIdentifier=${ACCT}&orgIdentifier=${ORG}&projectIdentifier=${PROJ}" \
             -H "x-api-key: ${API_KEY}" 2>/dev/null || true
 
+          # Delegate (delete the delegate record from Harness)
+          curl -s -X DELETE "${HARNESS_API}/delegate-setup/delegate/eks-k8s-delegate?accountIdentifier=${ACCT}&orgIdentifier=${ORG}&projectIdentifier=${PROJ}" \
+            -H "x-api-key: ${API_KEY}" 2>/dev/null || true
+          # Also try with delegate name as identifier
+          curl -s -X DELETE "https://app.harness.io/gateway/ng/api/delegate-setup/delegate/_eks_k8s_delegate?accountIdentifier=${ACCT}&orgIdentifier=${ORG}&projectIdentifier=${PROJ}" \
+            -H "x-api-key: ${API_KEY}" 2>/dev/null || true
+
           echo "=== Harness API cleanup done ==="
 
           # ── Remove Harness resources from Terraform state (already deleted via API) ──
