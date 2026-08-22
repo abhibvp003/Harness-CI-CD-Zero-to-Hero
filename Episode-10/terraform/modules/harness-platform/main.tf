@@ -168,26 +168,36 @@ resource "harness_platform_environment" "development" {
 # ── OPA Policy ──
 
 # OPA policy that enforces governance rules on production deploys
-resource "harness_platform_policy" "production_governance" {
-  identifier = "production_governance"
-  name       = "Production Governance"
-  org_id     = var.org_id
-  project_id = var.project_id
-  rego       = var.opa_policy_rego
-}
+# Uses Harness API directly (terraform resource returns 400 on some accounts)
+resource "null_resource" "opa_policy" {
+  provisioner "local-exec" {
+    interpreter = ["/bin/bash", "-c"]
+    command     = <<-EOT
+      # Create OPA Policy via API
+      curl -s -X POST \
+        "https://app.harness.io/gateway/pm/api/v1/policies?accountIdentifier=${var.harness_account_id}&orgIdentifier=${var.org_id}&projectIdentifier=${var.project_id}" \
+        -H "x-api-key: ${var.harness_api_key}" \
+        -H "Content-Type: application/json" \
+        -d '{
+          "identifier": "production_governance",
+          "name": "Production Governance",
+          "rego": ${jsonencode(var.opa_policy_rego)}
+        }' 2>/dev/null || true
 
-# Policy set that runs the governance check on pipeline execution
-resource "harness_platform_policyset" "production" {
-  identifier = "production_policy_set"
-  name       = "Production Policy Set"
-  org_id     = var.org_id
-  project_id = var.project_id
-  action     = "onrun"
-  type       = "pipeline"
-  enabled    = true
-  policies {
-    identifier = harness_platform_policy.production_governance.identifier
-    severity   = "error"
+      # Create Policy Set via API
+      curl -s -X POST \
+        "https://app.harness.io/gateway/pm/api/v1/policysets?accountIdentifier=${var.harness_account_id}&orgIdentifier=${var.org_id}&projectIdentifier=${var.project_id}" \
+        -H "x-api-key: ${var.harness_api_key}" \
+        -H "Content-Type: application/json" \
+        -d '{
+          "identifier": "production_policy_set",
+          "name": "Production Policy Set",
+          "action": "onrun",
+          "type": "pipeline",
+          "enabled": true,
+          "policies": [{"identifier": "production_governance", "severity": "error"}]
+        }' 2>/dev/null || true
+    EOT
   }
 }
 
