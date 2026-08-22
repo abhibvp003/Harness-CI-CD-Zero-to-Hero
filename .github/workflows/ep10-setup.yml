@@ -366,11 +366,6 @@ jobs:
 
           echo "=== Harness API cleanup done ==="
 
-          # ── Remove Harness resources from Terraform state (already deleted via API) ──
-          terraform state list 2>/dev/null | grep -E '^module\.(harness_platform|gitops|monitoring|logging|tracing|falco)\.' | while read -r resource; do
-            terraform state rm "$resource" 2>/dev/null || true
-          done || true
-
           # ── Delete CloudWatch log group (EKS auto-creates it outside Terraform) ──
           CLUSTER_NAME=$(terraform output -raw eks_cluster_name 2>/dev/null || echo "${{ vars.CLUSTER_NAME }}")
           aws logs delete-log-group --log-group-name "/aws/eks/${CLUSTER_NAME}/cluster" --region "${{ env.AWS_REGION_VALUE }}" 2>/dev/null || true
