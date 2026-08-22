@@ -291,11 +291,12 @@ jobs:
 
           echo "=== Deleting Harness resources via API ==="
 
-          # Monitored Service
-          curl -s -X DELETE "${HARNESS_API}/cv/monitored-service/online_boutique_production?accountId=${ACCT}&orgIdentifier=${ORG}&projectIdentifier=${PROJ}" \
+          # Monitored Service (must be deleted FIRST — references service + environment)
+          curl -s -X DELETE "${HARNESS_API}/cv/monitored-service/online_boutique_production?accountIdentifier=${ACCT}&orgIdentifier=${ORG}&projectIdentifier=${PROJ}" \
             -H "x-api-key: ${API_KEY}" 2>/dev/null || true
+          sleep 3
 
-          # Cluster Mappings
+          # Cluster Mappings (must be deleted before environments)
           for ENV in production development; do
             curl -s -X DELETE "${HARNESS_API}/environmentsV2/${ENV}/clusters?accountIdentifier=${ACCT}&orgIdentifier=${ORG}&projectIdentifier=${PROJ}" \
               -H "x-api-key: ${API_KEY}" 2>/dev/null || true
@@ -315,13 +316,15 @@ jobs:
           curl -s -X DELETE "${GITOPS_API}/agents/${AGENT}/clusters/incluster?accountIdentifier=${ACCT}&orgIdentifier=${ORG}&projectIdentifier=${PROJ}" \
             -H "x-api-key: ${API_KEY}" 2>/dev/null || true
 
-          # Service
-          curl -s -X DELETE "${HARNESS_API}/servicesV2/online_boutique?accountIdentifier=${ACCT}&orgIdentifier=${ORG}&projectIdentifier=${PROJ}" \
+          sleep 3
+
+          # Service (force delete — forceDelete=true bypasses reference checks)
+          curl -s -X DELETE "${HARNESS_API}/servicesV2/online_boutique?accountIdentifier=${ACCT}&orgIdentifier=${ORG}&projectIdentifier=${PROJ}&forceDelete=true" \
             -H "x-api-key: ${API_KEY}" 2>/dev/null || true
 
-          # Environments
+          # Environments (force delete)
           for ENV in production development; do
-            curl -s -X DELETE "${HARNESS_API}/environmentsV2/${ENV}?accountIdentifier=${ACCT}&orgIdentifier=${ORG}&projectIdentifier=${PROJ}" \
+            curl -s -X DELETE "${HARNESS_API}/environmentsV2/${ENV}?accountIdentifier=${ACCT}&orgIdentifier=${ORG}&projectIdentifier=${PROJ}&forceDelete=true" \
               -H "x-api-key: ${API_KEY}" 2>/dev/null || true
           done
 
