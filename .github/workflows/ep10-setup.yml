@@ -531,69 +531,44 @@ jobs:
         run: |
           echo "First destroy attempt failed. Cleaning up..."
 
-          # Force-remove Harness monitored service + cluster mappings + GitOps app (blocks service/env deletion)
-          terraform state rm "module.harness_platform.harness_platform_monitored_service.online_boutique" 2>/dev/null || true
-          terraform state rm "module.harness_platform.harness_platform_environment_clusters_mapping.production" 2>/dev/null || true
-          terraform state rm "module.harness_platform.harness_platform_environment_clusters_mapping.development" 2>/dev/null || true
-          terraform state rm "module.gitops.harness_platform_gitops_applications.app" 2>/dev/null || true
-          terraform state rm "module.gitops.harness_platform_gitops_app_project_mapping.project" 2>/dev/null || true
-          # Also remove service and environment from state if they can't be deleted (reference stuck in Harness API)
-          terraform state rm "module.harness_platform.harness_platform_service.online_boutique" 2>/dev/null || true
-          terraform state rm "module.harness_platform.harness_platform_environment.production" 2>/dev/null || true
-          terraform state rm "module.harness_platform.harness_platform_environment.development" 2>/dev/null || true
+          # Remove ALL Harness/GitOps/K8s resources from state (already deleted via API or cluster gone)
+          terraform state list 2>/dev/null | grep -E '^(kubernetes_|module\.(harness_platform|gitops|monitoring|logging|tracing|falco)|module\..+\.(kubernetes_|helm_|kubectl_))' | while read -r resource; do
+            terraform state rm "$resource" 2>/dev/null || true
+          done || true
+          terraform state rm "kubernetes_storage_class.ebs" 2>/dev/null || true
 
-          # If cluster is gone, remove all K8s resources from state
-          CLUSTER_NAME=$(terraform output -raw eks_cluster_name 2>/dev/null || echo "ep10-enterprise-cluster")
-          if ! aws eks describe-cluster --name "${CLUSTER_NAME}" --region "${{ env.AWS_REGION_VALUE }}" >/dev/null 2>&1; then
-            echo "EKS cluster gone. Removing K8s resources from state..."
-            terraform state list 2>/dev/null | grep -E '^(kubernetes_|module\..+\.kubernetes_|module\..+\.helm_|module\..+\.kubectl_)' | while read -r resource; do
-              echo "  Removing: $resource"
-              terraform state rm "$resource" 2>/dev/null || true
-            done || true
-            terraform state rm "kubernetes_storage_class.ebs" 2>/dev/null || true
-          fi
-
-          # Clean orphaned ENIs and security groups
+          # Clean ALL orphaned AWS networking resources in VPC
           VPC_ID="$(terraform output -raw vpc_id 2>/dev/null || true)"
           if [ -n "$VPC_ID" ]; then
-            echo "Deleting NAT Gateways in VPC ${VPC_ID}..."
+            echo "Cleaning VPC ${VPC_ID}..."
+
+            # Delete NAT Gateways
             for nat in $(aws ec2 describe-nat-gateways --region "${{ env.AWS_REGION_VALUE }}" \
               --filter "Name=vpc-id,Values=${VPC_ID}" "Name=state,Values=available,pending" \
               --query 'NatGateways[].NatGatewayId' --output text 2>/dev/null); do
               [ -z "$nat" ] && continue
               aws ec2 delete-nat-gateway --region "${{ env.AWS_REGION_VALUE }}" --nat-gateway-id "$nat" 2>/dev/null || true
             done
-            echo "Waiting 60s for NAT Gateways to release EIPs..."
             sleep 60
 
-            echo "Releasing orphaned Elastic IPs..."
+            # Release Elastic IPs
             for alloc in $(aws ec2 describe-addresses --region "${{ env.AWS_REGION_VALUE }}" \
               --query 'Addresses[?AssociationId==null].AllocationId' --output text 2>/dev/null); do
               [ -z "$alloc" ] && continue
               aws ec2 release-address --region "${{ env.AWS_REGION_VALUE }}" --allocation-id "$alloc" 2>/dev/null || true
             done
 
-            echo "Cleaning orphaned ENIs in VPC ${VPC_ID}..."
-            # Delete available ENIs
+            # Force-detach and delete ALL ENIs
             aws ec2 describe-network-interfaces --region "${{ env.AWS_REGION_VALUE }}" \
-              --filters "Name=vpc-id,Values=${VPC_ID}" "Name=status,Values=available" \
-              --query 'NetworkInterfaces[].NetworkInterfaceId' --output text 2>/dev/null | \
-              tr '\t' '\n' | while read -r eni; do
+              --filters "Name=vpc-id,Values=${VPC_ID}" \
+              --query 'NetworkInterfaces[].[NetworkInterfaceId,Attachment.AttachmentId,Status]' --output text 2>/dev/null | \
+              while read -r eni attach status; do
                 [ -z "$eni" ] && continue
-                aws ec2 delete-network-interface --region "${{ env.AWS_REGION_VALUE }}" --network-interface-id "$eni" || true
-              done
-            # Force-detach and delete in-use ENIs (leftover from NLB/EKS)
-            aws ec2 describe-network-interfaces --region "${{ env.AWS_REGION_VALUE }}" \
-              --filters "Name=vpc-id,Values=${VPC_ID}" "Name=status,Values=in-use" \
-              --query 'NetworkInterfaces[].[NetworkInterfaceId,Attachment.AttachmentId]' --output text 2>/dev/null | \
-              while read -r eni attach; do
-                [ -z "$eni" ] && continue
-                if [ -n "$attach" ] && [ "$attach" != "None" ]; then
+                if [ "$status" = "in-use" ] && [ -n "$attach" ] && [ "$attach" != "None" ]; then
                   aws ec2 detach-network-interface --region "${{ env.AWS_REGION_VALUE }}" --attachment-id "$attach" --force 2>/dev/null || true
                 fi
               done
-            sleep 10
-            # Now delete all ENIs (they should be available after detach)
+            sleep 15
             aws ec2 describe-network-interfaces --region "${{ env.AWS_REGION_VALUE }}" \
               --filters "Name=vpc-id,Values=${VPC_ID}" \
               --query 'NetworkInterfaces[].NetworkInterfaceId' --output text 2>/dev/null | \
@@ -602,7 +577,7 @@ jobs:
                 aws ec2 delete-network-interface --region "${{ env.AWS_REGION_VALUE }}" --network-interface-id "$eni" || true
               done
 
-            echo "Cleaning orphaned security groups..."
+            # Delete security groups
             aws ec2 describe-security-groups --region "${{ env.AWS_REGION_VALUE }}" \
               --filters "Name=vpc-id,Values=${VPC_ID}" \
               --query "SecurityGroups[?GroupName!='default'].GroupId" --output text 2>/dev/null | \
@@ -610,9 +585,39 @@ jobs:
                 [ -z "$sg" ] && continue
                 aws ec2 delete-security-group --region "${{ env.AWS_REGION_VALUE }}" --group-id "$sg" || true
               done
+
+            # Delete subnets
+            aws ec2 describe-subnets --region "${{ env.AWS_REGION_VALUE }}" \
+              --filters "Name=vpc-id,Values=${VPC_ID}" \
+              --query 'Subnets[].SubnetId' --output text 2>/dev/null | \
+              tr '\t' '\n' | while read -r sub; do
+                [ -z "$sub" ] && continue
+                aws ec2 delete-subnet --region "${{ env.AWS_REGION_VALUE }}" --subnet-id "$sub" || true
+              done
+
+            # Detach and delete internet gateway
+            for igw in $(aws ec2 describe-internet-gateways --region "${{ env.AWS_REGION_VALUE }}" \
+              --filters "Name=attachment.vpc-id,Values=${VPC_ID}" \
+              --query 'InternetGateways[].InternetGatewayId' --output text 2>/dev/null); do
+              [ -z "$igw" ] && continue
+              aws ec2 detach-internet-gateway --region "${{ env.AWS_REGION_VALUE }}" --internet-gateway-id "$igw" --vpc-id "$VPC_ID" || true
+              aws ec2 delete-internet-gateway --region "${{ env.AWS_REGION_VALUE }}" --internet-gateway-id "$igw" || true
+            done
+
+            # Delete route tables (non-main)
+            aws ec2 describe-route-tables --region "${{ env.AWS_REGION_VALUE }}" \
+              --filters "Name=vpc-id,Values=${VPC_ID}" \
+              --query 'RouteTables[?Associations[0].Main!=`true`].RouteTableId' --output text 2>/dev/null | \
+              tr '\t' '\n' | while read -r rt; do
+                [ -z "$rt" ] && continue
+                aws ec2 delete-route-table --region "${{ env.AWS_REGION_VALUE }}" --route-table-id "$rt" || true
+              done
+
+            # Delete VPC
+            aws ec2 delete-vpc --region "${{ env.AWS_REGION_VALUE }}" --vpc-id "$VPC_ID" || true
           fi
 
-          sleep 30
+          # Final terraform destroy (should find nothing or very little left)
           terraform destroy -auto-approve -no-color \
             -var="harness_account_id=${{ vars.HARNESS_ACCOUNT_ID }}" \
             -var="harness_api_key=${{ secrets.HARNESS_API_KEY }}" \
@@ -625,7 +630,7 @@ jobs:
             -var="cluster_name=${{ vars.CLUSTER_NAME }}" \
             -var="harness_project_id=${{ vars.HARNESS_PROJECT_ID }}" \
             -var="harness_org_id=${{ vars.HARNESS_ORG_ID }}" \
-            -var="aws_region=${{ vars.AWS_REGION }}"
+            -var="aws_region=${{ vars.AWS_REGION }}" || true
 
       - name: Destroy Summary
         if: github.event.inputs.action == 'destroy'
