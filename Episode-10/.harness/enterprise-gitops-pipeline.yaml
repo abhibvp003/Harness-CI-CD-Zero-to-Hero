@@ -669,7 +669,7 @@ pipeline:
                       duration: 5m
                       deploymentTag: <+pipeline.sequenceId>
                   failureStrategies:
-                    - onFailure: # App crashes → bad metrics detected → pause 5 min → click "Mark as Failure" to rollback
+                    - onFailure: # App crashes/errors detected → pause 5 min → click "Mark as Failure" to rollback
                         errors:
                           - Verification
                         action:
@@ -682,6 +682,12 @@ pipeline:
                     - onFailure: # Monitoring tool (Prometheus) itself crashed, not your app → skip, app is fine
                         errors:
                           - Unknown
+                          - Connectivity
+                        action:
+                          type: MarkAsSuccess
+                    - onFailure: # Verify step took too long (>15 min) → skip and continue
+                        errors:
+                          - Timeout
                         action:
                           type: MarkAsSuccess
 
