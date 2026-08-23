@@ -379,6 +379,26 @@ resource "harness_platform_monitored_service" "online_boutique" {
             query         = "sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"online-boutique\",container!=\"\"}[5m]))"
             groupName     = "Resource Health"
             isManualQuery = true
+          },
+          {
+            identifier = "pod_memory_usage"
+            metricName = "Pod Memory Usage"
+            riskProfile = {
+              riskCategory   = "Infrastructure"
+              thresholdTypes = ["ACT_WHEN_HIGHER"]
+            }
+            analysis = {
+              liveMonitoring = {
+                enabled = true
+              }
+              deploymentVerification = {
+                enabled                  = true
+                serviceInstanceFieldName = "pod"
+              }
+            }
+            query         = "sum by (pod) (container_memory_working_set_bytes{namespace=\"online-boutique\",container!=\"\"})"
+            groupName     = "Resource Health"
+            isManualQuery = true
           }
         ]
         metricPacks = [{
