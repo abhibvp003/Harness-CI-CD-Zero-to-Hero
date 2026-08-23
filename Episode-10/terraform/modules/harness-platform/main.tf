@@ -10,29 +10,70 @@ resource "harness_platform_connector_prometheus" "prometheus" {
   delegate_selectors = [var.delegate_name]
 }
 
-# Elasticsearch connector for CV — uses native Terraform resource (not API call)
-# This ensures the password is always in sync with random_password.efk
-resource "harness_platform_secret_text" "elk_password" {
-  identifier                = "elk_password"
-  name                      = "elk_password"
-  org_id                    = var.org_id
-  project_id                = var.project_id
-  secret_manager_identifier = "harnessSecretManager"
-  value_type                = "Inline"
-  value                     = var.efk_password
-}
+# Elasticsearch connector for CV (created via Harness API)
+# Password: same auto-generated EFK password from random_password.efk
+resource "null_resource" "elk_connector" {
+  triggers = {
+    efk_password_hash = sha256(var.efk_password)
+  }
 
-resource "harness_platform_connector_elasticsearch" "elasticsearch" {
-  identifier         = "elasticsearch"
-  name               = "elasticsearch"
-  org_id             = var.org_id
-  project_id         = var.project_id
-  url                = "http://elasticsearch-master.logging.svc.cluster.local:9200"
-  delegate_selectors = [var.delegate_name]
-  username           = "elastic"
-  password_ref       = harness_platform_secret_text.elk_password.identifier
+  provisioner "local-exec" {
+    interpreter = ["/bin/bash", "-c"]
+    command     = <<-EOT
+      # Step 1: Create Harness secret for ES password (delete first if exists)
+      curl -s -X DELETE \
+        "https://app.harness.io/gateway/ng/api/v2/secrets/elk_password?accountIdentifier=${var.harness_account_id}&orgIdentifier=${var.org_id}&projectIdentifier=${var.project_id}" \
+        -H "x-api-key: ${var.harness_api_key}" 2>/dev/null || true
+      sleep 2
+      curl -s -X POST \
+        "https://app.harness.io/gateway/ng/api/v2/secrets?accountIdentifier=${var.harness_account_id}&orgIdentifier=${var.org_id}&projectIdentifier=${var.project_id}" \
+        -H "x-api-key: ${var.harness_api_key}" \
+        -H "Content-Type: application/json" \
+        -d '{
+          "secret": {
+            "type": "SecretText",
+            "name": "elk_password",
+            "identifier": "elk_password",
+            "orgIdentifier": "${var.org_id}",
+            "projectIdentifier": "${var.project_id}",
+            "spec": {
+              "secretManagerIdentifier": "harnessSecretManager",
+              "valueType": "Inline",
+              "value": "${var.efk_password}"
+            }
+          }
+        }' 2>/dev/null
 
-  depends_on = [harness_platform_secret_text.elk_password]
+      sleep 2
+
+      # Step 2: Create ELK connector (delete first if exists)
+      curl -s -X DELETE \
+        "https://app.harness.io/gateway/ng/api/connectors/elasticsearch?accountIdentifier=${var.harness_account_id}&orgIdentifier=${var.org_id}&projectIdentifier=${var.project_id}" \
+        -H "x-api-key: ${var.harness_api_key}" 2>/dev/null || true
+      sleep 2
+      curl -s -X POST \
+        "https://app.harness.io/gateway/ng/api/connectors?accountIdentifier=${var.harness_account_id}" \
+        -H "x-api-key: ${var.harness_api_key}" \
+        -H "Content-Type: application/json" \
+        -d '{
+          "connector": {
+            "name": "elasticsearch",
+            "identifier": "elasticsearch",
+            "orgIdentifier": "${var.org_id}",
+            "projectIdentifier": "${var.project_id}",
+            "type": "ElasticSearch",
+            "spec": {
+              "url": "http://elasticsearch-master.logging.svc.cluster.local:9200",
+              "delegateSelectors": ["${var.delegate_name}"],
+              "authType": "UsernamePassword",
+              "username": "elastic",
+              "passwordRef": "elk_password"
+            }
+          }
+        }' 2>/dev/null || true
+    EOT
+  }
+  depends_on = [harness_platform_connector_prometheus.prometheus]
 }
 
 # Kubernetes connector that uses the delegate to talk to the cluster
