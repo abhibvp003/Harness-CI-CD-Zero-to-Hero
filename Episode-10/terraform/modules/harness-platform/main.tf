@@ -368,10 +368,7 @@ resource "harness_platform_monitored_service" "online_boutique" {
     # ── Health Source 2: Elasticsearch (Logs — application health) ──
     # Queries container logs from the online-boutique namespace
     # Harness ML analyzes log patterns: if new error patterns or error spike
-    # detected after deployment → triggers automatic rollback
-    #
-    # Reference: Harness Terraform Provider docs — "Sample template for Elastic Search Log Health Source"
-    # https://registry.terraform.io/providers/harness/harness/latest/docs/resources/platform_monitored_service
+    # detected after deployment - triggers automatic rollback
     health_sources {
       name       = "elasticsearch"
       identifier = "elasticsearch"
@@ -398,24 +395,20 @@ resource "harness_platform_monitored_service" "online_boutique" {
       })
     }
 
-    # ── Health Source 3: Prometheus (HTTP errors — live application health via Kong metrics) ──
-    # Kong Gateway exports HTTP request metrics to Prometheus
-    # This queries the REAL HTTP response codes hitting the frontend
-    # If 5xx errors spike after deploy → app is broken → rollback
-    # What it checks:
-    #   DNS → Route53 → NLB → Kong → Frontend → HTTP 5xx count
-    #   If 5xx count spikes after deploy → rollback
+    # ── Health Source 3: Prometheus (Pod CPU — detects resource spikes after deploy) ──
+    # Monitors CPU usage per pod in online-boutique namespace
+    # If CPU spikes abnormally after deploy → indicates resource leak → rollback
     health_sources {
-      name       = "app-http-errors"
-      identifier = "app_http_errors"
+      name       = "app-resource-health"
+      identifier = "app_resource_health"
       type       = "Prometheus"
       spec = jsonencode({
         connectorRef = "prometheus"
         metricDefinitions = [{
-          identifier = "http_5xx_errors"
-          metricName = "HTTP 5xx Errors"
+          identifier = "pod_cpu_usage"
+          metricName = "Pod CPU Usage"
           riskProfile = {
-            riskCategory   = "Errors"
+            riskCategory   = "Performance"
             thresholdTypes = ["ACT_WHEN_HIGHER"]
           }
           analysis = {
@@ -427,8 +420,8 @@ resource "harness_platform_monitored_service" "online_boutique" {
               serviceInstanceFieldName = "pod"
             }
           }
-          query         = "sum by (pod) (increase(kong_http_requests_total{service=~\"online-boutique.*\",code=~\"5..\"}[5m]))"
-          groupName     = "Application Health"
+          query         = "sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"online-boutique\",container!=\"\"}[5m]))"
+          groupName     = "Resource Health"
           isManualQuery = true
         }]
         metricPacks = [{
