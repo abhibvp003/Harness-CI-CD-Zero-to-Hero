@@ -332,33 +332,55 @@ resource "harness_platform_monitored_service" "online_boutique" {
     service_ref     = harness_platform_service.online_boutique.identifier
     environment_ref = harness_platform_environment.production.identifier
 
-    # ── Health Source 1: Prometheus (Metrics — infrastructure health) ──
+    # ── Health Source 1: Prometheus (Metrics — Pod Restarts + CPU usage) ──
     health_sources {
       name       = "prometheus"
       identifier = "prometheus"
       type       = "Prometheus"
       spec = jsonencode({
         connectorRef = "prometheus"
-        metricDefinitions = [{
-          identifier = "pod_restarts"
-          metricName = "Pod Restarts"
-          riskProfile = {
-            riskCategory   = "Errors"
-            thresholdTypes = ["ACT_WHEN_HIGHER"]
-          }
-          analysis = {
-            liveMonitoring = {
-              enabled = true
+        metricDefinitions = [
+          {
+            identifier = "pod_restarts"
+            metricName = "Pod Restarts"
+            riskProfile = {
+              riskCategory   = "Errors"
+              thresholdTypes = ["ACT_WHEN_HIGHER"]
             }
-            deploymentVerification = {
-              enabled                  = true
-              serviceInstanceFieldName = "pod"
+            analysis = {
+              liveMonitoring = {
+                enabled = true
+              }
+              deploymentVerification = {
+                enabled                  = true
+                serviceInstanceFieldName = "pod"
+              }
             }
+            query         = "sum by (pod) (increase(kube_pod_container_status_restarts_total{namespace=\"online-boutique\"}[5m]))"
+            groupName     = "Pod Health"
+            isManualQuery = true
+          },
+          {
+            identifier = "pod_cpu_usage"
+            metricName = "Pod CPU Usage"
+            riskProfile = {
+              riskCategory   = "Infrastructure"
+              thresholdTypes = ["ACT_WHEN_HIGHER"]
+            }
+            analysis = {
+              liveMonitoring = {
+                enabled = true
+              }
+              deploymentVerification = {
+                enabled                  = true
+                serviceInstanceFieldName = "pod"
+              }
+            }
+            query         = "sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"online-boutique\",container!=\"\"}[5m]))"
+            groupName     = "Resource Health"
+            isManualQuery = true
           }
-          query         = "sum by (pod) (increase(kube_pod_container_status_restarts_total{namespace=\"online-boutique\"}[5m]))"
-          groupName     = "Pod Health"
-          isManualQuery = true
-        }]
+        ]
         metricPacks = [{
           identifier = "Custom"
         }]
@@ -395,39 +417,5 @@ resource "harness_platform_monitored_service" "online_boutique" {
       })
     }
 
-    # ── Health Source 3: Prometheus (Pod CPU — detects resource spikes after deploy) ──
-    # Monitors CPU usage per pod in online-boutique namespace
-    # If CPU spikes abnormally after deploy → indicates resource leak → rollback
-    health_sources {
-      name       = "app-resource-health"
-      identifier = "app_resource_health"
-      type       = "Prometheus"
-      spec = jsonencode({
-        connectorRef = "prometheus"
-        metricDefinitions = [{
-          identifier = "pod_cpu_usage"
-          metricName = "Pod CPU Usage"
-          riskProfile = {
-            riskCategory   = "Performance"
-            thresholdTypes = ["ACT_WHEN_HIGHER"]
-          }
-          analysis = {
-            liveMonitoring = {
-              enabled = true
-            }
-            deploymentVerification = {
-              enabled                  = true
-              serviceInstanceFieldName = "pod"
-            }
-          }
-          query         = "sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"online-boutique\",container!=\"\"}[5m]))"
-          groupName     = "Resource Health"
-          isManualQuery = true
-        }]
-        metricPacks = [{
-          identifier = "Custom"
-        }]
-      })
-    }
   }
 }
