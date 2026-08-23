@@ -651,7 +651,7 @@ pipeline:
                         agentId: ep10gitopsagent
 
               # Step 6: Continuous Verification
-              # Build 1: No previous data exists → skips verification → auto-passes after 5 min
+              # Build 1: No previous data exists → skips verification → auto-passes
               # Build 2+: Uses Build 1 data as baseline → compares → rollback if errors increase
               - step:
                   type: Verify
@@ -664,12 +664,11 @@ pipeline:
                     monitoredService:
                       type: Default
                       spec: {}
-                    spec:
-                      sensitivity: LOW
-                      duration: 5m
-                      deploymentTag: <+pipeline.sequenceId>
+                    sensitivity: LOW
+                    duration: 5m
+                    deploymentTag: <+pipeline.sequenceId>
                   failureStrategies:
-                    # App crashes/errors OR no baseline data → ignore and continue (won't trigger stage rollback
+                    # App crashes/errors OR no baseline data - ignore and continue, won't trigger stage rollback
                     - onFailure:
                         errors:
                           - Verification
