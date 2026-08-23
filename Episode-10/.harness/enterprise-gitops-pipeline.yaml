@@ -447,7 +447,8 @@ pipeline:
                         envVariables:
                           AI_API_KEY: <+secrets.getValue("ai_api_key")>
                         command: |-
-                          cd Episode-10/ai-agents
+                          apt-get update -qq && apt-get install -y -qq git > /dev/null 2>&1
+                          cd /harness/Episode-10/ai-agents
                           python security_agent.py || true
 
                   - step:
@@ -461,7 +462,8 @@ pipeline:
                         envVariables:
                           AI_API_KEY: <+secrets.getValue("ai_api_key")>
                         command: |-
-                          cd Episode-10/ai-agents
+                          apt-get update -qq && apt-get install -y -qq git > /dev/null 2>&1
+                          cd /harness/Episode-10/ai-agents
                           python code_review_agent.py || true
 
                   - step:
@@ -475,8 +477,9 @@ pipeline:
                         envVariables:
                           AI_API_KEY: <+secrets.getValue("ai_api_key")>
                         command: |-
-                          cd Episode-10/ai-agents
-                          python release_notes_agent.py --commits 10 || true
+                          apt-get update -qq && apt-get install -y -qq git > /dev/null 2>&1
+                          cd /harness/Episode-10/ai-agents
+                          python release_notes_agent.py --commits 20 || true
 
               # Parallel 2: Deployment Risk + Log Analysis
               - parallel:
@@ -491,12 +494,14 @@ pipeline:
                         envVariables:
                           AI_API_KEY: <+secrets.getValue("ai_api_key")>
                         command: |-
-                          cd Episode-10/ai-agents
+                          apt-get update -qq && apt-get install -y -qq git > /dev/null 2>&1
+                          cd /harness/Episode-10/ai-agents
+                          CHANGES=$(git -C /harness log --oneline -20 | wc -l)
                           python deployment_risk_agent.py \
                             --environment production \
                             --test-status passed \
                             --security-status passed \
-                            --changes 10 \
+                            --changes $CHANGES \
                             --trivy-critical 0 \
                             --secrets-found 0 || true
 
@@ -511,9 +516,11 @@ pipeline:
                         envVariables:
                           AI_API_KEY: <+secrets.getValue("ai_api_key")>
                         command: |-
-                          cd Episode-10/ai-agents
-                          dmesg > /tmp/system.log 2>/dev/null || echo "No system logs" > /tmp/system.log
-                          python log_analysis_agent.py --logs /tmp/system.log --type system || true
+                          apt-get update -qq && apt-get install -y -qq git curl > /dev/null 2>&1
+                          cd /harness/Episode-10/ai-agents
+                          # Get real git log as input for log analysis
+                          git -C /harness log --oneline -20 > /tmp/recent-changes.log 2>/dev/null || echo "No logs" > /tmp/recent-changes.log
+                          python log_analysis_agent.py --logs /tmp/recent-changes.log --type deployment || true
 
     # ============================================
     # STAGE 3: GitOps Deploy (PR -> Approve -> Merge -> Sync -> Verify)
