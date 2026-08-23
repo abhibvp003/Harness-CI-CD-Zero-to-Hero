@@ -407,10 +407,9 @@ resource "harness_platform_monitored_service" "online_boutique" {
       })
     }
 
-    # ── Health Source 2: Elasticsearch (Logs — application health) ──
-    # Queries container logs from the online-boutique namespace
-    # Harness ML analyzes log patterns: if new error patterns or error spike
-    # detected after deployment - triggers automatic rollback
+    # ── Health Source 2: Elasticsearch (Logs - application health) ──
+    # Queries ALL logs from online-boutique namespace (not just errors)
+    # Harness ML builds baseline of normal log patterns, detects new error patterns after deploy
     health_sources {
       name       = "elasticsearch"
       identifier = "elasticsearch"
@@ -420,13 +419,13 @@ resource "harness_platform_monitored_service" "online_boutique" {
         connectorRef = "elasticsearch"
         queryDefinitions = [
           {
-            name       = "Error Logs"
-            identifier = "error_logs"
-            query      = "kubernetes.namespace_name:online-boutique AND (level:error OR level:ERROR OR severity:ERROR OR log:*error* OR log:*Error* OR log:*exception* OR log:*Exception*)"
-            index      = "fluentd-*"
+            name       = "Application Logs"
+            identifier = "application_logs"
+            query      = "kubernetes.namespace_name:online-boutique"
+            index      = "fluentd*"
             groupName  = "Logs_Group"
             queryParams = {
-              index                = "fluentd-*"
+              index                = "fluentd*"
               serviceInstanceField = "kubernetes.pod_name"
               timeStampIdentifier  = "@timestamp"
               timeStampFormat      = "yyyy-MM-dd'T'HH:mm:ss.SSSZ"
