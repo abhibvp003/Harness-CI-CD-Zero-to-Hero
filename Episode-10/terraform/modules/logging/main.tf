@@ -90,7 +90,11 @@ resource "harness_platform_gitops_applications" "elasticsearch" {
           parameters {
             name  = "minimumMasterNodes"
             value = "1"
-          }
+          # }
+          # parameters {
+          #   name  = "clusterHealthCheckParams"
+          #   value = "wait_for_status=yellow&timeout=1s"
+          # }
           parameters {
             name  = "volumeClaimTemplate.resources.requests.storage"
             value = "10Gi"
