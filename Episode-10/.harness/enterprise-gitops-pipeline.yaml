@@ -639,7 +639,7 @@ pipeline:
                       replaceResources: false
                       prunePropagationPolicy: foreground
 
-              # Step 5: Check application health status
+              # Step 5: Check application health — if ArgoCD reports Degraded, rollback triggers
               - step:
                   type: GitOpsGetAppDetails
                   name: Get App Status
