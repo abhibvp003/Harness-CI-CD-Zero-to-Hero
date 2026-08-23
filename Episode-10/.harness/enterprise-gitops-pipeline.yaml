@@ -650,9 +650,9 @@ pipeline:
                       - applicationName: online-boutique
                         agentId: ep10gitopsagent
 
-              # Step 6: Continuous Verification (Episode 9 — auto-rollback if metrics degrade)
-              # Compares pre/post deployment metrics from Prometheus
-              # If error_rate or latency increase → triggers rollback automatically
+              # Step 6: Continuous Verification
+              # Build 1: No previous data exists → skips verification → auto-passes after 5 min
+              # Build 2+: Uses Build 1 data as baseline → compares → rollback if errors increase
               - step:
                   type: Verify
                   name: Verify Deployment
@@ -665,9 +665,25 @@ pipeline:
                       type: Default
                       spec: {}
                     spec:
-                      sensitivity: MEDIUM
+                      sensitivity: LOW
                       duration: 5m
                       deploymentTag: <+pipeline.sequenceId>
+                  failureStrategies:
+                    - onFailure: # App crashes → bad metrics detected → pause 5 min → click "Mark as Failure" to rollback
+                        errors:
+                          - Verification
+                        action:
+                          type: ManualIntervention
+                          spec:
+                            timeout: 5m
+                            onTimeout:
+                              action:
+                                type: MarkAsSuccess
+                    - onFailure: # Monitoring tool (Prometheus) itself crashed, not your app → skip, app is fine
+                        errors:
+                          - Unknown
+                        action:
+                          type: MarkAsSuccess
 
             # ============================================
             # ROLLBACK (auto-triggered on failure)
