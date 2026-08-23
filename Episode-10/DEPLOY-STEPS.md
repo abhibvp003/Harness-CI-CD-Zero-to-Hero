@@ -417,6 +417,17 @@ aws eks list-addons --cluster-name ep10-enterprise-cluster --region us-east-1
 
 > ESO polls AWS SM every 1 hour. To force immediate refresh: `kubectl delete externalsecret app-secrets -n online-boutique` → ESO recreates it within 30 seconds.
 
+**6.3 — Elasticsearch Connector (refresh after first apply):**
+1. Go to **AWS Console → Secrets Manager** → find `online-boutique/efk-password`
+2. Click **"Retrieve secret value"** → copy the `password` value
+3. Go to **Harness → Project Settings → Secrets** → find `elk_password`
+4. Click **Edit** → paste the password from step 2 → **Save**
+5. Go to **Harness → Project Settings → Connectors** → find `elasticsearch`
+6. Click **Edit** → click **Next** → **Next** → **Save** (just re-save without changes)
+7. Click **Test Connection** → should show **Success**
+
+> This step is needed only on first deployment. Harness CV caches connector credentials internally. Re-saving the connector refreshes the cache so the Verify step can authenticate to Elasticsearch.
+
 ---
 
 ## Step 7: Create Secrets in Harness (Manual — NOT automated by Terraform)
@@ -581,6 +592,8 @@ kubectl get pods -n online-boutique
 | ALB not creating | Kong not running | `kubectl get pods -n kong` |
 | ESO not creating secrets | Secret doesn't exist in AWS SM | Go to AWS Console → Secrets Manager → add values |
 | Terraform destroy fails | ENIs/LBs not released | Wait 2 min, run destroy again (retry built-in) |
+| Verify step 401 Elasticsearch | Harness CV perpetual task caches old credentials | Go to Connectors → elasticsearch → Edit → Save (re-save refreshes cache). Then re-run pipeline. |
+| Elasticsearch readiness probe stuck 0/1 | Single-node ES waits for green status (impossible with 1 replica) | `clusterHealthCheckParams: wait_for_status=yellow&timeout=1s` already set in code |
 
 ---
 

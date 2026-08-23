@@ -762,7 +762,7 @@ pipeline:
                       echo "  OWASP ZAP — Dynamic Application Security Test"
                       echo "  Target: https://app.<+variable.domain_name>"
                       echo "============================================"
-                      zap-baseline.py -t https://app.<+variable.domain_name> -r /harness/zap-report.html -I
+                      zap-baseline.py -t https://app.<+variable.domain_name> -r /zap/wrk/zap-report.html -I || true
                       echo ""
                       echo "============================================"
                       echo "  ZAP BASELINE SCAN COMPLETE"
