@@ -18,9 +18,9 @@ def get_recent_commits(count=10):
     """Get recent git commits"""
     try:
         # Fetch git history (Harness uses shallow clone)
-        subprocess.run(["git", "fetch", "--unshallow"], capture_output=True, timeout=30)
+        subprocess.run(["git", "-C", "/harness", "fetch", "--unshallow"], capture_output=True, timeout=30)
         result = subprocess.run(
-            ["git", "log", f"-{count}", "--pretty=format:%h|%s|%an|%ad", "--date=short"],
+            ["git", "-C", "/harness", "log", f"-{count}", "--pretty=format:%h|%s|%an|%ad", "--date=short"],
             capture_output=True, text=True, timeout=10
         )
         if result.returncode == 0 and result.stdout.strip():

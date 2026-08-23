@@ -27,10 +27,10 @@ def get_git_diff():
     """Get the git diff of recent changes"""
     try:
         # Fetch git history (Harness uses shallow clone)
-        subprocess.run(["git", "fetch", "--unshallow"], capture_output=True, timeout=30)
+        subprocess.run(["git", "-C", "/harness", "fetch", "--unshallow"], capture_output=True, timeout=30)
         # Get diff of last commit
         result = subprocess.run(
-            ["git", "diff", "HEAD~1", "--", "*.js", "*.ts", "*.py", "*.go", "*.java", "*.cpp"],
+            ["git", "-C", "/harness", "diff", "HEAD~1", "--", "*.js", "*.ts", "*.py", "*.go", "*.java", "*.cpp"],
             capture_output=True, text=True, timeout=10
         )
         if result.returncode == 0 and result.stdout.strip():
@@ -38,7 +38,7 @@ def get_git_diff():
         
         # Fallback: get staged changes
         result = subprocess.run(
-            ["git", "diff", "--cached"],
+            ["git", "-C", "/harness", "diff", "--cached"],
             capture_output=True, text=True, timeout=10
         )
         if result.returncode == 0 and result.stdout.strip():
