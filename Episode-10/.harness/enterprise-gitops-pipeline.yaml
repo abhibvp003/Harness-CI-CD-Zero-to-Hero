@@ -669,7 +669,8 @@ pipeline:
                       duration: 5m
                       deploymentTag: <+pipeline.sequenceId>
                   failureStrategies:
-                    - onFailure: # App crashes/errors OR no baseline data → ignore and continue (won't trigger stage rollback)
+                    # App crashes/errors OR no baseline data → ignore and continue (won't trigger stage rollback
+                    - onFailure:
                         errors:
                           - Verification
                           - Unknown
