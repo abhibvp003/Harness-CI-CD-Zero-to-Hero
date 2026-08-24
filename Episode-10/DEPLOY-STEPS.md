@@ -266,7 +266,7 @@ aws eks list-addons --cluster-name ep10-enterprise-cluster --region us-east-1
 | Key | Value | Used By |
 |-----|-------|---------|
 | `REDIS_ADDR` | `redis-cart:6379` | cartservice |
-| `OTEL_ENDPOINT` | `otel-collector.tracing.svc.cluster.local:4317` | all services (tracing) |
+| `OTEL_ENDPOINT` | `otel-collector-opentelemetry-collector.tracing.svc.cluster.local:4317` | all services (tracing) |
 
 5. Click **Save**
 
