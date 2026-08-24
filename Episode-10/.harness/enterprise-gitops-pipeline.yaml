@@ -668,8 +668,9 @@ pipeline:
 
               # Step 6: Continuous Verification
               # Continuous Verification - compares metrics before vs after deploy
-              # Build 1: No baseline data - verification fails - triggers rollback (expected)
-              # Build 2+: Baseline exists - real verification - rollback only if errors increase
+              # Uses Auto type: picks best strategy based on available baseline data
+              # First deploy: uses canary-like analysis (no previous baseline needed)
+              # Subsequent deploys: uses rolling comparison (before vs after)
               - step:
                   type: Verify
                   name: Verify Deployment
@@ -677,7 +678,7 @@ pipeline:
                   timeout: 15m
                   spec:
                     isMultiServicesOrEnvs: false
-                    type: Rolling
+                    type: Auto
                     monitoredService:
                       type: Default
                       spec: {}
