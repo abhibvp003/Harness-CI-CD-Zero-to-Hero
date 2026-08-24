@@ -158,6 +158,44 @@ resource "harness_platform_gitops_applications" "otel_collector" {
             name  = "image.tag"
             value = "0.104.0"
           }
+          values = <<-EOT
+            config:
+              receivers:
+                otlp:
+                  protocols:
+                    grpc:
+                      endpoint: 0.0.0.0:4317
+                    http:
+                      endpoint: 0.0.0.0:4318
+                zipkin:
+                  endpoint: 0.0.0.0:9411
+              exporters:
+                otlp/jaeger:
+                  endpoint: jaeger-collector:4317
+                  tls:
+                    insecure: true
+                debug:
+                  verbosity: basic
+              processors:
+                batch:
+                  timeout: 5s
+                  send_batch_size: 1024
+              service:
+                pipelines:
+                  traces:
+                    receivers: [otlp, zipkin]
+                    processors: [batch]
+                    exporters: [otlp/jaeger, debug]
+                  metrics:
+                    receivers: [otlp]
+                    processors: [batch]
+                    exporters: [debug]
+            ports:
+              zipkin:
+                enabled: true
+                containerPort: 9411
+                servicePort: 9411
+          EOT
         }
       }
       destination {

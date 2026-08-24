@@ -428,7 +428,7 @@ resource "harness_platform_monitored_service" "online_boutique" {
             groupName  = "Logs_Group"
             queryParams = {
               index                = "fluentd*"
-              serviceInstanceField = "kubernetes.pod_name"
+              serviceInstanceField = "kubernetes.pod_name.keyword"
               timeStampIdentifier  = "@timestamp"
               timeStampFormat      = "yyyy-MM-dd'T'HH:mm:ss.SSSZ"
               messageIdentifier    = "log"
