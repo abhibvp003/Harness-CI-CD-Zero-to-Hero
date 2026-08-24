@@ -12,7 +12,7 @@ loadgeneratorImage: 713939171080.dkr.ecr.us-east-1.amazonaws.com/loadgenerator:v
 namespace: online-boutique
 replicas: 2
 domain: CHANGE-TO-YOUR-DOMAIN.com
-enableTracing: '1'
-collectorServiceAddr: otel-collector.tracing.svc.cluster.local:4317
-loadgeneratorUsers: '10'
-loadgeneratorSpawnRate: '1'
+enableTracing: "1"
+collectorServiceAddr: otel-collector-opentelemetry-collector.tracing.svc.cluster.local:4317
+loadgeneratorUsers: "10"
+loadgeneratorSpawnRate: "1"
