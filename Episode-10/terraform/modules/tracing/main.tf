@@ -105,6 +105,38 @@ resource "harness_platform_gitops_applications" "jaeger" {
             name  = "esLookback.enabled"
             value = "false"
           }
+          parameters {
+            name  = "collector.extraEnv[0].name"
+            value = "COLLECTOR_OTLP_ENABLED"
+          }
+          parameters {
+            name  = "collector.extraEnv[0].value"
+            value = "true"
+          }
+          parameters {
+            name  = "collector.extraEnv[1].name"
+            value = "COLLECTOR_OTLP_GRPC_HOST_PORT"
+          }
+          parameters {
+            name  = "collector.extraEnv[1].value"
+            value = ":4317"
+          }
+          parameters {
+            name  = "collector.extraEnv[2].name"
+            value = "COLLECTOR_OTLP_HTTP_HOST_PORT"
+          }
+          parameters {
+            name  = "collector.extraEnv[2].value"
+            value = ":4318"
+          }
+          parameters {
+            name  = "collector.service.otlp.grpc.port"
+            value = "4317"
+          }
+          parameters {
+            name  = "collector.service.otlp.http.port"
+            value = "4318"
+          }
         }
       }
       destination {
@@ -170,8 +202,8 @@ resource "harness_platform_gitops_applications" "otel_collector" {
                 zipkin:
                   endpoint: 0.0.0.0:9411
               exporters:
-                otlphttp/jaeger:
-                  endpoint: http://jaeger-collector:14268
+                otlp/jaeger:
+                  endpoint: jaeger-collector:4317
                   tls:
                     insecure: true
                 debug:
@@ -185,7 +217,7 @@ resource "harness_platform_gitops_applications" "otel_collector" {
                   traces:
                     receivers: [otlp, zipkin]
                     processors: [batch]
-                    exporters: [otlphttp/jaeger, debug]
+                    exporters: [otlp/jaeger, debug]
                   metrics:
                     receivers: [otlp]
                     processors: [batch]
