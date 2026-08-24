@@ -463,8 +463,15 @@ pipeline:
                           AI_API_KEY: <+secrets.getValue("ai_api_key")>
                         command: |-
                           apt-get update -qq && apt-get install -y -qq git > /dev/null 2>&1
+                          git config --global --add safe.directory /harness
                           cd /harness/Episode-10/ai-agents
-                          python code_review_agent.py || true
+                          # Get list of recently changed files from git log
+                          FILES=$(git -C /harness log --oneline -5 --name-only --pretty=format: | sort -u | grep -E '\.(py|go|js|ts|java|tf|yaml)$' | head -10 | tr '\n' ',')
+                          if [ -n "$FILES" ]; then
+                            python code_review_agent.py --files "$FILES" || true
+                          else
+                            python code_review_agent.py --files "Episode-10/ai-agents/ai_provider.py,Episode-10/ai-agents/security_agent.py" || true
+                          fi
 
                   - step:
                       type: Run
@@ -766,6 +773,9 @@ pipeline:
                     connectorRef: dockerhub
                     shell: Sh
                     image: ghcr.io/zaproxy/zaproxy:stable
+                    resources:
+                      limits:
+                        memory: 4Gi
                     command: |-
                       echo "============================================"
                       echo "  OWASP ZAP — Dynamic Application Security Test"

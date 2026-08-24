@@ -40,14 +40,17 @@ def generate_release_notes(commits):
 {commits}
 
 Generate professional release notes with:
-1. **RELEASE SUMMARY** (2-3 sentences)
-2. **NEW FEATURES** (bullet points)
-3. **BUG FIXES** (bullet points)
-4. **IMPROVEMENTS** (bullet points)
-5. **BREAKING CHANGES** (if any)
-6. **SECURITY UPDATES** (if any)
+1. **RELEASE SUMMARY** (2-3 sentences about what this release contains)
+2. **CONTRIBUTORS** (list each author with their commit count and what they worked on)
+3. **COMMIT DETAILS** (table: hash | message | author | date)
+4. **NEW FEATURES** (bullet points)
+5. **BUG FIXES** (bullet points)
+6. **IMPROVEMENTS** (bullet points)
+7. **BREAKING CHANGES** (if any)
+8. **SECURITY UPDATES** (if any)
+9. **DEPLOYMENT STATS** (total commits, date range, number of unique contributors)
 
-Format: Clean markdown. Skip empty sections. Be concise."""
+Format: Clean markdown. Skip empty sections. Be concise but detailed."""
 
     print("=" * 60)
     print("  📝 AI RELEASE NOTES AGENT")
