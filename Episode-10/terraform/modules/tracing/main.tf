@@ -170,7 +170,7 @@ resource "harness_platform_gitops_applications" "otel_collector" {
                 zipkin:
                   endpoint: 0.0.0.0:9411
               exporters:
-                otlp/jaeger:
+                jaeger:
                   endpoint: jaeger-collector:14250
                   tls:
                     insecure: true
@@ -185,7 +185,7 @@ resource "harness_platform_gitops_applications" "otel_collector" {
                   traces:
                     receivers: [otlp, zipkin]
                     processors: [batch]
-                    exporters: [otlp/jaeger, debug]
+                    exporters: [jaeger, debug]
                   metrics:
                     receivers: [otlp]
                     processors: [batch]
