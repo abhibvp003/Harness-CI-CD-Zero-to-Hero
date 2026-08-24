@@ -782,13 +782,78 @@ pipeline:
                       echo "  Target: https://app.<+variable.domain_name>"
                       echo "============================================"
                       mkdir -p /zap/wrk
-                      zap-baseline.py -t https://app.<+variable.domain_name> -r /zap/wrk/zap-report.html -I || true
-                      cat /zap/wrk/zap-report.html 2>/dev/null | head -50 || echo "Report generated"
+                      zap-baseline.py -t https://app.<+variable.domain_name> \
+                        -r /zap/wrk/zap-report.html \
+                        -J /zap/wrk/zap-report.json \
+                        -I || true
+
+                      # Copy report to workspace
+                      cp /zap/wrk/zap-report.html /harness/zap-report.html 2>/dev/null || true
+                      cp /zap/wrk/zap-report.json /harness/zap-report.json 2>/dev/null || true
+
                       echo ""
                       echo "============================================"
-                      echo "  ZAP BASELINE SCAN COMPLETE"
-                      echo "  Report: /harness/zap-report.html"
+                      echo "  ZAP SCAN RESULTS SUMMARY"
                       echo "============================================"
+                      echo ""
+
+                      # Parse JSON report for readable table output
+                      if [ -f /zap/wrk/zap-report.json ]; then
+                        echo "| Risk Level | Alert Count |"
+                        echo "|------------|-------------|"
+                        HIGH=$(python3 -c "import json; d=json.load(open('/zap/wrk/zap-report.json')); print(len([a for s in d.get('site',[]) for a in s.get('alerts',[]) if a.get('riskcode','0')=='3']))" 2>/dev/null || echo "0")
+                        MEDIUM=$(python3 -c "import json; d=json.load(open('/zap/wrk/zap-report.json')); print(len([a for s in d.get('site',[]) for a in s.get('alerts',[]) if a.get('riskcode','0')=='2']))" 2>/dev/null || echo "0")
+                        LOW=$(python3 -c "import json; d=json.load(open('/zap/wrk/zap-report.json')); print(len([a for s in d.get('site',[]) for a in s.get('alerts',[]) if a.get('riskcode','0')=='1']))" 2>/dev/null || echo "0")
+                        INFO=$(python3 -c "import json; d=json.load(open('/zap/wrk/zap-report.json')); print(len([a for s in d.get('site',[]) for a in s.get('alerts',[]) if a.get('riskcode','0')=='0']))" 2>/dev/null || echo "0")
+                        echo "| HIGH       | $HIGH       |"
+                        echo "| MEDIUM     | $MEDIUM     |"
+                        echo "| LOW        | $LOW        |"
+                        echo "| INFO       | $INFO       |"
+                        echo ""
+                        echo "--- ALERT DETAILS ---"
+                        python3 -c "
+                      import json
+                      d=json.load(open('/zap/wrk/zap-report.json'))
+                      risks={3:'HIGH',2:'MEDIUM',1:'LOW',0:'INFO'}
+                      for site in d.get('site',[]):
+                        for alert in site.get('alerts',[]):
+                          risk=risks.get(int(alert.get('riskcode',0)),'?')
+                          name=alert.get('name','Unknown')
+                          count=len(alert.get('instances',[]))
+                          print(f'  [{risk}] {name} ({count} instances)')
+                      " 2>/dev/null || echo "  (Could not parse alerts)"
+                      else
+                        echo "  JSON report not available. Showing HTML summary:"
+                        echo ""
+                        # Extract pass/fail lines from ZAP console output
+                        grep -E "^(PASS|FAIL|WARN)" /zap/wrk/zap-report.html 2>/dev/null | head -30 || echo "  Report generated at /harness/zap-report.html"
+                      fi
+
+                      # Upload HTML report to S3 for browser access
+                      apt-get update -qq && apt-get install -y -qq awscli > /dev/null 2>&1 || true
+                      BUCKET="<+variable.ci_cache_bucket>"
+                      REPORT_KEY="zap-reports/zap-report-<+pipeline.sequenceId>.html"
+                      aws s3 cp /harness/zap-report.html "s3://${BUCKET}/${REPORT_KEY}" --content-type "text/html" 2>/dev/null || true
+
+                      # Generate presigned URL (valid 7 days)
+                      REPORT_URL=$(aws s3 presign "s3://${BUCKET}/${REPORT_KEY}" --expires-in 604800 2>/dev/null || echo "")
+
+                      echo ""
+                      echo "============================================"
+                      echo "  URLs Scanned: $(grep -c 'url' /zap/wrk/zap-report.json 2>/dev/null || echo 'N/A')"
+                      echo "  HTML Report: /harness/zap-report.html"
+                      echo "  JSON Report: /harness/zap-report.json"
+                      echo "============================================"
+                      echo ""
+                      if [ -n "$REPORT_URL" ]; then
+                        echo "============================================"
+                        echo "  📄 VIEW FULL HTML REPORT (click/copy link):"
+                        echo ""
+                        echo "  $REPORT_URL"
+                        echo ""
+                        echo "  (Link valid for 7 days)"
+                        echo "============================================"
+                      fi
 
   # Slack notification on success/failure
   notificationRules:
