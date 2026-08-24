@@ -25,9 +25,9 @@ spec:
               value: "8080"
             - name: ENABLE_TRACING
               value: "{{.Values.enableTracing}}"
-            - name: COLLECTOR_SERVICE_ADDR
-              value: "{{.Values.collectorServiceAddr}}"
           envFrom:
+            - secretRef:
+                name: app-secrets # COLLECTOR_SERVICE_ADDR, REDIS_ADDR from AWS SM
             - secretRef:
                 name: db-credentials
           resources:

@@ -25,11 +25,11 @@ spec:
               value: "7000"
             - name: ENABLE_TRACING
               value: "{{.Values.enableTracing}}"
-            - name: COLLECTOR_SERVICE_ADDR
-              value: "{{.Values.collectorServiceAddr}}"
             - name: DISABLE_PROFILER
               value: "1"
           envFrom:
+            - secretRef:
+                name: app-secrets # COLLECTOR_SERVICE_ADDR, REDIS_ADDR from AWS SM
             - secretRef:
                 name: db-credentials
           resources:

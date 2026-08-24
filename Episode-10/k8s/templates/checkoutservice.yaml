@@ -25,8 +25,6 @@ spec:
               value: "5050"
             - name: ENABLE_TRACING
               value: "{{.Values.enableTracing}}"
-            - name: COLLECTOR_SERVICE_ADDR
-              value: "{{.Values.collectorServiceAddr}}"
             - name: PRODUCT_CATALOG_SERVICE_ADDR
               value: "productcatalogservice:3550"
             - name: SHIPPING_SERVICE_ADDR
@@ -40,6 +38,8 @@ spec:
             - name: CART_SERVICE_ADDR
               value: "cartservice:7070"
           envFrom:
+            - secretRef:
+                name: app-secrets # COLLECTOR_SERVICE_ADDR, REDIS_ADDR from AWS SM
             - secretRef:
                 name: db-credentials
           resources:

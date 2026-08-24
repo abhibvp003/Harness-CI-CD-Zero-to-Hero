@@ -105,8 +105,8 @@ resource "aws_secretsmanager_secret" "app_secrets" {
 resource "aws_secretsmanager_secret_version" "app_secrets" {
   secret_id = aws_secretsmanager_secret.app_secrets.id
   secret_string = jsonencode({
-    REDIS_ADDR    = "CHANGE_ME"
-    OTEL_ENDPOINT = "CHANGE_ME"
+    REDIS_ADDR             = "CHANGE_ME"
+    COLLECTOR_SERVICE_ADDR = "CHANGE_ME"
   })
 
   # Ignore changes — you update values manually in AWS Console

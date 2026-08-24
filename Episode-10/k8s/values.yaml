@@ -13,6 +13,5 @@ namespace: online-boutique
 replicas: 2
 domain: CHANGE-TO-YOUR-DOMAIN.com
 enableTracing: "1"
-collectorServiceAddr: otel-collector-opentelemetry-collector.tracing.svc.cluster.local:4317
 loadgeneratorUsers: "10"
 loadgeneratorSpawnRate: "1"
