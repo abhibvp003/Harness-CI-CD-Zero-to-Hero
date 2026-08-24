@@ -278,16 +278,20 @@ aws eks list-addons --cluster-name ep10-enterprise-cluster --region us-east-1
 
 > ESO polls AWS SM every 1 hour. To force immediate refresh: `kubectl delete externalsecret app-secrets -n online-boutique` → ESO recreates it within 30 seconds.
 
-**6.3 — Elasticsearch Connector (refresh after first apply):**
-1. Go to **AWS Console → Secrets Manager** → find `online-boutique/efk-password`
-2. Click **"Retrieve secret value"** → copy the `password` value
-3. Go to **Harness → Project Settings → Secrets** → find `elk_password`
-4. Click **Edit** → paste the password from step 2 → **Save**
-5. Go to **Harness → Project Settings → Connectors** → find `elasticsearch`
-6. Click **Edit** → click **Next** → **Next** → **Save** (just re-save without changes)
-7. Click **Test Connection** → should show **Success**
+**6.3 — Elasticsearch Connector (REQUIRED — refresh after every `terraform apply`):**
 
-> This step is needed only on first deployment. Harness CV caches connector credentials internally. Re-saving the connector refreshes the cache so the Verify step can authenticate to Elasticsearch.
+> **Without this step, the Verify Deployment step will fail with "data collection failure" and trigger rollback.**
+
+1. Go to **Harness → Project Settings → Connectors** → find `elasticsearch`
+2. Click **Edit** → click **Next** → **Next** → **Save** (just re-save without changes)
+3. Click **Test Connection** → should show **Success** ✅
+
+> **Why?** Terraform generates a new EFK password on each `apply`. The Harness CV perpetual task caches the old credentials internally. Re-saving the connector forces Harness to refresh its credential cache. Without this, CV cannot authenticate to Elasticsearch → "data collection failure" → pipeline rolls back even though the app is healthy.
+
+> **When to do this:**
+> - After every fresh `terraform apply`
+> - If Verify step fails with "data collection failure"
+> - If you see "0 out of 0 Log Clusters" in the CV details
 
 ---
 

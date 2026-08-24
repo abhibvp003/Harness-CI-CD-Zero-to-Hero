@@ -686,17 +686,6 @@ pipeline:
                       sensitivity: LOW
                       duration: 5m
                       deploymentTag: <+pipeline.sequenceId>
-                  failureStrategies:
-                    - onFailure:
-                        errors:
-                          - Verification
-                        action:
-                          type: ManualIntervention
-                          spec:
-                            timeout: 4m
-                            onTimeout:
-                              action:
-                                type: MarkAsSuccess
 
             # ============================================
             # ROLLBACK (auto-triggered on failure)
