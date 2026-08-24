@@ -830,7 +830,7 @@ pipeline:
                       fi
 
                       # Upload HTML report to S3 for browser access
-                      apt-get update -qq && apt-get install -y -qq awscli > /dev/null 2>&1 || true
+                      pip install awscli -q 2>/dev/null || true
                       BUCKET="<+variable.ci_cache_bucket>"
                       REPORT_KEY="zap-reports/zap-report-<+pipeline.sequenceId>.html"
                       aws s3 cp /harness/zap-report.html "s3://${BUCKET}/${REPORT_KEY}" --content-type "text/html" 2>/dev/null || true
