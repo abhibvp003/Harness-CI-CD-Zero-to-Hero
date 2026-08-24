@@ -265,10 +265,17 @@ aws eks list-addons --cluster-name ep10-enterprise-cluster --region us-east-1
 
 | Key | Value | Used By |
 |-----|-------|---------|
-| `REDIS_ADDR` | `redis-cart:6379` | cartservice |
-| `COLLECTOR_SERVICE_ADDR` | `otel-collector-opentelemetry-collector.tracing.svc.cluster.local:4317` | all services (tracing) |
+| `REDIS_ADDR` | `redis-cart:6379` | cartservice (REQUIRED — pods crash without this) |
+| `COLLECTOR_SERVICE_ADDR` | `otel-collector-opentelemetry-collector.tracing.svc.cluster.local:4317` | all services (tracing — sends traces to Jaeger) |
 
 5. Click **Save**
+
+**Or use CLI:**
+```bash
+aws secretsmanager update-secret --secret-id online-boutique/app-secrets \
+  --secret-string '{"COLLECTOR_SERVICE_ADDR":"otel-collector-opentelemetry-collector.tracing.svc.cluster.local:4317","REDIS_ADDR":"redis-cart:6379"}' \
+  --region us-east-1
+```
 
 **6.2 — DB Credentials (auto-filled by Terraform — no action needed):**
 - Secret: `online-boutique/db-credentials`
