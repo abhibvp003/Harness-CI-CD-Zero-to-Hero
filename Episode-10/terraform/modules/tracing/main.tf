@@ -171,7 +171,7 @@ resource "harness_platform_gitops_applications" "otel_collector" {
                   endpoint: 0.0.0.0:9411
               exporters:
                 otlp/jaeger:
-                  endpoint: jaeger-collector:4317
+                  endpoint: jaeger-collector:14250
                   tls:
                     insecure: true
                 debug:
