@@ -495,6 +495,7 @@ pipeline:
                           AI_API_KEY: <+secrets.getValue("ai_api_key")>
                         command: |-
                           apt-get update -qq && apt-get install -y -qq git > /dev/null 2>&1
+                          git config --global --add safe.directory /harness
                           cd /harness/Episode-10/ai-agents
                           CHANGES=$(git -C /harness log --oneline -20 | wc -l)
                           python deployment_risk_agent.py \
@@ -517,10 +518,11 @@ pipeline:
                           AI_API_KEY: <+secrets.getValue("ai_api_key")>
                         command: |-
                           apt-get update -qq && apt-get install -y -qq git curl > /dev/null 2>&1
+                          git config --global --add safe.directory /harness
                           cd /harness/Episode-10/ai-agents
                           # Get real git log as input for log analysis
                           git -C /harness log --oneline -20 > /tmp/recent-changes.log 2>/dev/null || echo "No logs" > /tmp/recent-changes.log
-                          python log_analysis_agent.py --logs /tmp/recent-changes.log --type deployment || true
+                          python log_analysis_agent.py --logs /tmp/recent-changes.log --type application || true
 
     # ============================================
     # STAGE 3: GitOps Deploy (PR -> Approve -> Merge -> Sync -> Verify)

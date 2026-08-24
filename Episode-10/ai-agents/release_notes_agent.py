@@ -17,6 +17,8 @@ from ai_provider import get_ai_response
 def get_recent_commits(count=10):
     """Get recent git commits"""
     try:
+        # Set safe directory for Harness workspace
+        subprocess.run(["git", "config", "--global", "--add", "safe.directory", "/harness"], capture_output=True, timeout=5)
         # Fetch git history (Harness uses shallow clone)
         subprocess.run(["git", "-C", "/harness", "fetch", "--unshallow"], capture_output=True, timeout=30)
         result = subprocess.run(
