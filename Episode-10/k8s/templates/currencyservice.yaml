@@ -23,6 +23,8 @@ spec:
           env:
             - name: PORT
               value: "7000"
+            - name: OTEL_SERVICE_NAME
+              value: "currencyservice"
             - name: ENABLE_TRACING
               value: "{{.Values.enableTracing}}"
             - name: DISABLE_PROFILER

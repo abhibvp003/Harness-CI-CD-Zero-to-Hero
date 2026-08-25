@@ -23,6 +23,8 @@ spec:
           env:
             - name: PORT
               value: "3550"
+            - name: OTEL_SERVICE_NAME
+              value: "productcatalogservice"
             - name: ENABLE_TRACING
               value: "{{.Values.enableTracing}}"
           envFrom:

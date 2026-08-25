@@ -20,6 +20,9 @@ spec:
           image: {{.Values.cartserviceImage}}
           ports:
             - containerPort: 7070
+          env:
+            - name: OTEL_SERVICE_NAME
+              value: "cartservice"
           envFrom:
             - secretRef:
                 name: app-secrets # COLLECTOR_SERVICE_ADDR, REDIS_ADDR from AWS SM
