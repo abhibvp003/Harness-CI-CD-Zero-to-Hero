@@ -1,5 +1,5 @@
 # ═══════════════════════════════════════════════════════════════════
-# Tracing Module — Jaeger + OTel Collector via ArgoCD (Helm)
+# Tracing Module — Jaeger All-in-One + OTel Collector via ArgoCD (Helm)
 # Self-contained: registers its own Helm repos + creates Harness apps
 # ═══════════════════════════════════════════════════════════════════
 
@@ -36,7 +36,8 @@ resource "harness_platform_gitops_repository" "otel" {
   }
 }
 
-# Jaeger — Harness GitOps Application
+# Jaeger All-in-One — single pod with collector + query + storage
+# Solves the badger storage split issue (collector and query in same process)
 resource "harness_platform_gitops_applications" "jaeger" {
   identifier = "jaeger"
   account_id = var.harness_account_id
@@ -66,20 +67,20 @@ resource "harness_platform_gitops_applications" "jaeger" {
         target_revision = "3.1.1"
         helm {
           parameters {
-            name  = "jaeger.ingress.enabled"
+            name  = "allInOne.enabled"
             value = "true"
           }
           parameters {
-            name  = "jaeger.ingress.ingressClassName"
-            value = "kong"
+            name  = "collector.enabled"
+            value = "false"
           }
           parameters {
-            name  = "jaeger.ingress.hosts[0]"
-            value = "jaeger.${var.domain_name}"
+            name  = "query.enabled"
+            value = "false"
           }
           parameters {
-            name  = "jaeger.ingress.pathType"
-            value = "Prefix"
+            name  = "agent.enabled"
+            value = "false"
           }
           parameters {
             name  = "provisionDataStore.cassandra"
@@ -88,6 +89,38 @@ resource "harness_platform_gitops_applications" "jaeger" {
           parameters {
             name  = "storage.type"
             value = "badger"
+          }
+          parameters {
+            name  = "allInOne.extraEnv[0].name"
+            value = "COLLECTOR_OTLP_ENABLED"
+          }
+          parameters {
+            name  = "allInOne.extraEnv[0].value"
+            value = "true"
+          }
+          parameters {
+            name  = "allInOne.extraEnv[1].name"
+            value = "BADGER_EPHEMERAL"
+          }
+          parameters {
+            name  = "allInOne.extraEnv[1].value"
+            value = "false"
+          }
+          parameters {
+            name  = "allInOne.extraEnv[2].name"
+            value = "BADGER_DIRECTORY_KEY"
+          }
+          parameters {
+            name  = "allInOne.extraEnv[2].value"
+            value = "/badger/key"
+          }
+          parameters {
+            name  = "allInOne.extraEnv[3].name"
+            value = "BADGER_DIRECTORY_VALUE"
+          }
+          parameters {
+            name  = "allInOne.extraEnv[3].value"
+            value = "/badger/data"
           }
           parameters {
             name  = "spark.enabled"
@@ -104,38 +137,6 @@ resource "harness_platform_gitops_applications" "jaeger" {
           parameters {
             name  = "esLookback.enabled"
             value = "false"
-          }
-          parameters {
-            name  = "collector.extraEnv[0].name"
-            value = "COLLECTOR_OTLP_ENABLED"
-          }
-          parameters {
-            name  = "collector.extraEnv[0].value"
-            value = "true"
-          }
-          parameters {
-            name  = "collector.extraEnv[1].name"
-            value = "COLLECTOR_OTLP_GRPC_HOST_PORT"
-          }
-          parameters {
-            name  = "collector.extraEnv[1].value"
-            value = ":4317"
-          }
-          parameters {
-            name  = "collector.extraEnv[2].name"
-            value = "COLLECTOR_OTLP_HTTP_HOST_PORT"
-          }
-          parameters {
-            name  = "collector.extraEnv[2].value"
-            value = ":4318"
-          }
-          parameters {
-            name  = "collector.service.otlp.grpc.port"
-            value = "4317"
-          }
-          parameters {
-            name  = "collector.service.otlp.http.port"
-            value = "4318"
           }
         }
       }
@@ -240,7 +241,7 @@ resource "harness_platform_gitops_applications" "otel_collector" {
   depends_on = [harness_platform_gitops_repository.otel]
 }
 
-# Jaeger Ingress — chart v3.1.1 doesn't create it properly via parameters
+# Jaeger Ingress
 resource "kubernetes_namespace" "tracing" {
   metadata { name = "tracing" }
   lifecycle { ignore_changes = all }
