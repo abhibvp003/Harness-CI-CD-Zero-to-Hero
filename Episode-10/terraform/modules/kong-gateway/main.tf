@@ -177,7 +177,7 @@ resource "kubectl_manifest" "kong_rate_limit" {
     }
     plugin = "rate-limiting"
     config = {
-      minute              = 1000
+      minute              = 10000
       policy              = "local"
       fault_tolerant      = true
       hide_client_headers = false
@@ -384,10 +384,10 @@ resource "kubectl_manifest" "kong_proxy_cache" {
     }
     plugin = "proxy-cache"
     config = {
-      response_code  = [200]
-      request_method = ["GET"]
-      content_type   = ["application/json"]
-      cache_ttl      = 30
+      response_code  = [200, 301, 302]
+      request_method = ["GET", "HEAD"]
+      content_type   = ["application/json", "text/html", "text/plain", "text/css", "application/javascript"]
+      cache_ttl      = 60
       strategy       = "memory"
       memory = {
         dictionary_name = "kong_db_cache"
