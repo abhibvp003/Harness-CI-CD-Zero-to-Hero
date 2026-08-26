@@ -1,5 +1,11 @@
 # Episode 10: Complete Enterprise Project (End-to-End)
 
+## Architecture
+
+![Enterprise GitOps Platform Architecture](architecture/architecture.png)
+
+---
+
 ## 🎯 Goal
 
 Build the COMPLETE enterprise CI/CD platform — everything from Episodes 1-9 automated with **one `terraform apply`**. Zero manual clicks. MNC production standard.
@@ -8,16 +14,45 @@ Build the COMPLETE enterprise CI/CD platform — everything from Episodes 1-9 au
 
 ## 🏗️ What This Creates
 
-```
-One terraform apply = Entire Enterprise Platform
+| Category | Resources |
+|----------|-----------|
+| **Infrastructure** | VPC → EKS (Auto Mode) → Bastion (SSM + SonarQube) → RDS PostgreSQL |
+| **Networking** | Kong Gateway 3.9 (API Gateway + Ingress + NLB + ACM TLS) → ExternalDNS |
+| **Security** | External Secrets Operator → AWS Secrets Manager (1 min refresh — bank-grade) |
+| **CI/CD** | K8s Delegate (HA) → GitOps Agent (HA) → Harness Platform Resources |
+| **Observability** | Prometheus + Grafana → EFK Stack → Jaeger All-in-One + OTel Collector |
+| **Governance** | OPA Policies → Continuous Verification (Prometheus) → Auto-Rollback |
+| **AI** | 5 Agents — Security, Code Review, Release Notes, Deployment Risk, Log Analysis |
+| **DAST** | OWASP ZAP — Post-deploy scan with S3 HTML report |
 
-Infrastructure:       VPC → EKS (Auto Mode) → Bastion → RDS PostgreSQL
-Networking:           Kong Gateway (API Gateway + Ingress) → ExternalDNS (auto Route53)
-Security:             External Secrets Operator → AWS Secrets Manager
-CI/CD:                K8s Delegate (HA) → GitOps Agent (HA) → Harness Platform Resources
-Observability:        Prometheus + Grafana → EFK → Jaeger + OTel Collector
-Governance:           OPA Policies → Continuous Verification (3 Health Sources) → Auto-Rollback
-AI:                   Security Agent → Code Review → Deployment Risk Assessment
+---
+
+## Pipeline Flow
+
+![Pipeline Execution View](architecture/pipeline%20-1.png)
+
+![Pipeline Designer View](architecture/pipeline.png)
+
+```
+Code Push → Security Scans → Build 11 Images → AI Agents → GitOps Deploy → Verify → DAST → Slack
+
+Stage 1: security-scans (5 parallel)
+  Gitleaks | Trivy | OSV Scanner | SonarQube | Checkov
+
+Stage 2: build-and-push (4 batches × 3 parallel)
+  S3 Cache Restore → 11 BuildAndPushECR → S3 Cache Save
+
+Stage 3: ai-agents (5 agents)
+  Security | Code Review | Release Notes | Risk Assessment | Log Analysis
+
+Stage 4: gitops-deploy
+  UpdateReleaseRepo → Approve → MergePR → GitOpsSync → GetAppStatus → Verify (CV)
+  Rollback: RevertPR → MergePR → GitOpsSync (auto on failure)
+
+Stage 5: dast-owasp-zap
+  ZAP Baseline Scan → S3 presigned URL (7-day browser access)
+
+Notifications: Slack (success/failure)
 ```
 
 ---
@@ -33,19 +68,20 @@ Episode-10/
 │   ├── provider.tf                     ← AWS, Helm, Kubernetes, Harness providers
 │   └── modules/
 │       ├── vpc/                        ← VPC, Subnets, NAT, Route Tables
-│       ├── eks/                        ← EKS Auto Mode, IAM, KMS, CloudWatch
-│       ├── bastion/                    ← EC2, SSM, kubectl, Helm, SonarQube
+│       ├── eks/                        ← EKS Auto Mode, IAM, KMS
+│       ├── bastion/                    ← EC2, SSM, kubectl, Helm, Docker, SonarQube
 │       ├── ecr/                        ← 11 repos + lifecycle policies
 │       ├── rds/                        ← PostgreSQL 16.3 + auto-creds in AWS SM
 │       ├── delegate/                   ← K8s Delegate (HA + autoscale + RBAC)
-│       ├── kong-gateway/               ← Kong 3.9 OSS (Manager UI, 20 plugins, NLB + ACM TLS)
+│       ├── kong-gateway/               ← Kong 3.9 OSS (HA 2→6, NLB + ACM, 20 plugins, 10000 req/min)
 │       ├── external-dns/               ← Auto Route53 records from Ingress (Pod Identity)
 │       ├── external-secrets/           ← ESO + ClusterSecretStore (Pod Identity)
 │       ├── gitops/                     ← GitOps Agent + Repo + Cluster + App
-│       ├── harness-platform/           ← Service, Envs, Connectors, OPA, CV (3 health sources)
+│       ├── harness-platform/           ← Service, Envs, Connectors, OPA, CV (Prometheus)
 │       ├── monitoring/                 ← Prometheus + Grafana (Helm via ArgoCD)
-│       ├── logging/                    ← EFK Stack — ES 7.17 (xpack trial auth) + Kibana + Fluentd
-│       └── tracing/                    ← Jaeger 3.1.1 + OTel Collector (ArgoCD)
+│       ├── logging/                    ← EFK Stack — ES 7.17 (xpack auth) + Kibana + Fluentd
+│       ├── tracing/                    ← Jaeger All-in-One + OTel Collector (ArgoCD)
+│       └── falco/                      ← Runtime Security (threat detection)
 │
 ├── k8s/                                ← Helm Chart (ArgoCD syncs to cluster)
 │   ├── Chart.yaml
@@ -53,83 +89,61 @@ Episode-10/
 │   └── templates/                      ← 11 microservices + Redis + Ingress + ExternalSecrets
 │
 ├── .harness/
-│   └── enterprise-gitops-pipeline.yaml ← CI + Security + AI + GitOps + Verify + Rollback
+│   └── enterprise-gitops-pipeline.yaml ← 5 stages: Security → Build → AI → GitOps → DAST
 │
-├── ai-agents/                          ← 4 AI agents (Python, zero dependencies)
-│   ├── security_agent.py              ← Trivy/Gitleaks/OWASP → AI report
-│   ├── deployment_risk_agent.py       ← SAFE/RISKY/BLOCK decision
-│   ├── code_review_agent.py           ← Git diff → bugs/security/performance
-│   └── log_analysis_agent.py          ← Logs → root cause + fix suggestions
+├── ai-agents/                          ← 5 AI agents (Python + Google Gemini)
+│   ├── ai_provider.py                 ← AI provider abstraction (Gemini 3.5 Flash)
+│   ├── security_agent.py             ← Security scan analysis → AI report
+│   ├── code_review_agent.py          ← Git diff → bugs/security/performance (score 1-10)
+│   ├── release_notes_agent.py        ← Git commits → changelog with contributors
+│   ├── deployment_risk_agent.py      ← SAFE/RISKY/BLOCK decision
+│   └── log_analysis_agent.py         ← Logs → pattern detection + recommendations
 │
 ├── policies/
-│   └── production-governance.rego      ← OPA: no Friday deploys, require approval
+│   └── production-governance.rego     ← OPA: no Friday deploys, require approval, require rollback
 │
-├── src/                                ← 11 microservices (Google Online Boutique)
-├── sonar-project.properties            ← SonarQube multi-service scan config
-├── DEPLOY-STEPS.md                     ← Step-by-step deployment guide
-└── README.md                           ← This file
+├── architecture/                       ← Architecture diagrams
+│   ├── architecture.png               ← Full platform architecture
+│   ├── pipeline -1.png                ← Pipeline execution view
+│   └── pipeline.png                   ← Pipeline designer view
+│
+├── src/                               ← 11 microservices (Google Online Boutique)
+├── .checkov.yaml                      ← Checkov suppressions
+├── sonar-project.properties           ← SonarQube multi-service scan config
+├── DEPLOY-STEPS.md                    ← Step-by-step deployment guide
+└── README.md                          ← This file
 ```
 
 ---
 
-## 🚀 Pipeline Flow
+## 🛡️ Security Stack (9 Layers)
 
-```
-Code Push → OPA Gate → Security Scans → Build 11 Images → AI Analysis → GitOps Deploy → Verify → Slack
-
-Stage 1: CI (KubernetesDirect — code stays in VPC)
-  ├── [Parallel] Gitleaks + Trivy + OWASP + SonarQube
-  └── [Parallel] BuildAndPushECR × 11 (OIDC, tag: v#)
-
-Stage 2: AI Security Agent → reads scan results → prioritized report
-
-Stage 3: AI Deployment Risk → SAFE/RISKY/BLOCK
-
-Stage 4: GitOps Deploy
-  ├── UpdateReleaseRepo (PR with 11 image tags)
-  ├── HarnessApproval (human review)
-  ├── MergePR → main
-  ├── GitOpsSync → ArgoCD syncs cluster
-  ├── GetAppDetails → Healthy ✅
-  └── Verify → 3 Health Sources CV (auto-rollback if ANY degraded)
-        ├── Prometheus: pod restarts (infrastructure)
-        ├── Prometheus: HTTP 5xx via Kong (end-to-end)
-        └── Elasticsearch: error logs (application)
-
-Rollback: RevertPR → MergePR → GitOpsSync (old version back)
-Notifications: Slack on success/failure
-```
+| Layer | Tool | Stage | What It Detects |
+|-------|------|-------|-----------------|
+| 1 | Gitleaks | CI | Hardcoded secrets, API keys, passwords |
+| 2 | Trivy | CI | Filesystem vulnerabilities (HIGH/CRITICAL) |
+| 3 | OSV Scanner | CI | Dependency CVEs (Google OSV database) |
+| 4 | SonarQube | CI | Code quality, security hotspots |
+| 5 | Checkov | CI | Terraform + K8s misconfigurations |
+| 6 | OPA Policies | Pipeline Run | Governance (no Friday deploys, require approval) |
+| 7 | Approval Gates | GitOps CD | Human review before production |
+| 8 | Kong Gateway | Runtime | Rate limiting (10000/min/IP), bot detection, CORS |
+| 9 | OWASP ZAP | Post-deploy | XSS, SQL injection, CSRF on live app |
 
 ---
 
-## 🛡️ Security Stack (8 Layers)
+## 🔍 Continuous Verification (Auto-Rollback)
 
-| Layer | Tool | Stage |
-|-------|------|-------|
-| 1 | Gitleaks | CI (secrets in code) |
-| 2 | SonarQube | CI (code quality) |
-| 3 | OWASP | CI (dependency CVEs) |
-| 4 | Trivy | CI (filesystem vulns) |
-| 5 | OPA Policies | On Pipeline Run |
-| 6 | Approval Gates | GitOps CD |
-| 7 | Kong Gateway | Runtime (rate limit, WAF, bot detection) |
-| 8 | Continuous Verification | Post-deploy (3 health sources — metrics + HTTP + logs) |
-
----
-
-## 🔍 Continuous Verification (3 Health Sources)
-
-| # | Health Source | Type | What It Monitors | Rollback When |
-|---|---|---|---|---|
-| 1 | `prometheus` | Prometheus Metrics | Pod restart count | Pods crash-looping after deploy |
-| 2 | `app-http-errors` | Prometheus Metrics | HTTP 5xx errors via Kong Gateway | App returning 502/503/500 to users |
-| 3 | `elasticsearch` | Elasticsearch Logs | Error logs, exceptions, stack traces | New error patterns or error spike |
+| Health Source | Type | Metrics | Rollback When |
+|---|---|---|---|
+| Prometheus | Metrics | Pod Restarts, CPU Usage, Memory Usage | Pods crash-looping or resource spike after deploy |
 
 **How it works:**
-- After GitOps deploys the new version, the **Verify step** runs for 5 minutes
-- Harness ML compares pre-deploy baseline vs post-deploy metrics/logs
-- If **ANY** of the 3 health sources detects anomaly → **automatic rollback**
-- Rollback = RevertPR → MergePR → GitOpsSync (old version restored in seconds)
+- After GitOps deploys the new version, the **Verify step** runs for 5 minutes (`type: Auto`)
+- Harness ML compares pre-deploy baseline vs post-deploy metrics
+- If anomaly detected → **automatic rollback** (RevertPR → MergePR → GitOpsSync)
+- Build 1: establishes baseline (no comparison, always passes)
+- Build 2+: real before vs after comparison
 
 ---
 
@@ -138,20 +152,41 @@ Notifications: Slack on success/failure
 | Service | URL | Login |
 |---------|-----|-------|
 | Online Boutique | `https://app.yourdomain.com` | No login |
-| Kong Manager | `https://kong.yourdomain.com` | admin / (from AWS SM: `online-boutique/kong-admin-password`) |
-| Grafana | `https://grafana.yourdomain.com` | admin / (from AWS SM: `online-boutique/grafana-password`) |
-| Kibana | `https://kibana.yourdomain.com` | elastic / (from AWS SM: `online-boutique/efk-password`) |
+| Kong Manager | `https://kong.yourdomain.com` | admin / (AWS SM: `online-boutique/kong-admin-password`) |
+| Grafana | `https://grafana.yourdomain.com` | admin / (AWS SM: `online-boutique/grafana-password`) |
+| Kibana | `https://kibana.yourdomain.com` | elastic / (AWS SM: `online-boutique/efk-password`) |
 | Jaeger | `https://jaeger.yourdomain.com` | No login |
+| Falco | `https://falco.yourdomain.com` | admin / (AWS SM: `online-boutique/falco-password`) |
 | SonarQube | `http://BASTION-IP:9000` | admin / admin |
 
 All via **1 NLB + Kong Gateway** (cost optimized). ExternalDNS auto-manages Route53.
 
 ---
 
+## � Secrets Management (Bank-Grade)
+
+```
+AWS Secrets Manager → External Secrets Operator (1 min refresh) → K8s Secret → Pods
+
+No secrets in Git. No hardcoded values. Auto-rotation within 60 seconds.
+```
+
+| Secret | Source | Used By |
+|--------|--------|---------|
+| `COLLECTOR_SERVICE_ADDR` | AWS SM (`app-secrets`) | All services (Jaeger tracing) |
+| `REDIS_ADDR` | AWS SM (`app-secrets`) | cartservice |
+| DB credentials | AWS SM (`db-credentials`) | All services |
+| Grafana password | AWS SM (auto-generated) | Grafana login |
+| EFK password | AWS SM (auto-generated) | Elasticsearch + Kibana |
+| Kong admin password | AWS SM (auto-generated) | Kong Manager |
+
+---
+
 ## 💰 Cost
 
+| Period | Cost |
+|--------|------|
 | Running | ~$6/day (~$183/month) |
-|---------|----------------------|
 | **After destroy** | **$0.00** |
 
 ---
@@ -160,36 +195,36 @@ All via **1 NLB + Kong Gateway** (cost optimized). ExternalDNS auto-manages Rout
 
 See **[DEPLOY-STEPS.md](./DEPLOY-STEPS.md)** for complete step-by-step instructions.
 
-Quick start:
+**Quick start:**
 1. Set GitHub Variables + Secrets (Step 1-3 in DEPLOY-STEPS)
-2. Run `ep10-setup.yml → apply` (creates everything)
-3. Import pipeline from Git in Harness
-4. Run pipeline → 11 microservices deployed via GitOps
-5. When done: `ep10-setup.yml → destroy` (bill = $0)
+2. Run `ep10-setup.yml → apply` (creates everything ~20 min)
+3. Add secrets in AWS SM (Step 6)
+4. Import pipeline from Git in Harness
+5. Run pipeline → 11 microservices deployed via GitOps
+6. When done: `ep10-setup.yml → destroy` (bill = $0)
 
 ---
 
-## 🎓 Technologies Covered
+## 🎓 Technologies (25+)
 
 | Category | Technologies |
 |----------|-------------|
-| **Platform** | Harness CI, CD, GitOps, STO, OPA |
-| **Containers** | Docker, Multi-stage Builds, ECR |
-| **Orchestration** | Kubernetes (EKS Auto Mode), Helm |
-| **API Gateway** | Kong Gateway 3.9 OSS (20 plugins, Manager UI, HA) |
-| **Infrastructure** | Terraform (14 modules), GitHub Actions |
-| **GitOps** | ArgoCD (via Harness GitOps Agent) |
-| **Database** | RDS PostgreSQL (encrypted, auto-creds) |
-| **Security** | Trivy, SonarQube, Gitleaks, OWASP, OPA |
-| **Secrets** | AWS Secrets Manager + External Secrets Operator |
-| **Monitoring** | Prometheus, Grafana (auto-dashboards) |
-| **Logging** | Elasticsearch, Fluentd, Kibana (EFK) |
-| **Continuous Verification** | Harness CV (Prometheus metrics + Elasticsearch logs + HTTP 5xx) |
-| **Tracing** | OpenTelemetry, Jaeger |
-| **DNS** | Route53 + ExternalDNS (automatic) |
-| **TLS** | ACM Certificate (auto-discovery) |
-| **AI** | GPT-4o-mini / Gemini (security, code review, risk) |
+| **CI/CD Platform** | Harness CI, CD, GitOps, CV, OPA |
+| **Containers** | Docker, Multi-stage Builds, ECR (Remote Cache) |
+| **Orchestration** | Kubernetes (EKS Auto Mode), Helm, Karpenter |
+| **API Gateway** | Kong Gateway 3.9 OSS (HA, 20 plugins, proxy cache) |
+| **Infrastructure** | Terraform (14 modules), GitHub Actions (OIDC) |
+| **GitOps** | ArgoCD (via Harness GitOps Agent, auto-sync + self-heal) |
+| **Database** | RDS PostgreSQL 16.3 (encrypted, auto-creds) |
+| **Security** | Trivy, SonarQube, Gitleaks, OSV, Checkov, OWASP ZAP, Falco |
+| **Secrets** | AWS Secrets Manager + External Secrets Operator (1 min refresh) |
+| **Monitoring** | Prometheus + Grafana (pod health dashboards) |
+| **Logging** | Elasticsearch + Fluentd + Kibana (EFK) |
+| **Tracing** | Jaeger All-in-One + OpenTelemetry Collector |
+| **DNS/TLS** | Route53 + ExternalDNS + ACM Certificate |
+| **AI** | Google Gemini 3.5 Flash (5 agents) |
 | **Notifications** | Slack |
+| **IAM** | Pod Identity (IRSA replacement) |
 
 ---
 
