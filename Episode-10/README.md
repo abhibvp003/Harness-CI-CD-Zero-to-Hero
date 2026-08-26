@@ -62,109 +62,45 @@ Notifications: Slack (success/failure)
 ```
 Episode-10/
 ├── terraform/                          ← Infrastructure as Code (15 modules)
-│   ├── main.tf                         ← Root module — orchestrates all modules + pre-destroy cleanup
-│   ├── variables.tf                    ← All inputs (injected from GitHub Secrets/Variables via Actions)
-│   ├── outputs.tf                      ← Platform outputs (cluster name, bastion IP, VPC ID, RDS endpoint)
-│   ├── provider.tf                     ← AWS, Helm, Kubernetes, Kubectl, Harness providers configured
+│   ├── main.tf                         ← Root module (orchestrates all + pre-destroy cleanup)
+│   ├── variables.tf                    ← All inputs from GitHub Secrets/Variables
+│   ├── outputs.tf                      ← Platform outputs
+│   ├── provider.tf                     ← AWS, Helm, K8s, Kubectl, Harness providers
 │   └── modules/
-│       ├── vpc/                        ← VPC (10.0.0.0/16) + 2 public subnets (NLB, Bastion)
-│       │                                  + 2 private subnets (EKS pods, RDS) + NAT GW + IGW + Route Tables
-│       ├── eks/                        ← EKS Cluster (v1.31) + 2 Managed Node Groups:
-│       │                                  Workloads (6×t3a.large, 3-10 autoscale) + CI (1×t3a.xlarge, tainted)
-│       │                                  + OIDC (IRSA) + KMS encryption + LB Controller + Cluster Autoscaler
-│       │                                  + EBS CSI + VPC CNI + CoreDNS + kube-proxy addons
-│       ├── bastion/                    ← EC2 (t2.medium, Amazon Linux 2023) + SSM (no SSH key needed)
-│       │                                  + pre-installs: kubectl, Helm, Docker, aws-cli, SonarQube
-│       │                                  + EKS Admin access via aws_eks_access_entry
-│       ├── ecr/                        ← 11 Docker repos (frontend, cart, checkout, product, currency,
-│       │                                  email, payment, recommendation, shipping, ad, loadgenerator, cache)
-│       │                                  + lifecycle: delete untagged after 7 days + scan-on-push
-│       ├── rds/                        ← PostgreSQL 16.3 (db.t3.micro) + gp3 encrypted (20-100GB auto)
-│       │                                  + private subnet only + 7-day backups + credentials → AWS SM
-│       ├── delegate/                   ← Harness Delegate (Helm) + HA (2 replicas, autoscale to 6)
-│       │                                  + 2-4Gi memory + ClusterRole (pods, deploys, jobs, ingress, secrets)
-│       ├── kong-gateway/               ← Kong 3.9 OSS (DB-less, Helm) + NLB (ACM TLS on 443)
-│       │                                  + HA (2→6 replicas) + Manager UI (basic-auth, password in AWS SM)
-│       │                                  + 20 plugins: rate-limit (10000/min), CORS, security headers,
-│       │                                    bot-detect, zipkin, proxy-cache (60s), IP restrict, request-size,
-│       │                                    correlation-id, file-log, tcp-log, http-log, JWT, ACL, gRPC, etc.
-│       ├── external-dns/               ← ExternalDNS (Helm + IRSA) → watches Kong Ingress resources
-│       │                                  → auto-creates Route53 CNAME records (30s poll, TXT ownership)
-│       ├── external-secrets/           ← ESO (Helm + IRSA) + ClusterSecretStore (aws-secrets-manager)
-│       │                                  + pre-creates app-secrets in AWS SM with placeholder keys
-│       ├── gitops/                     ← Harness GitOps Agent (ArgoCD HA: controller×2, repo-server×2-5,
-│       │                                  server×2-4, redis×2) + downloads YAML from Harness API
-│       │                                  + creates Repo (GitHub PAT) + Cluster + App (Helm chart sync)
-│       ├── harness-platform/           ← Service (online_boutique, ReleaseRepo type)
-│       │                                  + 2 Environments (production + development)
-│       │                                  + Connectors: Prometheus, Elasticsearch (API), K8s delegate
-│       │                                  + OPA Policy + PolicySet (via API, free tier compatible)
-│       │                                  + Monitored Service (CV: pod restarts, CPU, memory)
-│       │                                  + Variables: ci_cache_bucket, domain_name, sonar_host_url
-│       ├── monitoring/                 ← kube-prometheus-stack 62.3.0 (ArgoCD auto-sync + self-heal)
-│       │                                  + Grafana (password in AWS SM) + 50Gi persistent storage
-│       │                                  + 2 dashboards: Online Boutique pods + Kong Gateway health
-│       ├── logging/                    ← Elasticsearch 7.17 (xpack trial, single-node, yellow health check)
-│       │                                  + Kibana (Kong Ingress) + Fluentd DaemonSet (logstash format)
-│       │                                  + auto Kibana index pattern job (waits for fluentd* index)
-│       ├── tracing/                    ← Jaeger All-in-One (allInOne.enabled=true, collector+query+storage)
-│       │                                  + OTLP enabled (4317/4318) + badger persistent storage
-│       │                                  + OTel Collector (receives OTLP from apps → exports to Jaeger)
-│       └── falco/                      ← Falco 4.16.1 (DaemonSet, modern_ebpf driver)
-│                                          + Sidekick UI (basic-auth, password in AWS SM)
-│                                          + Detects: shell exec, privilege escalation, file tampering
+│       ├── vpc/                        ← VPC + 4 subnets + NAT + IGW + Route Tables
+│       ├── eks/                        ← EKS + 2 Node Groups + OIDC + KMS + LB Controller + Autoscaler
+│       ├── bastion/                    ← EC2 + SSM + SonarQube + EKS Admin access
+│       ├── ecr/                        ← 11 repos + scan-on-push + lifecycle cleanup
+│       ├── rds/                        ← PostgreSQL 16.3 + encrypted + auto-creds in AWS SM
+│       ├── delegate/                   ← Harness Delegate (HA 2→6, autoscale, RBAC)
+│       ├── kong-gateway/               ← Kong 3.9 + NLB + ACM TLS + 20 plugins + Manager UI
+│       ├── external-dns/               ← Auto Route53 from Ingress (IRSA, 30s poll)
+│       ├── external-secrets/           ← ESO + ClusterSecretStore + app-secrets placeholder
+│       ├── gitops/                     ← ArgoCD HA Agent + Repo + Cluster + App
+│       ├── harness-platform/           ← Service + Envs + Connectors + OPA + CV
+│       ├── monitoring/                 ← Prometheus + Grafana + 2 dashboards (ArgoCD)
+│       ├── logging/                    ← Elasticsearch + Kibana + Fluentd (ArgoCD)
+│       ├── tracing/                    ← Jaeger All-in-One + OTel Collector (ArgoCD)
+│       └── falco/                      ← Runtime Security (DaemonSet + Sidekick UI)
 │
-├── k8s/                                ← Helm Chart — ArgoCD syncs from GitHub to cluster
-│   ├── Chart.yaml                      ← Chart metadata
-│   ├── values.yaml                     ← Image tags + config (pipeline PR updates these values)
-│   └── templates/
-│       ├── frontend.yaml               ← Frontend (Go) + OTEL_SERVICE_NAME
-│       ├── cartservice.yaml            ← CartService (.NET) — reads REDIS_ADDR from app-secrets
-│       ├── checkoutservice.yaml        ← CheckoutService (Go)
-│       ├── productcatalogservice.yaml  ← ProductCatalog (Go)
-│       ├── currencyservice.yaml        ← CurrencyService (Node.js)
-│       ├── emailservice.yaml           ← EmailService (Python)
-│       ├── paymentservice.yaml         ← PaymentService (Node.js)
-│       ├── recommendationservice.yaml  ← RecommendationService (Python)
-│       ├── shippingservice.yaml        ← ShippingService (Go)
-│       ├── adservice.yaml              ← AdService (Java/Gradle)
-│       ├── loadgenerator.yaml          ← LoadGenerator (Locust) — drives traffic for metrics
-│       ├── redis.yaml                  ← Redis (cart storage)
-│       ├── ingress.yaml                ← Kong Ingress: app.domain → frontend
-│       ├── external-secret.yaml        ← ESO: AWS SM → K8s Secret (1 min refresh, bank-grade)
-│       ├── external-secret-db.yaml     ← ESO: DB credentials (1 min refresh)
-│       ├── namespace.yaml              ← online-boutique namespace
-│       └── storageclass.yaml           ← auto-ebs-sc (gp3, encrypted, default)
+├── k8s/                                ← Helm Chart (ArgoCD syncs to cluster)
+│   ├── values.yaml                     ← Image tags (pipeline PR updates these)
+│   └── templates/                      ← 11 microservices + Redis + Ingress + ExternalSecrets
 │
 ├── .harness/
-│   └── enterprise-gitops-pipeline.yaml ← 5-stage enterprise pipeline:
-│                                          Stage 1: Security (Gitleaks, Trivy, OSV, SonarQube, Checkov)
-│                                          Stage 2: Build (11 images → ECR, S3 cache, remote layer cache)
-│                                          Stage 3: AI (5 agents: security, code review, risk, notes, logs)
-│                                          Stage 4: GitOps (PR → Approve → Merge → Sync → CV → Rollback)
-│                                          Stage 5: DAST (OWASP ZAP → S3 presigned HTML report)
+│   └── enterprise-gitops-pipeline.yaml ← 5 stages: Security → Build → AI → GitOps+CV → DAST
 │
-├── ai-agents/                          ← 5 AI agents (Python + Google Gemini 3.5 Flash)
-│   ├── ai_provider.py                 ← Provider abstraction (Gemini/OpenAI via AI_API_KEY env)
-│   ├── security_agent.py             ← Reads pipeline context → threat assessment report
-│   ├── code_review_agent.py          ← Reviews last 5 commits → score 1-10, APPROVE/BLOCK
-│   ├── release_notes_agent.py        ← Last 20 commits → changelog with contributors table
-│   ├── deployment_risk_agent.py      ← Environment + tests + time + changes → SAFE/RISKY/BLOCK
-│   └── log_analysis_agent.py         ← Git log patterns → risky changes + recommendations
+├── ai-agents/                          ← 5 AI agents (Gemini 3.5 Flash)
+│   ├── security_agent.py             ← Threat assessment
+│   ├── code_review_agent.py          ← Code review (score 1-10)
+│   ├── release_notes_agent.py        ← Auto changelog
+│   ├── deployment_risk_agent.py      ← SAFE/RISKY/BLOCK
+│   └── log_analysis_agent.py         ← Pattern detection
 │
-├── policies/
-│   └── production-governance.rego     ← OPA: no Friday deploys, require approval, require rollback
-│
-├── architecture/                       ← Architecture diagrams (for README + LinkedIn)
-│   ├── architecture.png               ← Full platform architecture with tech logos
-│   ├── pipeline -1.png                ← Pipeline execution view (Harness UI)
-│   └── pipeline.png                   ← Pipeline designer view (Harness Studio)
-│
-├── src/                               ← 11 microservices source (Google Online Boutique fork)
-├── .checkov.yaml                      ← Checkov suppressions (known acceptable risks)
-├── .gitleaks.toml                     ← Gitleaks allowlist (test data, not real secrets)
-├── sonar-project.properties           ← SonarQube config (scans all 11 service directories)
-├── DEPLOY-STEPS.md                    ← Complete 12-step deployment guide
+├── policies/production-governance.rego ← OPA policy
+├── architecture/                       ← Diagrams (architecture + pipeline)
+├── src/                               ← 11 microservices (Online Boutique)
+├── DEPLOY-STEPS.md                    ← 12-step deployment guide
 └── README.md                          ← This file
 ```
 
