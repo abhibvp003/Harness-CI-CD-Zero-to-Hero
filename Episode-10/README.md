@@ -57,40 +57,6 @@ Notifications: Slack (success/failure)
 
 ---
 
-## 🧩 Terraform Modules Explained
-
-| # | Module | What It Creates | Key Design Choices |
-|---|--------|----------------|-------------------|
-| 1 | **vpc** | VPC, 2 public + 2 private subnets, NAT Gateway, IGW, Route Tables | Dual-AZ for HA. Public subnets for NLB/Bastion. Private subnets for EKS nodes + RDS. Single NAT (cost optimized). |
-| 2 | **eks** | EKS Cluster, 2 Node Groups (workloads + CI), OIDC, KMS, LB Controller, Cluster Autoscaler | Workloads: 6×t3a.large (3-10 autoscale). CI: 1×t3a.xlarge (1-8, tainted — only pipeline pods run here). IRSA via OIDC. Secrets encrypted with KMS. |
-| 3 | **bastion** | EC2 (Amazon Linux 2023), IAM Admin role, SSM access, SonarQube | Pre-installs kubectl, Helm, Docker, aws-cli via user_data. Full EKS admin access. No SSH key needed (SSM). |
-| 4 | **ecr** | 11 ECR repos + lifecycle policies | Scan-on-push enabled. Untagged images auto-deleted after 7 days. force_delete for clean destroy. |
-| 5 | **rds** | PostgreSQL 16.3, Subnet Group, Security Group, AWS SM credentials | gp3 encrypted storage (20-100GB auto-scale). Private only. 7-day backups. Password auto-generated + stored in AWS SM. |
-| 6 | **delegate** | Harness Delegate (Helm), ClusterRole, ClusterRoleBinding | HA: 2 replicas, autoscale to 6 (70% CPU). 2-4Gi memory. Broad K8s RBAC (pods, deploys, jobs, ingress). |
-| 7 | **kong-gateway** | Kong 3.9 OSS (Helm), NLB + ACM TLS, 20 plugins, Manager UI, JWT | DB-less mode. NLB with ACM TLS termination on 443. HA 2→6 replicas. Rate limit 10000/min/IP. Proxy cache 60s. Security headers. Bot detection. Zipkin tracing. |
-| 8 | **external-dns** | ExternalDNS (Helm), IAM Role (IRSA) | Watches Kong Ingress → auto-creates Route53 CNAME records. 30s poll interval. TXT ownership (won't touch your other records). |
-| 9 | **external-secrets** | ESO (Helm), ClusterSecretStore, IAM Role (IRSA), app-secrets placeholder | IRSA auth (no webhook timing issues). Creates ClusterSecretStore for cluster-wide access. App secrets pre-created with CHANGE_ME. |
-| 10 | **gitops** | Harness GitOps Agent (ArgoCD HA), Repo, Cluster, Application | Downloads agent YAML from Harness API. Removes auto-upgrader CronJob. Waits for agent + app-controller + Redis HA. Syncs Helm chart from GitHub. |
-| 11 | **harness-platform** | Service, Environments, Connectors (Prometheus, ELK, K8s), OPA Policy, Monitored Service, Variables | Prometheus connector for CV. ELK connector via API (secret-based auth). OPA policy + policy set via API. Monitored service with Prometheus health source. |
-| 12 | **monitoring** | Prometheus + Grafana (ArgoCD Helm App), Grafana dashboards (ConfigMaps) | kube-prometheus-stack 62.3.0. 50Gi persistent storage. Auto-sync + self-heal. Pod health + Kong dashboards. |
-| 13 | **logging** | Elasticsearch + Kibana + Fluentd (ArgoCD Helm Apps), Kibana index pattern job | ES 7.17 (xpack trial auth). Single-node (yellow health check). Fluentd DaemonSet. Auto-creates fluentd* index pattern. |
-| 14 | **tracing** | Jaeger All-in-One + OTel Collector (ArgoCD Helm Apps), Ingress | Jaeger all-in-one (collector+query+badger in 1 pod). OTLP enabled on 4317. OTel Collector receives from apps, exports to Jaeger. |
-| 15 | **falco** | Falco Runtime Security (ArgoCD Helm App), Sidekick UI with auth | DaemonSet on every node. modern_ebpf driver. Detects shell exec, privilege escalation. UI password in AWS SM. |
-
-### Module Dependency Flow
-
-```
-VPC → EKS → [Bastion, Delegate, Kong, ExternalDNS, ExternalSecrets, GitOps, Monitoring, Logging, Tracing, Falco]
-                ↓
-              RDS (private subnets)
-                ↓
-              ECR (images for pipeline)
-                ↓
-         HarnessPlatform (service, envs, CV)
-```
-
----
-
 ## 📁 Project Structure
 
 ```
