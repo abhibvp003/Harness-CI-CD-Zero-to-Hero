@@ -1,4 +1,4 @@
-# Latest Amazon Linux 2023 AMI (standard, not minimal — includes cloud-init user_data execution)
+# Latest Amazon Linux 2023 AMI 
 data "aws_ami" "amazon_linux" {
   most_recent = true
   owners      = ["amazon"]
@@ -63,7 +63,7 @@ resource "aws_security_group" "bastion" {
   tags = merge(var.tags, { Name = "${var.cluster_name}-bastion-sg" })
 }
 
-# The bastion EC2 instance used to access the private EKS cluster
+# bastion EC2 instance used to access the {private EKS cluster}
 resource "aws_instance" "bastion" {
   ami                    = data.aws_ami.amazon_linux.id
   instance_type          = var.instance_type

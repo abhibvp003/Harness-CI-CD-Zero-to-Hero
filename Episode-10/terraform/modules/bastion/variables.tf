@@ -1,4 +1,4 @@
-# Cluster name for bastion resource tagging
+# Cluster name for bastion resource tagging (from GitHub Variable: CLUSTER_NAME)
 variable "cluster_name" {
   type = string
 }
@@ -30,7 +30,7 @@ variable "tags" {
   default = {}
 }
 
-# AWS region for bastion host deployment
+# AWS region for bastion host deployment (from GitHub Variable: AWS_REGION)
 variable "aws_region" {
   description = "AWS region"
   type        = string

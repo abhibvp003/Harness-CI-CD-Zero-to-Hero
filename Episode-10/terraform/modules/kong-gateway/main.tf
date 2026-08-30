@@ -47,7 +47,6 @@ resource "helm_release" "kong" {
         http = { enabled = true, containerPort = 8000, servicePort = 80 }
         tls  = { enabled = true, containerPort = 8443, servicePort = 443 }
       }
-      # NLB listens on 443 (TLS terminated via ACM), forwards decrypted HTTP to Kong 8443
       # Kong 8443 is the default TLS listener but NLB sends plain HTTP — works because backend-protocol=http
 
       # Admin API (ClusterIP — controller sidecar connects via HTTPS 8444 internally)
@@ -165,7 +164,7 @@ resource "kubectl_manifest" "kong_admin_ingress" {
 # Security + Observability at gateway level
 # ═══════════════════════════════════════════════════════════════════
 
-# Plugin 1: Rate Limiting — 100 requests/minute per IP (DDoS protection)
+# Plugin 1: Rate Limiting — 10000 requests/minute per IP (DDoS protection)
 resource "kubectl_manifest" "kong_rate_limit" {
   yaml_body = yamlencode({
     apiVersion = "configuration.konghq.com/v1"
@@ -503,6 +502,7 @@ resource "kubectl_manifest" "kong_upstream_timeout" {
 }
 
 # Plugin 18: Zipkin — Distributed tracing (sends trace data to Jaeger/Zipkin)
+# open-source distributed tracing system
 resource "kubectl_manifest" "kong_zipkin" {
   yaml_body = yamlencode({
     apiVersion = "configuration.konghq.com/v1"

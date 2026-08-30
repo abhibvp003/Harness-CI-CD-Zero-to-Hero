@@ -9,14 +9,14 @@
 pipeline:
   name: ep10-enterprise-gitops
   identifier: ep10_enterprise_gitops
-  projectIdentifier: HarnessCICDZerotoHero
-  orgIdentifier: default
+  projectIdentifier: HarnessCICDZerotoHero # ← CHANGE: your project ID
+  orgIdentifier: default # ← CHANGE: your org
   tags: {}
   properties:
     ci:
       codebase:
-        connectorRef: account.Github
-        repoName: Harness-CI-CD-Zero-to-Hero
+        connectorRef: account.Github # ← CHANGE: your GitHub connector
+        repoName: Harness-CI-CD-Zero-to-Hero # ← CHANGE: your repo name
         build: <+input>
   stages:
     # ============================================
@@ -33,7 +33,7 @@ pipeline:
           infrastructure:
             type: KubernetesDirect
             spec:
-              connectorRef: k8sdelegate
+              connectorRef: k8sdelegate # ← CHANGE: your K8s connector
               namespace: harness-delegate-ng
               automountServiceAccountToken: true
               os: Linux
@@ -51,7 +51,7 @@ pipeline:
                       name: Gitleaks Scan
                       identifier: gitleaks
                       spec:
-                        connectorRef: dockerhub
+                        connectorRef: dockerhub # ← CHANGE: your Docker Hub connector (same for all Run steps below)
                         shell: Sh
                         image: zricethezav/gitleaks:latest
                         command: |-
@@ -139,7 +139,7 @@ pipeline:
           infrastructure:
             type: KubernetesDirect
             spec:
-              connectorRef: k8sdelegate
+              connectorRef: k8sdelegate # ← CHANGE: your K8s connector
               namespace: harness-delegate-ng
               automountServiceAccountToken: true
               os: Linux
@@ -157,7 +157,7 @@ pipeline:
                   name: Restore Cache
                   identifier: restore_cache
                   spec:
-                    connectorRef: account.aws_account
+                    connectorRef: account.aws_account # ← CHANGE: your AWS OIDC connector
                     region: <+variable.aws_region>
                     bucket: <+variable.ci_cache_bucket>
                     key: ep10-build-cache
@@ -180,7 +180,7 @@ pipeline:
                       name: Push Frontend
                       identifier: push_frontend
                       spec:
-                        connectorRef: account.aws_account
+                        connectorRef: account.aws_account # ← CHANGE: your AWS OIDC connector (same for all push steps below)
                         region: <+variable.aws_region>
                         account: <+variable.aws_account_id>
                         imageName: frontend
@@ -422,7 +422,7 @@ pipeline:
           infrastructure:
             type: KubernetesDirect
             spec:
-              connectorRef: k8sdelegate
+              connectorRef: k8sdelegate # ← CHANGE: your K8s connector
               namespace: harness-delegate-ng
               automountServiceAccountToken: true
               os: Linux
@@ -441,7 +441,7 @@ pipeline:
                       name: AI Security Agent
                       identifier: ai_security_agent
                       spec:
-                        connectorRef: dockerhub
+                        connectorRef: dockerhub # ← CHANGE: your Docker Hub connector (same for all AI agent steps)
                         shell: Sh
                         image: python:3.11-slim
                         envVariables:
@@ -544,7 +544,7 @@ pipeline:
           deploymentType: Kubernetes
           gitOpsEnabled: true
           service:
-            serviceRef: online_boutique
+            serviceRef: online_boutique # ← CHANGE: your service ID
             serviceInputs:
               serviceDefinition:
                 type: Kubernetes
@@ -557,11 +557,11 @@ pipeline:
                           spec:
                             tag: v<+pipeline.sequenceId>
           environment:
-            environmentRef: production
+            environmentRef: production # ← CHANGE: your environment ID
             deployToAll: false
             gitOpsClusters:
-              - identifier: incluster
-                agentIdentifier: ep10gitopsagent
+              - identifier: incluster # ← CHANGE: your GitOps cluster ID
+                agentIdentifier: ep10gitopsagent # ← CHANGE: your GitOps agent ID
           execution:
             steps:
               # Step 1: Update ALL image tags in values.yaml via PR
@@ -644,8 +644,8 @@ pipeline:
                     applyOnly: false
                     forceApply: false
                     applicationsList:
-                      - applicationName: online-boutique
-                        agentId: ep10gitopsagent
+                      - applicationName: online-boutique # ← CHANGE: your GitOps app name
+                        agentId: ep10gitopsagent # ← CHANGE: your GitOps agent ID
                     retry: false
                     syncOptions:
                       skipSchemaValidation: false
@@ -663,8 +663,8 @@ pipeline:
                   timeout: 5m
                   spec:
                     applicationsList:
-                      - applicationName: online-boutique
-                        agentId: ep10gitopsagent
+                      - applicationName: online-boutique # ← CHANGE: your GitOps app name
+                        agentId: ep10gitopsagent # ← CHANGE: your GitOps agent ID
 
               # Step 6: Continuous Verification
               # Continuous Verification - compares metrics before vs after deploy
@@ -719,8 +719,8 @@ pipeline:
                     applyOnly: false
                     forceApply: false
                     applicationsList:
-                      - applicationName: online-boutique
-                        agentId: ep10gitopsagent
+                      - applicationName: online-boutique # ← CHANGE: your GitOps app name
+                        agentId: ep10gitopsagent # ← CHANGE: your GitOps agent ID
                     retry: false
                     syncOptions:
                       skipSchemaValidation: false
@@ -753,7 +753,7 @@ pipeline:
           infrastructure:
             type: KubernetesDirect
             spec:
-              connectorRef: k8sdelegate
+              connectorRef: k8sdelegate # ← CHANGE: your K8s connector
               namespace: harness-delegate-ng
               automountServiceAccountToken: true
               os: Linux
@@ -771,7 +771,7 @@ pipeline:
                   name: OWASP ZAP Baseline Scan
                   identifier: owasp_zap_scan
                   spec:
-                    connectorRef: dockerhub
+                    connectorRef: dockerhub # ← CHANGE: your Docker Hub connector
                     shell: Sh
                     image: ghcr.io/zaproxy/zaproxy:stable
                     resources:

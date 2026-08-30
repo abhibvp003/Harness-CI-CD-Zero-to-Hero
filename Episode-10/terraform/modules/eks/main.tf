@@ -1,6 +1,6 @@
 # ═══════════════════════════════════════════════════════════════════
-# EKS Cluster — Standard Managed (NOT Auto Mode)
-# Production pattern: Managed Node Groups + Cluster Autoscaler
+# EKS Cluster — Standard Managed
+# Production : Managed Node Groups + Cluster Autoscaler
 # High availability, auto-scaling, no taints on worker nodes
 # IRSA (IAM Roles for Service Accounts) for workload IAM access
 # ═══════════════════════════════════════════════════════════════════
@@ -94,7 +94,7 @@ resource "aws_kms_alias" "eks" {
 }
 
 # ═══════════════════════════════════════════════════════════════════
-# EKS Cluster (Standard — no Auto Mode)
+# EKS Cluster (Standard)
 # ═══════════════════════════════════════════════════════════════════
 resource "aws_eks_cluster" "main" {
   name     = var.cluster_name
@@ -308,8 +308,6 @@ resource "aws_launch_template" "ci" {
 
 # ═══════════════════════════════════════════════════════════════════
 # AWS Load Balancer Controller — creates NLB/ALB from K8s Service annotations
-# Required for service.beta.kubernetes.io/aws-load-balancer-type: external
-# IRSA: projected SA token provides credentials instantly at pod start
 # ═══════════════════════════════════════════════════════════════════
 resource "aws_iam_policy" "lb_controller" {
   name = "${var.cluster_name}-lb-controller-policy"
@@ -423,7 +421,6 @@ resource "helm_release" "aws_lb_controller" {
 # ═══════════════════════════════════════════════════════════════════
 # Cluster Autoscaler — auto-scales node groups when pods are pending
 # Monitors pending pods → increases desired_size → new nodes join cluster
-# IRSA: projected SA token provides credentials instantly at pod start
 # ═══════════════════════════════════════════════════════════════════
 resource "aws_iam_policy" "cluster_autoscaler" {
   name = "${var.cluster_name}-autoscaler-policy"

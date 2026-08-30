@@ -111,7 +111,7 @@ resource "harness_platform_service" "online_boutique" {
                   store:
                     type: Github
                     spec:
-                      connectorRef: account.Github
+                      connectorRef: account.Github   
                       gitFetchType: Branch
                       repoName: ${var.github_repo}
                       branch: ${var.github_branch}

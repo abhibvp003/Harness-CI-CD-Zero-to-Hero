@@ -1,5 +1,5 @@
 # ═══════════════════════════════════════════════════════════════════
-# GitOps Module — Official Harness Pattern (from harness-community/gitops-terraform-onboarding)
+# GitOps Module — 
 # Flow: Register Agent → Get Deploy YAML → kubectl apply → Wait → Create Repo → Cluster → App
 #Harness API → Terraform data source → /tmp/gitops_agent.yaml → kubectl apply → deleted when runner exits
 # ═══════════════════════════════════════════════════════════════════

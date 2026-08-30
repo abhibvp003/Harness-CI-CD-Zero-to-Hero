@@ -1,9 +1,9 @@
-# AWS region for Secrets Manager access
+# AWS region for Secrets Manager access (from GitHub Variable: AWS_REGION)
 variable "aws_region" {
   type = string
 }
 
-# EKS cluster name (used for resource naming)
+# EKS cluster name (used for resource naming) (from GitHub Variable: CLUSTER_NAME)
 variable "cluster_name" {
   description = "EKS cluster name"
   type        = string

@@ -1,7 +1,6 @@
 # ═══════════════════════════════════════════════════════════════════
 # External Secrets Operator — Syncs AWS Secrets Manager → K8s Secrets
 # IRSA grants SecretsManager access via projected SA tokens
-# No webhook timing issues — credentials available instantly at pod start
 # ═══════════════════════════════════════════════════════════════════
 
 # ─────────────────────────────────────────

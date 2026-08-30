@@ -1,9 +1,6 @@
 # ═══════════════════════════════════════════════════════════════════
 # ExternalDNS — Auto-creates Route53 records from Ingress resources
-# MNC Pattern: Zero manual DNS management
 # Watches Ingress → creates CNAME in Route53 → deletes on Ingress removal
-# Only manages records it creates (ownership via TXT records)
-# IRSA: projected SA token provides credentials instantly at pod start
 # ═══════════════════════════════════════════════════════════════════
 
 # ─────────────────────────────────────────

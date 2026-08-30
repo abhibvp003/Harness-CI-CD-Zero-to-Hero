@@ -1,9 +1,9 @@
-# Harness account ID for delegate registration
+# Harness account ID for delegate registration (from GitHub Variable: HARNESS_ACCOUNT_ID)
 variable "account_id" {
   type = string
 }
 
-# Token used to authenticate the delegate
+# Token used to authenticate the delegate (from GitHub Secret: HARNESS_DELEGATE_TOKEN)
 variable "delegate_token" {
   type      = string
   sensitive = true

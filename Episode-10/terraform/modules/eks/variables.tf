@@ -1,4 +1,4 @@
-# Name identifier for the EKS cluster
+# Name identifier for the EKS cluster (from GitHub Variable: CLUSTER_NAME)
 variable "cluster_name" {
   type = string
 }
@@ -34,7 +34,7 @@ variable "tags" {
   default = {}
 }
 
-# AWS region for LB Controller and Cluster Autoscaler
+# AWS region for LB Controller and Cluster Autoscaler (from GitHub Variable: AWS_REGION)
 variable "region" {
   type = string
 }

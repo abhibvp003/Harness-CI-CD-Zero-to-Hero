@@ -4,7 +4,7 @@ variable "vpc_cidr" {
   type        = string
 }
 
-# Name used for EKS cluster and resource tagging
+# Name used for EKS cluster and resource tagging (from GitHub Variable: CLUSTER_NAME)
 variable "cluster_name" {
   description = "Cluster name for tagging"
   type        = string
