@@ -122,6 +122,36 @@ resource "harness_platform_gitops_applications" "jaeger" {
             name  = "allInOne.extraEnv[3].value"
             value = "/badger/data"
           }
+          # Expose OTLP ports (4317 gRPC, 4318 HTTP) on the all-in-one pod + service
+          parameters {
+            name  = "allInOne.extraEnv[4].name"
+            value = "COLLECTOR_OTLP_GRPC_HOST_PORT"
+          }
+          parameters {
+            name  = "allInOne.extraEnv[4].value"
+            value = ":4317"
+          }
+          parameters {
+            name  = "allInOne.extraEnv[5].name"
+            value = "COLLECTOR_OTLP_HTTP_HOST_PORT"
+          }
+          parameters {
+            name  = "allInOne.extraEnv[5].value"
+            value = ":4318"
+          }
+          # Persistent storage for badger (survives pod restarts)
+          parameters {
+            name  = "storage.badger.persistence.enabled"
+            value = "true"
+          }
+          parameters {
+            name  = "storage.badger.persistence.size"
+            value = "10Gi"
+          }
+          parameters {
+            name  = "storage.badger.persistence.storageClass"
+            value = "auto-ebs-sc"
+          }
           parameters {
             name  = "spark.enabled"
             value = "false"
@@ -204,7 +234,7 @@ resource "harness_platform_gitops_applications" "otel_collector" {
                   endpoint: 0.0.0.0:9411
               exporters:
                 otlp/jaeger:
-                  endpoint: jaeger-query:4317
+                  endpoint: jaeger-otlp:4317
                   tls:
                     insecure: true
                 debug:
@@ -275,6 +305,32 @@ resource "kubectl_manifest" "jaeger_ingress" {
           }]
         }
       }]
+    }
+  })
+
+  depends_on = [harness_platform_gitops_applications.jaeger, kubernetes_namespace.tracing]
+}
+
+# OTLP Service — exposes port 4317 on the Jaeger all-in-one pod
+# The all-in-one Helm service only exposes query (16686); OTel Collector needs OTLP gRPC (4317)
+# This dedicated service routes otel-collector → jaeger all-in-one on 4317
+resource "kubectl_manifest" "jaeger_otlp_service" {
+  yaml_body = yamlencode({
+    apiVersion = "v1"
+    kind       = "Service"
+    metadata = {
+      name      = "jaeger-otlp"
+      namespace = "tracing"
+    }
+    spec = {
+      selector = {
+        "app.kubernetes.io/component" = "all-in-one"
+        "app.kubernetes.io/instance"  = "jaeger"
+      }
+      ports = [
+        { name = "otlp-grpc", port = 4317, targetPort = 4317, protocol = "TCP" },
+        { name = "otlp-http", port = 4318, targetPort = 4318, protocol = "TCP" }
+      ]
     }
   })
 
