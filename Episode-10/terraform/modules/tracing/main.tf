@@ -96,7 +96,7 @@ resource "harness_platform_gitops_applications" "jaeger" {
           }
           parameters {
             name  = "allInOne.extraEnv[0].value"
-            value = "true"
+            value = "\"true\""
           }
           parameters {
             name  = "allInOne.extraEnv[1].name"
@@ -104,7 +104,7 @@ resource "harness_platform_gitops_applications" "jaeger" {
           }
           parameters {
             name  = "allInOne.extraEnv[1].value"
-            value = "false"
+            value = "\"false\""
           }
           parameters {
             name  = "allInOne.extraEnv[2].name"
