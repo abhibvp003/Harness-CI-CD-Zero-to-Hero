@@ -50,6 +50,7 @@ resource "aws_iam_role_policy_attachment" "node_policies" {
     "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
     "arn:aws:iam::aws:policy/SecretsManagerReadWrite",
     "arn:aws:iam::aws:policy/AmazonRoute53FullAccess",
+    "arn:aws:iam::aws:policy/AmazonS3FullAccess", # CI builds + ZAP report upload to S3 cache bucket
     "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy",
   ])
   policy_arn = each.value
