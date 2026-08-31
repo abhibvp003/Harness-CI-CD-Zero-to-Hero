@@ -712,7 +712,7 @@ pipeline:
                   type: GitOpsSync
                   name: Rollback Sync
                   identifier: rollback_sync
-                  timeout: 10m
+                  timeout: 20m # ← CHANGE: raised from 10m — rollback sync must wait for reverted pods to become Healthy
                   spec:
                     prune: true
                     dryRun: false
@@ -835,8 +835,13 @@ pipeline:
                       # Install AWS CLI (ZAP image is Debian-based — try pip then apt)
                       if ! command -v aws >/dev/null 2>&1; then
                         pip install awscli -q || \
-                        (apt-get update -qq && apt-get install -y -qq awscli)
+                        (apt-get update -qq && apt-get install -y -qq awscli) || true
                       fi
+                      # Force AWS CLI to use the EC2 node instance profile via IMDS (v2)
+                      # (Harness CI pod has no SA credentials — must reach node metadata endpoint)
+                      export AWS_EC2_METADATA_DISABLED=false
+                      export AWS_DEFAULT_REGION=<+variable.aws_region>
+                      export AWS_REGION=<+variable.aws_region>
                       BUCKET="<+variable.ci_cache_bucket>"
                       REPORT_KEY="zap-reports/zap-report-<+pipeline.sequenceId>.html"
                       JSON_KEY="zap-reports/zap-report-<+pipeline.sequenceId>.json"
