@@ -782,15 +782,17 @@ pipeline:
                       echo "  OWASP ZAP — Dynamic Application Security Test"
                       echo "  Target: https://app.<+variable.domain_name>"
                       echo "============================================"
-                      mkdir -p /zap/wrk
-                      # -r/-J are RELATIVE to /zap/wrk (ZAP working dir) — use filename only, not full path
-                      cd /zap/wrk
+                      # ZAP baseline hardcodes /zap/wrk as work dir and prepends it to -r/-J.
+                      # Root cause of "NoSuchFileException /zap/wrk/zap/wrk/...": passing a full path.
+                      # FIX: pass ONLY the filename (no path) so ZAP writes to /zap/wrk/<file>.
+                      # Ensure /zap/wrk exists and is writable by the zap user.
+                      mkdir -p /zap/wrk && chmod 777 /zap/wrk 2>/dev/null || true
                       zap-baseline.py -t https://app.<+variable.domain_name> \
                         -r zap-report.html \
                         -J zap-report.json \
                         -I || true
 
-                      # Copy report to workspace
+                      # ZAP wrote reports to /zap/wrk — copy them to the Harness workspace
                       cp /zap/wrk/zap-report.html /harness/zap-report.html 2>/dev/null || true
                       cp /zap/wrk/zap-report.json /harness/zap-report.json 2>/dev/null || true
 
@@ -800,14 +802,14 @@ pipeline:
                       echo "============================================"
                       echo ""
 
-                      # Parse JSON report for readable table output
-                      if [ -f /zap/wrk/zap-report.json ]; then
+                      # Parse JSON report for readable table output (read from /harness copy)
+                      if [ -f /harness/zap-report.json ]; then
                         echo "| Risk Level | Alert Count |"
                         echo "|------------|-------------|"
-                        HIGH=$(python3 -c "import json; d=json.load(open('/zap/wrk/zap-report.json')); print(len([a for s in d.get('site',[]) for a in s.get('alerts',[]) if a.get('riskcode','0')=='3']))" 2>/dev/null || echo "0")
-                        MEDIUM=$(python3 -c "import json; d=json.load(open('/zap/wrk/zap-report.json')); print(len([a for s in d.get('site',[]) for a in s.get('alerts',[]) if a.get('riskcode','0')=='2']))" 2>/dev/null || echo "0")
-                        LOW=$(python3 -c "import json; d=json.load(open('/zap/wrk/zap-report.json')); print(len([a for s in d.get('site',[]) for a in s.get('alerts',[]) if a.get('riskcode','0')=='1']))" 2>/dev/null || echo "0")
-                        INFO=$(python3 -c "import json; d=json.load(open('/zap/wrk/zap-report.json')); print(len([a for s in d.get('site',[]) for a in s.get('alerts',[]) if a.get('riskcode','0')=='0']))" 2>/dev/null || echo "0")
+                        HIGH=$(python3 -c "import json; d=json.load(open('/harness/zap-report.json')); print(len([a for s in d.get('site',[]) for a in s.get('alerts',[]) if a.get('riskcode','0')=='3']))" 2>/dev/null || echo "0")
+                        MEDIUM=$(python3 -c "import json; d=json.load(open('/harness/zap-report.json')); print(len([a for s in d.get('site',[]) for a in s.get('alerts',[]) if a.get('riskcode','0')=='2']))" 2>/dev/null || echo "0")
+                        LOW=$(python3 -c "import json; d=json.load(open('/harness/zap-report.json')); print(len([a for s in d.get('site',[]) for a in s.get('alerts',[]) if a.get('riskcode','0')=='1']))" 2>/dev/null || echo "0")
+                        INFO=$(python3 -c "import json; d=json.load(open('/harness/zap-report.json')); print(len([a for s in d.get('site',[]) for a in s.get('alerts',[]) if a.get('riskcode','0')=='0']))" 2>/dev/null || echo "0")
                         echo "| HIGH       | $HIGH       |"
                         echo "| MEDIUM     | $MEDIUM     |"
                         echo "| LOW        | $LOW        |"
@@ -816,7 +818,7 @@ pipeline:
                         echo "--- ALERT DETAILS ---"
                         python3 -c "
                       import json
-                      d=json.load(open('/zap/wrk/zap-report.json'))
+                      d=json.load(open('/harness/zap-report.json'))
                       risks={3:'HIGH',2:'MEDIUM',1:'LOW',0:'INFO'}
                       for site in d.get('site',[]):
                         for alert in site.get('alerts',[]):
@@ -826,24 +828,23 @@ pipeline:
                           print(f'  [{risk}] {name} ({count} instances)')
                       " 2>/dev/null || echo "  (Could not parse alerts)"
                       else
-                        echo "  JSON report not available. Showing HTML summary:"
-                        echo ""
-                        # Extract pass/fail lines from ZAP console output
-                        grep -E "^(PASS|FAIL|WARN)" /zap/wrk/zap-report.html 2>/dev/null | head -30 || echo "  Report generated at /harness/zap-report.html"
+                        echo "  JSON report not available. Showing console PASS/WARN/FAIL summary above."
                       fi
 
-                      # Upload HTML report to S3 for browser access
+                      # Upload reports to S3 folder "zap-reports/" (HTML + JSON) for browser access
                       pip install awscli -q 2>/dev/null || true
                       BUCKET="<+variable.ci_cache_bucket>"
                       REPORT_KEY="zap-reports/zap-report-<+pipeline.sequenceId>.html"
+                      JSON_KEY="zap-reports/zap-report-<+pipeline.sequenceId>.json"
                       aws s3 cp /harness/zap-report.html "s3://${BUCKET}/${REPORT_KEY}" --content-type "text/html" 2>/dev/null || true
+                      aws s3 cp /harness/zap-report.json "s3://${BUCKET}/${JSON_KEY}" --content-type "application/json" 2>/dev/null || true
 
                       # Generate presigned URL (valid 7 days)
                       REPORT_URL=$(aws s3 presign "s3://${BUCKET}/${REPORT_KEY}" --expires-in 604800 2>/dev/null || echo "")
 
                       echo ""
                       echo "============================================"
-                      echo "  URLs Scanned: $(grep -c 'url' /zap/wrk/zap-report.json 2>/dev/null || echo 'N/A')"
+                      echo "  URLs Scanned: $(grep -c 'url' /harness/zap-report.json 2>/dev/null || echo 'N/A')"
                       echo "  HTML Report: /harness/zap-report.html"
                       echo "  JSON Report: /harness/zap-report.json"
                       echo "============================================"
