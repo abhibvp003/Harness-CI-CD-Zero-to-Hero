@@ -65,11 +65,22 @@ def read_diff_file(filepath):
 def read_source_files(file_list):
     """Read source files for review"""
     content = ""
+    # Paths from git log are relative to repo root (/harness), but this agent
+    # runs from /harness/Episode-10/ai-agents. Try both the given path and /harness prefix.
+    search_roots = ["", "/harness/", os.path.join(os.getcwd(), "")]
     for filepath in file_list.split(","):
         filepath = filepath.strip()
-        if os.path.exists(filepath):
+        if not filepath:
+            continue
+        resolved = None
+        for root in search_roots:
+            candidate = os.path.join(root, filepath) if root else filepath
+            if os.path.exists(candidate):
+                resolved = candidate
+                break
+        if resolved:
             try:
-                with open(filepath, "r") as f:
+                with open(resolved, "r") as f:
                     file_content = f.read()[:3000]
                     content += f"\n--- FILE: {filepath} ---\n{file_content}\n"
             except IOError:

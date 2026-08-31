@@ -783,9 +783,11 @@ pipeline:
                       echo "  Target: https://app.<+variable.domain_name>"
                       echo "============================================"
                       mkdir -p /zap/wrk
+                      # -r/-J are RELATIVE to /zap/wrk (ZAP working dir) — use filename only, not full path
+                      cd /zap/wrk
                       zap-baseline.py -t https://app.<+variable.domain_name> \
-                        -r /zap/wrk/zap-report.html \
-                        -J /zap/wrk/zap-report.json \
+                        -r zap-report.html \
+                        -J zap-report.json \
                         -I || true
 
                       # Copy report to workspace
