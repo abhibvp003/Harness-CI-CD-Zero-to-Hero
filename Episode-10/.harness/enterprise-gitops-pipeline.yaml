@@ -712,7 +712,7 @@ pipeline:
                   type: GitOpsSync
                   name: Rollback Sync
                   identifier: rollback_sync
-                  timeout: 20m # ← CHANGE: raised from 10m — rollback sync must wait for reverted pods to become Healthy
+                  timeout: 10m
                   spec:
                     prune: true
                     dryRun: false
