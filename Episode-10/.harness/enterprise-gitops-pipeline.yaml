@@ -832,12 +832,17 @@ pipeline:
                       fi
 
                       # Upload reports to S3 folder "zap-reports/" (HTML + JSON) for browser access
-                      pip install awscli -q 2>/dev/null || true
+                      # Install AWS CLI (ZAP image is Debian-based — try pip then apt)
+                      if ! command -v aws >/dev/null 2>&1; then
+                        pip install awscli -q || \
+                        (apt-get update -qq && apt-get install -y -qq awscli)
+                      fi
                       BUCKET="<+variable.ci_cache_bucket>"
                       REPORT_KEY="zap-reports/zap-report-<+pipeline.sequenceId>.html"
                       JSON_KEY="zap-reports/zap-report-<+pipeline.sequenceId>.json"
-                      aws s3 cp /harness/zap-report.html "s3://${BUCKET}/${REPORT_KEY}" --content-type "text/html" 2>/dev/null || true
-                      aws s3 cp /harness/zap-report.json "s3://${BUCKET}/${JSON_KEY}" --content-type "application/json" 2>/dev/null || true
+                      echo "Uploading reports to s3://${BUCKET}/zap-reports/ ..."
+                      aws s3 cp /harness/zap-report.html "s3://${BUCKET}/${REPORT_KEY}" --content-type "text/html" || echo "HTML upload failed"
+                      aws s3 cp /harness/zap-report.json "s3://${BUCKET}/${JSON_KEY}" --content-type "application/json" || echo "JSON upload failed"
 
                       # Generate presigned URL (valid 7 days)
                       REPORT_URL=$(aws s3 presign "s3://${BUCKET}/${REPORT_KEY}" --expires-in 604800 2>/dev/null || echo "")
