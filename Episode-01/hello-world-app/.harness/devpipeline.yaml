@@ -1,31 +1,14 @@
-# ============================================
-# HARNESS CI PIPELINE - Hello World (Episode 1)
-# ============================================
-# If you are using this pipeline, change these values:
-#
-# 1. projectIdentifier → Your Harness project ID (find in URL after /projects/)
-# 2. orgIdentifier → Your organization name (usually "default")
-# 3. connectorRef → Your GitHub connector name (with "account." prefix if account-level)
-# 4. repoName → Your GitHub repository name (if using codebase)
-#
-# Infrastructure: Harness Cloud (free, needs credit card verification)
-# No Delegate needed for this pipeline.
-# ============================================
 pipeline:
   name: devpipeline
   identifier: devpipeline
-  # CHANGE THIS: Your project ID (find in URL after /projects/)
   projectIdentifier: HarnessCICDZerotoHero
-  # CHANGE THIS: Your organization name (usually "default")
   orgIdentifier: default
   tags: {}
   properties:
     ci:
       codebase:
-        # CHANGE THIS: Your GitHub connector name (add "account." if it's account-level)
         connectorRef: account.Github
-        # CHANGE THIS: Your GitHub repository name
-        repoName: Harness-CI-CD-Zero-to-Hero
+        repoName: abhibvp003/Harness-CI-CD-Zero-to-Hero
         build: <+input>
   stages:
     - stage:
