@@ -1,46 +1,15 @@
-# ============================================
-# PIPELINE: Terraform on Harness Cloud
-# Creates VPC + EC2 or Destroys everything
-# ============================================
-# PREREQUISITES:
-#   1. S3 bucket created manually (for Terraform state)
-#   2. Secrets in Harness:
-#      - aws_access_key_id (AWS Access Key)
-#      - aws_secret_access_key (AWS Secret Key)
-#   3. Variables in Harness:
-#      - s3_bucket_name (your state bucket)
-#      - aws_region (us-east-1)
-#
-# WHY secrets needed here:
-#   OIDC connector works for Harness features (deploy, etc.)
-#   But Terraform CLI needs AWS_ACCESS_KEY_ID + SECRET as env vars
-#   Harness Cloud Run step cannot pass OIDC token to terraform CLI
-#
-# HOW TO USE:
-#   Run pipeline → Choose: "apply" or "destroy"
-#
-# CHANGE THESE:
-#   - projectIdentifier
-#   - orgIdentifier
-#   - connectorRef (GitHub)
-#   - secret names (if different)
-# ============================================
 pipeline:
   name: terraform-infra-pipeline
   identifier: terraform_infra_pipeline
-  # CHANGE THIS: Your project ID
   projectIdentifier: HarnessCICDZerotoHero
-  # CHANGE THIS: Your org
   orgIdentifier: default
   tags: {}
   properties:
     ci:
       codebase:
-        # CHANGE THIS: Your GitHub connector
         connectorRef: account.Github
-        repoName: Harness-CI-CD-Zero-to-Hero
+        repoName: abhibvp003/Harness-CI-CD-Zero-to-Hero
         build: <+input>
-  # Runtime input: user picks "apply" or "destroy"
   variables:
     - name: tf_action
       type: String
@@ -50,7 +19,7 @@ pipeline:
     - stage:
         name: terraform
         identifier: terraform
-        description: "Apply or Destroy AWS infrastructure"
+        description: Apply or Destroy AWS infrastructure
         type: CI
         spec:
           cloneCodebase: true
@@ -62,7 +31,6 @@ pipeline:
             spec: {}
           execution:
             steps:
-              # Step 1: Terraform Init
               - step:
                   type: Run
                   name: Terraform Init
@@ -70,7 +38,6 @@ pipeline:
                   spec:
                     shell: Sh
                     envVariables:
-                      # CHANGE THIS: Your AWS secret names in Harness
                       AWS_ACCESS_KEY_ID: <+secrets.getValue("aws_access_key_id")>
                       AWS_SECRET_ACCESS_KEY: <+secrets.getValue("aws_secret_access_key")>
                       AWS_DEFAULT_REGION: <+variable.aws_region>
@@ -82,8 +49,6 @@ pipeline:
                         -backend-config="key=harness-demo/terraform.tfstate" \
                         -backend-config="region=<+variable.aws_region>"
                       echo "=== Init Done! ==="
-
-              # Step 2: Terraform Plan
               - step:
                   type: Run
                   name: Terraform Plan
@@ -103,8 +68,6 @@ pipeline:
                         terraform plan -no-color
                       fi
                       echo "=== Plan Done! ==="
-
-              # Step 3: Terraform Apply or Destroy
               - step:
                   type: Run
                   name: Terraform Execute
