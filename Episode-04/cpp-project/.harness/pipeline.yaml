@@ -1,45 +1,29 @@
-# ============================================
-# PIPELINE: C++ Enterprise CI Pipeline (Episode 4)
-# ============================================
-# Flow: Clone → Install Deps → Unit Test → Build → Docker Build → Push Docker Hub → Push ECR
-#
-# CHANGE THESE:
-#   - projectIdentifier
-#   - orgIdentifier
-#   - connectorRef (GitHub, Docker Hub, AWS)
-# ============================================
 pipeline:
   name: cpp-enterprise-ci-pipeline
   identifier: cpp_enterprise_ci_pipeline
-  # CHANGE THIS: Your project ID
   projectIdentifier: HarnessCICDZerotoHero
-  # CHANGE THIS: Your org
   orgIdentifier: default
   tags: {}
   properties:
     ci:
       codebase:
-        # CHANGE THIS: Your GitHub connector
-        # This connector is at ACCOUNT level (Account Settings → Connectors)
-        # We created this in Episode 1
         connectorRef: account.Github
-        repoName: Harness-CI-CD-Zero-to-Hero
+        repoName: abhibvp003/Harness-CI-CD-Zero-to-Hero
         build: <+input>
-  # Runtime Inputs: user selects version and environment when running
   variables:
     - name: deploy_version
       type: String
-      description: "Enter deploy version (e.g. 1.0.0, 2.1.3)"
+      description: Enter deploy version (e.g. 1.0.0, 2.1.3)
       value: <+input>
     - name: environment
       type: String
-      description: "Select environment"
+      description: Select environment
       value: <+input>.allowedValues(development,testing,staging,production)
   stages:
     - stage:
         name: build-cpp
         identifier: build_cpp
-        description: "Enterprise CI Pipeline for C++ App"
+        description: Enterprise CI Pipeline for C++ App
         type: CI
         spec:
           cloneCodebase: true
@@ -51,7 +35,6 @@ pipeline:
             spec: {}
           execution:
             steps:
-              # Step 1: Install Dependencies
               - step:
                   type: Run
                   name: Install Dependencies
@@ -65,8 +48,6 @@ pipeline:
                       echo "CMake version: $(cmake --version | head -1)"
                       echo "GCC version: $(g++ --version | head -1)"
                       echo "=== Dependencies Installed! ==="
-
-              # Step 2: Unit Tests
               - step:
                   type: Run
                   name: Unit Tests
@@ -81,8 +62,6 @@ pipeline:
                       make tests
                       ./tests
                       echo "=== All Tests Passed! ==="
-
-              # Step 3: Build Application
               - step:
                   type: Run
                   name: Build Application
@@ -98,16 +77,11 @@ pipeline:
                       echo "Binary size:"
                       ls -lh app
                       echo "=== Build Successful! ==="
-
-              # Step 4: Build and Push to Docker Hub
               - step:
                   type: BuildAndPushDockerRegistry
                   name: Push to Docker Hub
                   identifier: push_dockerhub
                   spec:
-                    # CHANGE THIS: Your Docker Hub connector
-                    # This connector is at PROJECT level (Project Settings → Connectors)
-                    # We created this in Episode 2
                     connectorRef: dockerhub
                     repo: <+variable.docker_username>/cpp-harness-app
                     tags:
@@ -116,8 +90,6 @@ pipeline:
                       - latest
                     dockerfile: Episode-04/cpp-project/Dockerfile
                     context: Episode-04/cpp-project
-
-              # Step 5: Verify Docker Hub Push
               - step:
                   type: Run
                   name: Verify Images
@@ -132,14 +104,10 @@ pipeline:
                       echo "  Environment: <+pipeline.variables.environment>"
                       echo "  Docker Hub: <+variable.docker_username>/cpp-harness-app:<+pipeline.variables.deploy_version>-<+pipeline.variables.environment>"
                       echo "========================================="
-
-    # ============================================
-    # STAGE 2: Push to Amazon ECR
-    # ============================================
     - stage:
         name: push-to-ecr
         identifier: push_to_ecr
-        description: "Push Docker image to Amazon ECR"
+        description: Push Docker image to Amazon ECR
         type: CI
         spec:
           cloneCodebase: true
@@ -151,7 +119,6 @@ pipeline:
             spec: {}
           execution:
             steps:
-              # Step 1: Create ECR Repository (if not exists)
               - step:
                   type: Run
                   name: Create ECR Repo
@@ -160,8 +127,6 @@ pipeline:
                     shell: Sh
                     image: amazon/aws-cli:latest
                     envVariables:
-                      # These secrets are at PROJECT level (Project Settings → Secrets)
-                      # We created these in Episode 3
                       AWS_ACCESS_KEY_ID: <+secrets.getValue("aws_access_key_id")>
                       AWS_SECRET_ACCESS_KEY: <+secrets.getValue("aws_secret_access_key")>
                       AWS_DEFAULT_REGION: us-east-1
@@ -171,20 +136,13 @@ pipeline:
                         --repository-name cpp-harness-app \
                         --region us-east-1 2>/dev/null || echo "Repository already exists"
                       echo "=== ECR Repo Ready! ==="
-
-              # Step 2: Build and Push to Amazon ECR
               - step:
                   type: BuildAndPushECR
                   name: Push to ECR
                   identifier: push_ecr
                   spec:
-                    # CHANGE THIS: Your AWS connector (OIDC)
-                    # This connector is at ACCOUNT level (Account Settings → Connectors)
-                    # We created this in Episode 3 using OIDC authentication
                     connectorRef: account.aws_account
                     region: us-east-1
-                    # This variable is at PROJECT level (Project Settings → Variables)
-                    # We created this in Episode 4: aws_account_id = 713939171080
                     account: <+variable.aws_account_id>
                     imageName: cpp-harness-app
                     tags:
@@ -193,8 +151,6 @@ pipeline:
                       - latest
                     dockerfile: Episode-04/cpp-project/Dockerfile
                     context: Episode-04/cpp-project
-
-              # Step 2: Verify ECR Push
               - step:
                   type: Run
                   name: Verify ECR Image
@@ -203,8 +159,6 @@ pipeline:
                     shell: Sh
                     image: amazon/aws-cli:latest
                     envVariables:
-                      # These secrets are at PROJECT level (Project Settings → Secrets)
-                      # We created these in Episode 3
                       AWS_ACCESS_KEY_ID: <+secrets.getValue("aws_access_key_id")>
                       AWS_SECRET_ACCESS_KEY: <+secrets.getValue("aws_secret_access_key")>
                       AWS_DEFAULT_REGION: us-east-1
@@ -217,8 +171,6 @@ pipeline:
                       echo ""
                       echo "✅ Image EXISTS on ECR!"
                       echo "=== Verification Done! ==="
-
-              # Step 3: Final Summary
               - step:
                   type: Run
                   name: Final Summary
@@ -243,14 +195,10 @@ pipeline:
                       echo "    - <+pipeline.sequenceId>"
                       echo "    - latest"
                       echo "========================================="
-
-    # ============================================
-    # STAGE 3: APPROVAL GATE (Manual approval before delete)
-    # ============================================
     - stage:
         name: approval-to-delete
         identifier: approval_to_delete
-        description: "Manual approval required before deleting images"
+        description: Manual approval required before deleting images
         type: Approval
         spec:
           execution:
@@ -276,15 +224,11 @@ pipeline:
                         - _project_all_users
                     approverInputs: []
                   timeout: 1d
-
-    # ============================================
-    # STAGE 4 & 5: Delete Docker Hub + ECR (PARALLEL)
-    # ============================================
     - parallel:
         - stage:
             name: cleanup-dockerhub
             identifier: cleanup_dockerhub
-            description: "Wait 2 min then delete Docker Hub repo"
+            description: Wait 2 min then delete Docker Hub repo
             type: CI
             spec:
               cloneCodebase: false
@@ -296,7 +240,6 @@ pipeline:
                 spec: {}
               execution:
                 steps:
-                  # Step 1: Delete Docker Hub repository
                   - step:
                       type: Run
                       name: Delete Docker Hub Repo
@@ -319,11 +262,10 @@ pipeline:
                             echo "⚠️ May still exist (status: $STATUS)"
                           fi
                           echo "=== Docker Hub Cleanup Done! ==="
-
         - stage:
             name: cleanup-ecr
             identifier: cleanup_ecr
-            description: "Wait 2 min then delete ECR images and repository"
+            description: Wait 2 min then delete ECR images and repository
             type: CI
             spec:
               cloneCodebase: false
@@ -335,7 +277,6 @@ pipeline:
                 spec: {}
               execution:
                 steps:
-                  # Step 1: Delete ECR images and repository
                   - step:
                       type: Run
                       name: Delete ECR Repo
@@ -344,8 +285,6 @@ pipeline:
                         shell: Sh
                         image: amazon/aws-cli:latest
                         envVariables:
-                          # These secrets are at PROJECT level (Project Settings → Secrets)
-                          # We created these in Episode 4
                           AWS_ACCESS_KEY_ID: <+secrets.getValue("aws_access_key_id")>
                           AWS_SECRET_ACCESS_KEY: <+secrets.getValue("aws_secret_access_key")>
                           AWS_DEFAULT_REGION: us-east-1
