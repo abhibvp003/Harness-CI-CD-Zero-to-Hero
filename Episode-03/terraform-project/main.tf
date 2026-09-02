@@ -8,17 +8,17 @@ terraform {
     }
   }
 
-  backend "s3" {
-  }
+  backend "s3" {}
 }
 
 provider "aws" {
   region = var.aws_region
 }
 
-# ---------------------------------------------------------
-# VPC
-# ---------------------------------------------------------
+variable "aws_region" {
+  type    = string
+  default = "us-east-1"
+}
 
 resource "aws_vpc" "example" {
   cidr_block           = "10.0.0.0/16"
@@ -26,8 +26,7 @@ resource "aws_vpc" "example" {
   enable_dns_hostnames = true
 
   tags = {
-    Name        = "harness-demo-vpc"
-    Environment = "demo"
-    ManagedBy   = "Terraform"
+    Name      = "harness-demo-vpc"
+    ManagedBy = "Terraform"
   }
 }
