@@ -12,7 +12,7 @@ pipeline:
         build:
           type: branch
           spec:
-            branch: main
+            branch: master
   stages:
     - stage:
         name: build-go
@@ -27,6 +27,8 @@ pipeline:
           runtime:
             type: Docker
             spec: {}
+          delegateSelectors:
+            - docker-delegate
           execution:
             steps:
               - step:
