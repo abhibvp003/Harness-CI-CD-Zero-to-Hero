@@ -141,7 +141,7 @@ pipeline:
                   name: Push to ECR
                   identifier: push_ecr
                   spec:
-                    connectorRef: account.aws_account
+                    connectorRef: aws_account
                     region: us-east-1
                     account: <+variable.aws_account_id>
                     imageName: cpp-harness-app
