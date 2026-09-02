@@ -39,14 +39,24 @@ pipeline:
                     shell: Sh
                     command: |-
                       echo "=== Terraform Init ==="
+
                       cd Episode-03/terraform-project
+
+                      echo "=== Terraform Version ==="
                       terraform version
+
+                      echo "=== AWS CLI Version ==="
                       aws --version
+
+                      echo "=== AWS Caller Identity ==="
                       aws sts get-caller-identity
+
+                      echo "=== Running Terraform Init ==="
                       terraform init \
-                        -backend-config="bucket=<+variable.s3_bucket_name>" \
+                        -backend-config="bucket=terraform-statefile-028872334692" \
                         -backend-config="key=harness-demo/terraform.tfstate" \
-                        -backend-config="region=<+variable.aws_region>"
+                        -backend-config="region=us-east-1"
+
                       echo "=== Init Done! ==="
                     envVariables:
                       AWS_ACCESS_KEY_ID: <+secrets.getValue("aws_access_key_id")>
