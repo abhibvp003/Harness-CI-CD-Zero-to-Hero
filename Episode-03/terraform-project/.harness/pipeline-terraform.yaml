@@ -37,18 +37,21 @@ pipeline:
                   identifier: tf_init
                   spec:
                     shell: Sh
-                    envVariables:
-                      AWS_ACCESS_KEY_ID: <+secrets.getValue("aws_access_key_id")>
-                      AWS_SECRET_ACCESS_KEY: <+secrets.getValue("aws_secret_access_key")>
-                      AWS_DEFAULT_REGION: <+variable.aws_region>
                     command: |-
                       echo "=== Terraform Init ==="
                       cd Episode-03/terraform-project
+                      terraform version
+                      aws --version
+                      aws sts get-caller-identity
                       terraform init \
                         -backend-config="bucket=<+variable.s3_bucket_name>" \
                         -backend-config="key=harness-demo/terraform.tfstate" \
                         -backend-config="region=<+variable.aws_region>"
                       echo "=== Init Done! ==="
+                    envVariables:
+                      AWS_ACCESS_KEY_ID: <+secrets.getValue("aws_access_key_id")>
+                      AWS_SECRET_ACCESS_KEY: <+secrets.getValue("aws_secret_access_key")>
+                      AWS_DEFAULT_REGION: <+variable.aws_region>
               - step:
                   type: Run
                   name: Terraform Plan
