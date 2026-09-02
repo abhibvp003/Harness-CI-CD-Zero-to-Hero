@@ -1,23 +1,41 @@
+# ============================================
+# PIPELINE: Go App - Docker Delegate on AWS EC2
+# ============================================
+#
+# WHAT YOU NEED:
+#   1. AWS EC2 with Docker + Delegate (--network host) + Runner v0.1.20
+#   2. GitHub connector (account.Github)
+#   3. Docker Hub connector (dockerhub) at project level
+#   4. Secret "docker-hub-password"
+#   5. Variable "docker_username"
+#
+# CHANGE THESE VALUES:
+#   1. projectIdentifier → Your project ID
+#   2. orgIdentifier → Your org name
+#   3. connectorRef → Your connectors
+#
+# ============================================
 pipeline:
   name: go-docker-delegate-pipeline
   identifier: go_docker_delegate_pipeline
+  # CHANGE THIS: Your project ID
   projectIdentifier: HarnessCICDZerotoHero
+  # CHANGE THIS: Your org name
   orgIdentifier: default
   tags: {}
   properties:
     ci:
       codebase:
+        # CHANGE THIS: Your GitHub connector
         connectorRef: account.Github
-        repoName: abhibvp003/Harness-CI-CD-Zero-to-Hero
-        build:
-          type: branch
-          spec:
-            branch: master
+        # CHANGE THIS: Your repo name
+        repoName: Harness-CI-CD-Zero-to-Hero
+        build: <+input>
   stages:
     - stage:
         name: build-go
         identifier: build_go
-        description: Build, test, push Go app
+        description: "Build, test, push Go app"
         type: CI
         spec:
           cloneCodebase: true
@@ -27,10 +45,9 @@ pipeline:
           runtime:
             type: Docker
             spec: {}
-          delegateSelectors:
-            - docker-delegate
           execution:
             steps:
+              # Step 1: Run unit tests
               - step:
                   type: Run
                   name: Run Tests
@@ -43,6 +60,8 @@ pipeline:
                       cd Episode-03/go-project
                       go test -v ./...
                       echo "=== All Tests Passed! ==="
+
+              # Step 2: Lint Check
               - step:
                   type: Run
                   name: Lint Check
@@ -55,6 +74,8 @@ pipeline:
                       cd Episode-03/go-project
                       golangci-lint run ./... || echo "Lint warnings found (non-blocking)"
                       echo "=== Lint Check Done! ==="
+
+              # Step 3: Code Coverage
               - step:
                   type: Run
                   name: Code Coverage
@@ -70,6 +91,8 @@ pipeline:
                       COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}')
                       echo "Total Coverage: $COVERAGE"
                       echo "=== Coverage Done! ==="
+
+              # Step 4: Build Go binary
               - step:
                   type: Run
                   name: Build App
@@ -83,6 +106,8 @@ pipeline:
                       go build -o main .
                       ls -lh main
                       echo "=== Build Successful! ==="
+
+              # Step 5: Run app and verify
               - step:
                   type: Run
                   name: Verify App
@@ -102,6 +127,8 @@ pipeline:
                       echo ""
                       echo "=== App Verified! ==="
                       kill %1 2>/dev/null || true
+
+              # Step 6: Build and Push Docker image
               - step:
                   type: BuildAndPushDockerRegistry
                   name: Build and Push to Docker Hub
@@ -114,6 +141,8 @@ pipeline:
                       - latest
                     dockerfile: Episode-03/go-project/Dockerfile
                     context: Episode-03/go-project
+
+              # Step 7: Verify image on Docker Hub
               - step:
                   type: Run
                   name: Verify Push
@@ -133,6 +162,8 @@ pipeline:
                       echo ""
                       echo "View: https://hub.docker.com/r/<+variable.docker_username>/go-harness-app"
                       echo "=== Verification Done! ==="
+
+              # Step 8: Pipeline Complete
               - step:
                   type: Run
                   name: Pipeline Complete
@@ -154,6 +185,8 @@ pipeline:
                       echo ""
                       echo "  Image: <+variable.docker_username>/go-harness-app:<+pipeline.sequenceId>"
                       echo "========================================="
+
+              # Step 9: Verify success
               - step:
                   type: Run
                   name: Verify Success
@@ -169,6 +202,8 @@ pipeline:
                       echo ""
                       echo "Docker Hub: https://hub.docker.com/r/<+variable.docker_username>/go-harness-app"
                       echo "=== All Good! ==="
+
+              # Step 10: Wait 1 minute before cleanup
               - step:
                   type: Run
                   name: Wait Before Cleanup
@@ -180,6 +215,8 @@ pipeline:
                       echo "=== Step 10: Waiting 1 minute before cleanup ==="
                       sleep 60
                       echo "=== Done waiting! ==="
+
+              # Step 11: Delete Docker Hub repository and verify
               - step:
                   type: Run
                   name: Delete and Verify
