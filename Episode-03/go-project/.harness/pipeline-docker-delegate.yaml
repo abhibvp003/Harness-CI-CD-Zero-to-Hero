@@ -102,7 +102,7 @@ pipeline:
                   name: Build and Push to Docker Hub
                   identifier: build_push_docker
                   spec:
-                    connectorRef: k8s_build_cluster
+                    connectorRef: dockerhub
                     repo: <+variable.docker_username>/go-harness-app
                     tags:
                       - <+pipeline.sequenceId>
