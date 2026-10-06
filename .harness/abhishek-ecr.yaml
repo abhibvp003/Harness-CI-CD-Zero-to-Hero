@@ -1,0 +1,65 @@
+inputSet:
+  pipeline:
+    identifier: abhishekecr
+    template:
+      templateInputs:
+        variables:
+          - name: deploy_version
+            type: String
+            value: 1.0.0
+          - name: environment
+            type: String
+            value: development
+          - name: app_name
+            type: String
+            value: ""
+          - name: dockerfile_path
+            type: String
+            value: Episode-04/cpp-project/Dockerfile
+          - name: build_context
+            type: String
+            value: ""
+          - name: build_command
+            type: String
+            value: ""
+          - name: test_command
+            type: String
+            value: ""
+        properties:
+          ci:
+            codebase:
+              connectorRef: account.Github
+              repoName: https://github.com/abhibvp003/Harness-CI-CD-Zero-to-Hero.git
+              build:
+                spec:
+                  branch: master
+                type: branch
+        stages:
+          - stage:
+              identifier: build_and_push
+              type: CI
+              spec:
+                execution:
+                  steps:
+                    - step:
+                        identifier: push_dockerhub
+                        type: BuildAndPushDockerRegistry
+                        spec:
+                          connectorRef: dockerhub
+          - stage:
+              identifier: push_to_ecr
+              type: CI
+              spec:
+                execution:
+                  steps:
+                    - step:
+                        identifier: push_ecr
+                        type: BuildAndPushECR
+                        spec:
+                          connectorRef: aws_account
+                          region: us-east-1
+                          account: "028872334692"
+  name: abhishek-ecr
+  identifier: abhishekecr
+  orgIdentifier: default
+  projectIdentifier: HarnessCICDZerotoHero
