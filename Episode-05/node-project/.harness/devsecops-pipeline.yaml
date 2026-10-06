@@ -1,30 +1,3 @@
-# ============================================
-# PIPELINE: Advanced CI & DevSecOps (Episode 5)
-# ============================================
-# Topics covered:
-#   - Caching (npm)
-#   - Parallel Execution
-#   - Security Scanning (Trivy, Gitleaks, OWASP)
-#   - SonarQube Code Quality
-#   - Triggers (Git Push, PR, Cron)
-#   - Performance Optimization
-#
-# CONNECTORS USED:
-#   - account.Github        → ACCOUNT level (Episode 1)
-#   - dockerhub             → PROJECT level (Episode 2)
-#   - account.aws_account   → ACCOUNT level (Episode 3, OIDC)
-#
-# SECRETS USED:
-#   - docker-hub-password       → PROJECT level (Episode 2)
-#   - aws_access_key_id         → PROJECT level (Episode 3)
-#   - aws_secret_access_key     → PROJECT level (Episode 3)
-#   - sonar_token               → PROJECT level (Episode 5 - create this)
-#
-# VARIABLES USED:
-#   - docker_username           → PROJECT level (Episode 2)
-#   - aws_account_id            → PROJECT level (Episode 4)
-#   - sonar_host_url            → PROJECT level (Episode 5 - create this)
-# ============================================
 pipeline:
   name: devsecops-pipeline
   identifier: devsecops_pipeline
@@ -35,16 +8,13 @@ pipeline:
     ci:
       codebase:
         connectorRef: account.Github
-        repoName: Harness-CI-CD-Zero-to-Hero
+        repoName: abhibvp003/Harness-CI-CD-Zero-to-Hero
         build: <+input>
   stages:
-    # ============================================
-    # STAGE 0: Matrix Build (Test Multiple Node Versions)
-    # ============================================
     - stage:
         name: matrix-test
         identifier: matrix_test
-        description: "Test app on Node 18, 20, 22 in parallel"
+        description: Test app on Node 18, 20, 22 in parallel
         type: CI
         spec:
           cloneCodebase: true
@@ -76,22 +46,17 @@ pipeline:
                   strategy:
                     matrix:
                       nodeVersion:
-                        - "18-alpine"
-                        - "20-alpine"
-                        - "21-alpine"
+                        - 18-alpine
+                        - 20-alpine
+                        - 21-alpine
                       maxConcurrency: 3
-
-    # ============================================
-    # STAGE 1: Build & Test (with Caching + Parallel)
-    # ============================================
     - stage:
         name: build-and-test
         identifier: build_and_test
-        description: "Install, lint, test with npm caching"
+        description: Install, lint, test with npm caching
         type: CI
         spec:
           cloneCodebase: true
-          # CACHING: Harness saves node_modules between builds
           caching:
             enabled: true
             paths:
@@ -104,7 +69,6 @@ pipeline:
             spec: {}
           execution:
             steps:
-              # Step 1: Install Dependencies (cached)
               - step:
                   type: Run
                   name: Install Dependencies
@@ -116,10 +80,7 @@ pipeline:
                       cd Episode-05/node-project
                       npm install
                       echo "=== Dependencies Installed! ==="
-
-              # Step 2-4: PARALLEL execution (Lint + Test + Security scan at same time)
               - parallel:
-                  # Step 2: Lint Check
                   - step:
                       type: Run
                       name: Lint Check
@@ -131,8 +92,6 @@ pipeline:
                           cd Episode-05/node-project
                           npx eslint src/ --no-eslintrc --rule '{"no-unused-vars":"warn"}' || true
                           echo "=== Lint Done! ==="
-
-                  # Step 3: Unit Tests with Coverage
                   - step:
                       type: Run
                       name: Unit Tests
@@ -147,8 +106,6 @@ pipeline:
                           echo "Coverage Report:"
                           cat coverage/lcov.info | head -20 || true
                           echo "=== All Tests Passed! ==="
-
-                  # Step 4: Gitleaks (Secret Detection)
                   - step:
                       type: Run
                       name: Gitleaks Scan
@@ -173,8 +130,6 @@ pipeline:
                             echo "✅ No secrets found!"
                           fi
                           echo "=== Gitleaks Done! ==="
-
-                  # Step 5: SonarQube Code Quality & Security Analysis
                   - step:
                       type: Run
                       name: SonarQube Scan
@@ -183,10 +138,6 @@ pipeline:
                         shell: Sh
                         image: sonarsource/sonar-scanner-cli:latest
                         envVariables:
-                          # Create these in Project Settings → Secrets/Variables
-                          # sonar_token: Project Settings → Secrets → sonar_token
-                          # sonar_host_url: Project Settings → Variables → sonar_host_url
-                          #   (use http://BASTION-IP:9000 or https://sonarcloud.io)
                           SONAR_TOKEN: <+secrets.getValue("sonar_token")>
                           SONAR_HOST_URL: <+variable.sonar_host_url>
                           SONAR_USER_HOME: /tmp/.sonar
@@ -199,14 +150,10 @@ pipeline:
                           echo ""
                           echo "=== SonarQube Scan Complete! ==="
                           echo "  View results at: $SONAR_HOST_URL/dashboard?id=harness-devsecops-app"
-
-    # ============================================
-    # STAGE 2: Security Scanning (Trivy + OWASP)
-    # ============================================
     - stage:
         name: security-scan
         identifier: security_scan
-        description: "Docker image vulnerability scan + dependency check"
+        description: Docker image vulnerability scan + dependency check
         type: CI
         spec:
           cloneCodebase: true
@@ -218,7 +165,6 @@ pipeline:
             spec: {}
           execution:
             steps:
-              # Step 1: Build Docker Image (for scanning)
               - step:
                   type: Run
                   name: Build Docker Image
@@ -230,10 +176,7 @@ pipeline:
                       cd Episode-05/node-project
                       docker build -t devsecops-app:scan .
                       echo "=== Image Built! ==="
-
-              # Step 2-3: PARALLEL security scans
               - parallel:
-                  # Step 2: Trivy - Docker Image Vulnerability Scan
                   - step:
                       type: Run
                       name: Trivy Image Scan
@@ -258,8 +201,6 @@ pipeline:
                           except:
                             print('  Could not parse results')
                           " || true
-
-                  # Step 3: OWASP Dependency Check
                   - step:
                       type: Run
                       name: OWASP Dependency Check
@@ -286,8 +227,6 @@ pipeline:
                           except:
                             print('  No vulnerabilities data')
                           " || true
-
-              # Step 4: Security Summary
               - step:
                   type: Run
                   name: Security Summary
@@ -306,14 +245,10 @@ pipeline:
                       echo ""
                       echo "  All security gates passed!"
                       echo "========================================="
-
-    # ============================================
-    # STAGE 3: Push to Amazon ECR
-    # ============================================
     - stage:
         name: push-to-ecr
         identifier: push_images
-        description: "Push verified image to Amazon ECR"
+        description: Push verified image to Amazon ECR
         type: CI
         spec:
           cloneCodebase: true
@@ -325,7 +260,6 @@ pipeline:
             spec: {}
           execution:
             steps:
-              # Step 1: Create ECR Repo
               - step:
                   type: Run
                   name: Create ECR Repo
@@ -341,15 +275,11 @@ pipeline:
                       echo "=== Creating ECR Repository ==="
                       aws ecr create-repository --repository-name devsecops-app --region us-east-1 2>/dev/null || echo "Repository already exists"
                       echo "=== ECR Repo Ready! ==="
-
-              # Step 2: Push to ECR
               - step:
                   type: BuildAndPushECR
                   name: Push to ECR
                   identifier: push_ecr
                   spec:
-                    # This connector is at ACCOUNT level (Account Settings → Connectors)
-                    # We created this in Episode 3 using OIDC
                     connectorRef: account.aws_account
                     region: us-east-1
                     account: <+variable.aws_account_id>
@@ -359,8 +289,6 @@ pipeline:
                       - latest
                     dockerfile: Episode-05/node-project/Dockerfile
                     context: Episode-05/node-project
-
-              # Step 3: Final Pipeline Summary
               - step:
                   type: Run
                   name: Pipeline Complete
@@ -388,14 +316,10 @@ pipeline:
                       echo ""
                       echo "  Security Status: ALL GATES PASSED 🛡️"
                       echo "=============================================="
-
-    # ============================================
-    # STAGE 4: Approval + Cleanup
-    # ============================================
     - stage:
         name: approval-cleanup
         identifier: approval_cleanup
-        description: "Approve before deleting images"
+        description: Approve before deleting images
         type: Approval
         spec:
           execution:
@@ -420,14 +344,10 @@ pipeline:
                         - _project_all_users
                     approverInputs: []
                   timeout: 1d
-
-    # ============================================
-    # STAGE 5: Delete ECR
-    # ============================================
     - stage:
         name: cleanup-ecr
         identifier: cleanup_ecr
-        description: "Delete ECR repo"
+        description: Delete ECR repo
         type: CI
         spec:
           cloneCodebase: false
